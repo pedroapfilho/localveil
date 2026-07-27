@@ -1,0 +1,41 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf .turbo dist node_modules",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "start": "vite preview",
+    "lint": "oxlint src",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/i18n": "workspace:*",
+    "@repo/pii-detect": "workspace:*",
+    "@repo/redact-core": "workspace:*",
+    "@repo/redact-text": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "sonner": "^2.0.7",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@repo/config-vitest": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/vite": "^4.3.2",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
+  }
+}
