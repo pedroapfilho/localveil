@@ -4,6 +4,9 @@ packages:
 
 allowBuilds:
   esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: false
 
 minimumReleaseAgeExclude:
   - cnfast@0.0.8
