@@ -20,3 +20,5 @@ export { UnsupportedFileError } from "./unsupported-file-error.ts";
 export { spansToRects } from "./rects.ts";
 export { buildWordIndex } from "./word-index.ts";
 export type { WordIndex, WordInput } from "./word-index.ts";
+export { buildZip, uniqueFilename } from "./zip.ts";
+export type { ZipEntry } from "./zip.ts";
