@@ -1,0 +1,37 @@
+import type { Messages } from "./en";
+
+const es: Messages = {
+  "app.name": "localveil",
+  "app.skipToContent": "Ir al contenido",
+  "app.tagline": "Oculta los datos personales de tus archivos. Nada sale de tu dispositivo.",
+  "download.button": "Descargar ZIP ({count})",
+  "download.excluded": "{count} archivos quedaron fuera porque fallaron.",
+  "download.waiting": "Oculta un archivo para habilitar la descarga.",
+  "dropzone.formats": "Archivos de texto, Markdown, CSV, JSON y log",
+  "dropzone.hint": "o arrástralos aquí",
+  "dropzone.label": "Elegir archivos",
+  "error.unknown": "Algo salió mal.",
+  "files.empty": "Todavía no hay archivos.",
+  "files.heading": "Archivos",
+  "files.noRedactions": "No se encontró nada que ocultar",
+  "files.redactions": "{count} ocultados",
+  "files.remove": "Quitar {name}",
+  "locale.label": "Idioma",
+  "model.downloading": "Descargando el modelo de detección ({percent})",
+  "model.ready": "Modelo de detección listo",
+  "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",
+  "stage.detecting": "Buscando datos personales",
+  "stage.finished": "Finalizado",
+  "stage.loadingModel": "Cargando el modelo de detección",
+  "stage.reading": "Leyendo el archivo",
+  "stage.redacting": "Ocultando",
+  "status.done": "Listo",
+  "status.error": "Falló",
+  "status.queued": "En cola",
+  "status.running": "Procesando",
+  "toast.downloaded": "Tu ZIP se está descargando.",
+  "toast.failed": "No se pudieron ocultar los datos de {name}.",
+  "toast.unsupported": "{name} no es un tipo de archivo admitido.",
+};
+
+export { es };
