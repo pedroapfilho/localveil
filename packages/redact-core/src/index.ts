@@ -1,3 +1,7 @@
+export { chunkText } from "./chunk.ts";
+export type { TextChunk } from "./chunk.ts";
+export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
+export type { ChunkSpans, Range } from "./merge-spans.ts";
 export { RedactionError } from "./redaction-error.ts";
 export { createRedactorRegistry } from "./registry.ts";
 export type { RedactorRegistry } from "./registry.ts";
