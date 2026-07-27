@@ -1,5 +1,5 @@
 {
-  "name": "filter-pii-local",
+  "name": "localveil",
   "private": true,
   "type": "module",
   "scripts": {
