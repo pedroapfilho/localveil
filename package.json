@@ -1,0 +1,45 @@
+{
+  "name": "filter-pii-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "turbo run start",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "typecheck": "turbo run typecheck",
+    "build": "turbo run build",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "test": "turbo run test",
+    "test:coverage": "turbo run test:coverage",
+    "fallow": "fallow",
+    "fallow:dead": "fallow dead-code",
+    "fallow:dupes": "fallow dupes",
+    "fallow:health": "fallow health --score",
+    "fallow:audit": "fallow audit --base main",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "fallow": "^3.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
+    "oxfmt": "^0.58.0",
+    "oxlint": "^1.75.0",
+    "oxlint-config-awesomeness": "^3.2.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "turbo": "^2.10.4"
+  },
+  "lint-staged": {
+    "!(*.d).{ts,tsx,mts,cts,js,jsx,mjs,cjs}": [
+      "oxlint"
+    ],
+    "*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,md}": [
+      "oxfmt"
+    ]
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.13.1"
+}

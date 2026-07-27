@@ -1,0 +1,5 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": ["oxlint.config.ts", "apps/web/src/main.tsx", "apps/web/src/redact-worker.ts"],
+  "ignoreDependencies": ["@vitest/coverage-v8", "jsdom", "react-dom"]
+}
