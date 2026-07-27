@@ -17,3 +17,6 @@ export type {
   Span,
 } from "./types.ts";
 export { UnsupportedFileError } from "./unsupported-file-error.ts";
+export { spansToRects } from "./rects.ts";
+export { buildWordIndex } from "./word-index.ts";
+export type { WordIndex, WordInput } from "./word-index.ts";
