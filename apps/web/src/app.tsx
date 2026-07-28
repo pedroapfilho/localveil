@@ -14,8 +14,7 @@ const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,ima
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const removeJob = useJobStore((state) => state.removeJob);
-  const { downloadZip, model, submit } = useRedaction();
+  const { downloadZip, model, remove, submit } = useRedaction();
 
   useDocumentLocale();
 
@@ -58,7 +57,7 @@ const App = () => {
           <p className="text-muted-foreground text-xs">{t("dropzone.formats")}</p>
         </div>
 
-        <JobList jobs={jobs} onRemove={removeJob} />
+        <JobList jobs={jobs} onRemove={remove} />
 
         <DownloadPanel jobs={jobs} onDownload={handleDownload} />
       </main>

@@ -5,6 +5,7 @@ import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
 
+import { createJobQueue } from "./job-queue";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
 // The three predicates are disjoint (text/*, application/pdf, image/*), so the order
@@ -40,64 +41,47 @@ const loadDetector = async () => {
   }
 };
 
-const runJob = async ({ file, id }: WorkerRequest) => {
-  const redactor = registry.resolve(file);
+const queue = createJobQueue({
+  onError: (request, error) => {
+    post({
+      id: request.id,
+      message: describeError(error),
+      type: "error",
+      unsupported: error instanceof UnsupportedFileError,
+    });
+  },
+  run: async ({ file, id }, stopIfCancelled) => {
+    const redactor = registry.resolve(file);
 
-  post({ fraction: 0, id, stage: "stage.loadingModel", type: "progress" });
+    post({ fraction: 0, id, stage: "stage.loadingModel", type: "progress" });
 
-  const detect = await loadDetector();
+    const detect = await loadDetector();
 
-  const result = await redactor.redact(file, detect, (fraction, stage) => {
-    post({ fraction, id, stage, type: "progress" });
-  });
+    stopIfCancelled();
 
-  post({
-    blob: result.blob,
-    id,
-    redactionCount: result.redactionCount,
-    type: "done",
-    warnings: result.warnings,
-  });
-};
+    const result = await redactor.redact(file, detect, (fraction, stage) => {
+      stopIfCancelled();
+      post({ fraction, id, stage, type: "progress" });
+    });
 
-const queue: Array<WorkerRequest> = [];
-let draining = false;
+    post({
+      blob: result.blob,
+      id,
+      redactionCount: result.redactionCount,
+      type: "done",
+      warnings: result.warnings,
+    });
+  },
+});
 
-// One file at a time: the model holds its tensors on the device, and running two
-// inferences at once is how a mid-range GPU runs out of memory.
-/* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
-const drain = async () => {
-  if (draining) {
+globalThis.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
+  const request = event.data;
+
+  if (request.type === "cancel") {
+    queue.cancel(request.id);
+
     return;
   }
 
-  draining = true;
-
-  let next = queue.shift();
-
-  while (next !== undefined) {
-    const request = next;
-
-    try {
-      await runJob(request);
-    } catch (error) {
-      post({
-        id: request.id,
-        message: describeError(error),
-        type: "error",
-        unsupported: error instanceof UnsupportedFileError,
-      });
-    }
-
-    next = queue.shift();
-  }
-
-  draining = false;
-};
-/* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
-
-globalThis.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
-  queue.push(event.data);
-
-  void drain();
+  queue.enqueue(request);
 });

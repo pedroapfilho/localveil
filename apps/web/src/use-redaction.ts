@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Job } from "./store";
 import { completedJobs, useJobStore } from "./store";
-import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
+import type { CancelRequest, RedactRequest, WorkerResponse } from "./worker-protocol";
 
 const ZIP_NAME = "localveil.zip";
 
@@ -37,10 +37,17 @@ const triggerDownload = (blob: Blob) => {
 };
 
 const sendJob = (worker: Worker, job: Job) => {
-  const request: WorkerRequest = { file: job.file, id: job.id, type: "redact" };
+  const request: RedactRequest = { file: job.file, id: job.id, type: "redact" };
 
   // Worker#postMessage has no target origin; its second argument is a transfer
   // list, so the window-to-window rule does not apply here.
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin
+  worker.postMessage(request);
+};
+
+const sendCancel = (worker: Worker, id: string) => {
+  const request: CancelRequest = { id, type: "cancel" };
+
   // oxlint-disable-next-line unicorn/require-post-message-target-origin
   worker.postMessage(request);
 };
@@ -257,6 +264,24 @@ const useRedaction = () => {
     [ensureWorker],
   );
 
+  // Taking a row off the page has to reach the worker. Without this it carried on
+  // rendering and recognising every page of a file nobody was waiting for, with the
+  // rest of the queue stuck behind it and no row left to show that it was still
+  // going.
+  const remove = useCallback((id: string) => {
+    const worker = workerRef.current;
+
+    if (worker !== null) {
+      sendCancel(worker, id);
+    }
+
+    useJobStore.getState().removeJob(id);
+
+    // Re-read after the removal: dropping the last file that was in flight has to
+    // retire the watchdog rather than leave the page under a timer.
+    armWatchdogRef.current?.();
+  }, []);
+
   const downloadZip = useCallback(async () => {
     const ready = completedJobs(useJobStore.getState().jobs);
 
@@ -267,7 +292,7 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { downloadZip, model, submit };
+  return { downloadZip, model, remove, submit };
 };
 
 export { useRedaction };

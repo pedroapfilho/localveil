@@ -57,7 +57,7 @@ class FakeWorker {
 }
 
 const Harness = () => {
-  const { submit } = useRedaction();
+  const { remove, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -66,10 +66,24 @@ const Harness = () => {
     ]);
   };
 
+  const handleRemoveFirst = () => {
+    const first = useJobStore.getState().jobs.at(0);
+
+    if (first !== undefined) {
+      remove(first.id);
+    }
+  };
+
   return (
-    <button onClick={handleClick} type="button">
-      submit
-    </button>
+    <>
+      <button onClick={handleClick} type="button">
+        submit
+      </button>
+
+      <button onClick={handleRemoveFirst} type="button">
+        remove
+      </button>
+    </>
   );
 };
 
@@ -83,6 +97,15 @@ const workerAt = (index: number) => {
   }
 
   return worker;
+};
+
+const filesSentTo = (index: number) =>
+  workerAt(index)
+    .posted.filter((request) => request.type === "redact")
+    .map((request) => request.file.name);
+
+const removeFirst = () => {
+  fireEvent.click(screen.getByRole("button", { name: "remove" }));
 };
 
 const submitTwo = () => {
@@ -126,7 +149,7 @@ describe("useRedaction", () => {
   it("sends every dropped file to the worker", () => {
     submitTwo();
 
-    expect(workerAt(0).posted.map((request) => request.file.name)).toEqual(["one.txt", "two.txt"]);
+    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
   });
 
   it("builds one worker for the page, not one per file", () => {
@@ -158,7 +181,7 @@ describe("when the worker dies", () => {
     startFirstJob();
     killFirstWorker();
 
-    expect(workerAt(1).posted.map((request) => request.file.name)).not.toContain("one.txt");
+    expect(filesSentTo(1)).not.toContain("one.txt");
   });
 
   it("gives the files that never ran to a fresh worker", () => {
@@ -167,7 +190,7 @@ describe("when the worker dies", () => {
     killFirstWorker();
 
     expect(FakeWorker.instances.length).toBe(2);
-    expect(workerAt(1).posted.map((request) => request.file.name)).toEqual(["two.txt"]);
+    expect(filesSentTo(1)).toEqual(["two.txt"]);
   });
 
   it("leaves the requeued file queued rather than marking it failed", () => {
@@ -204,7 +227,7 @@ describe("when the worker dies", () => {
     });
 
     expect(workerAt(0).terminated).toBe(true);
-    expect(workerAt(1).posted.map((request) => request.file.name)).toEqual(["two.txt"]);
+    expect(filesSentTo(1)).toEqual(["two.txt"]);
   });
 
   it("ignores a late error from a worker that was already replaced", () => {
@@ -245,7 +268,7 @@ describe("when the worker goes quiet", () => {
     waitOutTheSilence();
 
     expect(jobsNow()[0].status).toBe("error");
-    expect(workerAt(1).posted.map((request) => request.file.name)).toEqual(["two.txt"]);
+    expect(filesSentTo(1)).toEqual(["two.txt"]);
   });
 
   it("waits again each time the worker speaks", () => {
@@ -289,5 +312,54 @@ describe("when the worker goes quiet", () => {
     waitOutTheSilence();
 
     expect(workerAt(0).terminated).toBe(false);
+  });
+
+  it("stops watching a worker whose last file was taken away", () => {
+    submitTwo();
+    startFirstJob();
+    removeFirst();
+    removeFirst();
+    waitOutTheSilence();
+
+    expect(workerAt(0).terminated).toBe(false);
+  });
+});
+
+// Taking a row off the page used to tell only the page. The worker carried on with
+// the file, and everything behind it waited for work nobody wanted.
+describe("removing a file", () => {
+  it("tells the worker to stop as well as the page", () => {
+    submitTwo();
+
+    const id = jobsNow()[0].id;
+
+    removeFirst();
+
+    expect(workerAt(0).posted.at(-1)).toEqual({ id, type: "cancel" });
+  });
+
+  it("takes the row off the page", () => {
+    submitTwo();
+    removeFirst();
+
+    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
+  });
+
+  it("cancels the file that is running, not whichever is first in the list", () => {
+    submitTwo();
+    startFirstJob();
+
+    const running = jobsNow().find((job) => job.status === "running");
+
+    removeFirst();
+
+    expect(workerAt(0).posted.at(-1)).toEqual({ id: running?.id, type: "cancel" });
+  });
+
+  it("leaves the rest of the queue where it was", () => {
+    submitTwo();
+    removeFirst();
+
+    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
   });
 });
