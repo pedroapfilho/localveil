@@ -74,10 +74,27 @@ describe("locateTokens", () => {
     expect(locateTokens("", ids, decode)).toEqual([undefined, undefined]);
   });
 
-  it("refuses to place spans when the tokenizer did not round-trip the text", () => {
+  // The tokenizer eats the space in front of a comma. An invoice with 88 of them
+  // used to fail outright rather than lose one space from one offset.
+  it("keeps its place when the tokenizer swallows a character", () => {
+    const { decode, ids } = tokenize(["Ana", ",", " Rua"]);
+    const ranges = locateTokens("Ana , Rua", ids, decode);
+
+    expect(ranges[0]).toEqual({ end: 3, start: 0 });
+    expect(ranges[2]?.end).toBe(9);
+  });
+
+  it("places the last token against the end of the source, not the decode", () => {
+    const { decode, ids } = tokenize(["Ana", " Silva"]);
+    const ranges = locateTokens("Ana  Silva", ids, decode);
+
+    expect(ranges.at(-1)?.end).toBe(10);
+  });
+
+  it("refuses to place spans when the tokenizer returned text the chunk never had", () => {
     const { decode, ids } = tokenize(["Call", " Jane"]);
 
-    expect(() => locateTokens("Call Jane and more", ids, decode)).toThrow(/round-tripped/v);
+    expect(() => locateTokens("Call John", ids, decode)).toThrow(/does not contain/v);
   });
 
   // The alignment used to match decoded tokens against the text, and could not tell
