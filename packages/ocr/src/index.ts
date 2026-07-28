@@ -4,3 +4,5 @@ export { recognizeWords, releaseRecognizers } from "./recognize.ts";
 export type { Recognition } from "./recognize.ts";
 export { readImageText } from "./read-image-text.ts";
 export type { ImageReading } from "./read-image-text.ts";
+export { GOOD, LEGIBLE, readabilityOf } from "./readable.ts";
+export type { Readability } from "./readable.ts";

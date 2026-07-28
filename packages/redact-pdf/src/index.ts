@@ -1,5 +1,5 @@
 import type { OcrLanguage } from "@repo/ocr";
-import { detectLanguage, readImageText } from "@repo/ocr";
+import { detectLanguage, readabilityOf, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -21,8 +21,6 @@ const SCALE = 2;
 // A page carrying almost nothing in its text layer is a scan, so there is no
 // language to read off it and the recogniser has to work that out itself.
 const MIN_TEXT_WORDS = 4;
-
-const MIN_CONFIDENCE = 70;
 
 // Below this the language guess is not worth acting on, and the recogniser falls
 // back to probing in English.
@@ -99,6 +97,12 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
     pdfjs.getDocument({
       CanvasFactory: OffscreenCanvasFactory,
       data: new Uint8Array(source),
+      // Embedded fonts normally reach the canvas through an `@font-face` rule, and
+      // there is no document in a worker to put one in. Left alone, pdf.js draws
+      // every glyph as a .notdef box: a wall of tofu that the recogniser reads as
+      // gibberish and the model then tags as one long name. This makes it build the
+      // glyph outlines itself, which needs no DOM.
+      disableFontFace: true,
       FilterFactory: NoFilterFactory,
     }).promise,
     pdfLib.PDFDocument.create(),
@@ -123,7 +127,15 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
 
-    await page.render({ canvas: null, canvasContext: target, viewport }).promise;
+    // A canvas starts out transparent and pdf.js paints only ink, so without this the
+    // recogniser is handed dark glyphs on an undefined background and reads a page of
+    // gibberish that the detection model then tags as one long name.
+    await page.render({
+      background: "#FFFFFF",
+      canvas: null,
+      canvasContext: target,
+      viewport,
+    }).promise;
 
     return { canvas, page, viewport };
   };
@@ -165,7 +177,9 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
 
     language ??= reading.language;
 
-    if (reading.words.length > 0 && reading.confidence < MIN_CONFIDENCE) {
+    const readability = readabilityOf(reading);
+
+    if (readability !== "good" && reading.words.length > 0) {
       warnings.add("warning.lowConfidence");
     }
 
@@ -174,7 +188,8 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
     onProgress(progress, "stage.detecting");
 
     const { text, words } = buildWordIndex(reading.words);
-    const spans = text.length === 0 ? [] : await detect(text);
+    // Nothing is looked for in text the recogniser could not read: see readable.ts.
+    const spans = readability === "unreadable" ? [] : await detect(text);
 
     for (const token of tokensFromSpans(text, spans)) {
       tokens.set(token.text.toLowerCase(), token);

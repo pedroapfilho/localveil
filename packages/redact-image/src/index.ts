@@ -1,4 +1,4 @@
-import { readImageText } from "@repo/ocr";
+import { readabilityOf, readImageText } from "@repo/ocr";
 import type { Rect, Redactor, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -7,10 +7,6 @@ import {
   spansToRects,
   tokensFromSpans,
 } from "@repo/redact-core";
-
-// Tesseract reports its confidence out of 100. Below this the page is legible
-// enough to produce words but not enough to trust that it produced all of them.
-const MIN_CONFIDENCE = 70;
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
@@ -65,16 +61,19 @@ const imageRedactor: Redactor = {
     const reading = await readImageText(file);
     const warnings: Array<WarningKey> = [];
 
-    if (reading.words.length === 0) {
-      warnings.push("warning.noText");
-    } else if (reading.confidence < MIN_CONFIDENCE) {
+    const readability = readabilityOf(reading);
+
+    if (readability === "unreadable") {
+      warnings.push(reading.words.length === 0 ? "warning.noText" : "warning.lowConfidence");
+    } else if (readability === "shaky") {
       warnings.push("warning.lowConfidence");
     }
 
     onProgress(0.6, "stage.detecting");
 
     const { text, words } = buildWordIndex(reading.words);
-    const detected = text.length === 0 ? [] : await detect(text);
+    // Nothing is looked for in text the recogniser could not read: see readable.ts.
+    const detected = readability === "unreadable" ? [] : await detect(text);
     // A name the model tagged once but missed later is still that name.
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
 
@@ -97,4 +96,4 @@ const imageRedactor: Redactor = {
   },
 };
 
-export { imageRedactor, MIN_CONFIDENCE };
+export { imageRedactor };
