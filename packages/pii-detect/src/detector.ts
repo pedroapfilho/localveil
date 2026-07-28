@@ -1,6 +1,6 @@
 import { env, pipeline } from "@huggingface/transformers";
 import type { Detect, ModelProgress, Span } from "@repo/redact-core";
-import { chunkText, mergeChunkSpans } from "@repo/redact-core";
+import { chunkText, mergeChunkSpans, patternSpans } from "@repo/redact-core";
 
 import type { RawToken } from "./decode.ts";
 import { decodeBioes } from "./decode.ts";
@@ -118,6 +118,16 @@ const toRawTokens = (output: unknown, text: string, classifier: TokenClassifier)
   });
 };
 
+// Named-entity models lean on capitalisation so heavily that recall collapses when
+// it is gone: an invoice header reading PEDRO AFONSO PEDROSA FILHO went undetected at
+// every threshold, while the same text in title case was tagged immediately. Changing
+// case never changes string length, so spans found in the recased copy land on the
+// original without any remapping.
+const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['\u2019]\p{Lu}+)?/gv;
+
+const titleCased = (text: string) =>
+  text.replaceAll(RUN_OF_CAPITALS, (word) => word[0] + word.slice(1).toLowerCase());
+
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
     chunkSize = CHUNK_SIZE,
@@ -159,18 +169,29 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     // One inference at a time: a long file can produce hundreds of chunks, and
     // queueing them all would hold every intermediate tensor on the device at once.
     /* oxlint-disable react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+    const spansOf = async (source: string) => {
+      const output = await classifier(source, { ignore_labels: [] });
+
+      return decodeBioes(toRawTokens(output, source, classifier), minScore);
+    };
+
     const parts = await chunks.reduce<Promise<Array<ChunkSpans>>>(async (pending, chunk) => {
       const collected = await pending;
-      const output = await classifier(chunk.text, { ignore_labels: [] });
-      const tokens = toRawTokens(output, chunk.text, classifier);
+      const spans = await spansOf(chunk.text);
+      const recased = titleCased(chunk.text);
 
-      collected.push({ offset: chunk.offset, spans: decodeBioes(tokens, minScore) });
+      // Only worth a second pass when there was something to recase.
+      const shouted = recased === chunk.text ? [] : await spansOf(recased);
+
+      collected.push({ offset: chunk.offset, spans: [...spans, ...shouted] });
 
       return collected;
     }, Promise.resolve([]));
     /* oxlint-enable react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-    return mergeChunkSpans(parts);
+    // Patterns run over the whole text rather than per chunk: they are cheap, and a
+    // check digit is a fact the model can only guess at.
+    return [...mergeChunkSpans(parts), ...patternSpans(text)];
   };
 };
 

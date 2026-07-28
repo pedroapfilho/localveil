@@ -3,6 +3,7 @@ export type { TextChunk } from "./chunk.ts";
 export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
 export type { ChunkSpans, Range } from "./merge-spans.ts";
 export { RedactionError } from "./redaction-error.ts";
+export { patternSpans } from "./patterns.ts";
 export { spansForTokens, tokensFromSpans } from "./repeats.ts";
 export type { PiiToken } from "./repeats.ts";
 export { createRedactorRegistry } from "./registry.ts";

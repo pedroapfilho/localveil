@@ -168,3 +168,70 @@ describe("createDetector", () => {
     await expect(createDetector()).rejects.toThrow(/network down/v);
   });
 });
+
+// A name in an invoice header goes undetected at every threshold while the same
+// text in title case is tagged immediately, so the chunk is read both ways.
+describe("shouting text", () => {
+  it("reads a chunk again in title case when it holds runs of capitals", async () => {
+    const classifier = stubClassifier((text) =>
+      text === "PEDRO SILVA" ? [] : tokensFor("private_person", 5),
+    );
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    expect(await detect("PEDRO SILVA")).toEqual([
+      { end: 5, label: "private_person", score: 0.9, start: 0 },
+    ]);
+  });
+
+  it("does not pay for a second pass when nothing is shouting", async () => {
+    const classifier = stubClassifier(() => []);
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    await detect("Pedro Silva went home");
+
+    expect(classifier.mock.calls.length).toBe(1);
+  });
+
+  it("keeps what the first pass found as well as what the second did", async () => {
+    const classifier = stubClassifier((text) =>
+      text === "ANA" ? [{ entity: "S-private_person", index: 0, score: 0.9 }] : [],
+    );
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    const spans = await detect("ANA");
+
+    expect(spans.length).toBe(1);
+  });
+});
+
+describe("patterns", () => {
+  it("finds a checksummed identifier the model walked past", async () => {
+    const classifier = stubClassifier(() => []);
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+    const spans = await detect("CPF 108.467.036-45 emitido");
+
+    expect(spans).toEqual([{ end: 18, label: "account_number", score: 1, start: 4 }]);
+  });
+
+  it("leaves a number that fails its check digits alone", async () => {
+    const classifier = stubClassifier(() => []);
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    expect(await detect("total 12345678901 units")).toEqual([]);
+  });
+});
