@@ -8,6 +8,7 @@ type FileDropzoneProps = {
   accept?: string;
   className?: string;
   disabled?: boolean;
+  formats?: string;
   hint: string;
   label: string;
   onFilesSelected: (files: Array<File>) => void;
@@ -17,6 +18,7 @@ const FileDropzone = ({
   accept,
   className,
   disabled = false,
+  formats,
   hint,
   label,
   onFilesSelected,
@@ -75,18 +77,28 @@ const FileDropzone = ({
           Enter and Space behaviour with no key handling of ours. */}
       <label
         className={cn(
-          "border-foreground/20 bg-card hover:border-foreground/40 has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-offset-background data-[dragging=true]:border-primary data-[dragging=true]:bg-primary/5 flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-offset-2 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-60",
+          "group border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/70 has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-offset-background data-dragging:border-primary data-dragging:bg-primary/5 flex w-full cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed px-6 py-12 text-center has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-offset-2 data-disabled:cursor-not-allowed data-disabled:opacity-60 sm:py-14",
           className,
         )}
-        data-disabled={disabled}
+        data-disabled={disabled || undefined}
         data-dragging={dragging || undefined}
         data-slot="file-dropzone"
       >
-        <UploadIcon aria-hidden className="text-muted-foreground size-6" />
+        {/* The ring reads as the surface the file lands on, so it moves with the
+            drag state rather than sitting still while the border changes. */}
+        <span className="bg-background ring-foreground/10 group-data-dragging:ring-primary/40 mb-3 flex size-11 items-center justify-center rounded-full shadow-xs ring-1 sm:size-10">
+          <UploadIcon aria-hidden className="text-muted-foreground size-5 shrink-0 sm:size-4" />
+        </span>
 
-        <span className="font-medium">{label}</span>
+        <p className="text-lg font-medium sm:text-base">{label}</p>
 
-        <span className="text-muted-foreground text-sm">{hint}</span>
+        <p className="text-muted-foreground text-base text-pretty sm:text-sm">{hint}</p>
+
+        {formats === undefined ? null : (
+          <p className="text-muted-foreground/80 mt-4 max-w-[44ch] text-sm text-pretty">
+            {formats}
+          </p>
+        )}
 
         <input
           accept={accept}

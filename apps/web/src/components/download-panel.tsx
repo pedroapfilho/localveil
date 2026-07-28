@@ -17,17 +17,26 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
   const excluded = failedJobs(jobs).length;
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <Button disabled={!ready} onClick={onDownload} size="lg">
+    <div className="flex flex-col items-center gap-3">
+      <Button
+        className="focus-visible:outline-ring w-full focus-visible:outline-2 focus-visible:outline-offset-2 sm:w-auto"
+        disabled={!ready}
+        onClick={onDownload}
+        size="lg"
+      >
         <DownloadIcon aria-hidden data-icon="inline-start" />
 
         {t("download.button", { count: completedJobs(jobs).length })}
       </Button>
 
-      {ready ? null : <p className="text-muted-foreground text-sm">{t("download.waiting")}</p>}
+      {ready ? null : (
+        <p className="text-muted-foreground text-base text-pretty sm:text-sm">
+          {t("download.waiting")}
+        </p>
+      )}
 
       {excluded === 0 ? null : (
-        <p className="text-muted-foreground text-sm tabular-nums">
+        <p className="text-muted-foreground text-base text-pretty tabular-nums sm:text-sm">
           {t("download.excluded", { count: excluded })}
         </p>
       )}

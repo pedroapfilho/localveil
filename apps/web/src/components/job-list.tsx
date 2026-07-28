@@ -1,3 +1,7 @@
+// Safari drops list semantics from a `ul` whose bullets are removed, and these have
+// none, so `role="list"` restores what the styling took away rather than repeating
+// what the element already says.
+/* oxlint-disable jsx-a11y/no-redundant-roles */
 import type { MessageKey } from "@repo/i18n";
 import { useTranslations } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
@@ -13,11 +17,13 @@ const STATUS_KEYS: Record<JobStatus, MessageKey> = {
   running: "status.running",
 };
 
+// The dot carries the same meaning as the word beside it and never on its own, so a
+// reader who cannot tell the colours apart still has the label.
 const STATUS_TONES: Record<JobStatus, string> = {
   done: "text-success",
   error: "text-destructive",
   queued: "text-muted-foreground",
-  running: "text-muted-foreground",
+  running: "text-foreground",
 };
 
 type JobRowProps = {
@@ -47,42 +53,61 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
   const summary = describeResult();
 
   return (
-    <li className="border-border flex flex-col gap-2 rounded-xl border p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-sm font-medium" title={file.name}>
-          {file.name}
-        </p>
+    <li className="flex flex-col gap-3 px-4 py-4 sm:px-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="truncate text-base font-medium sm:text-sm" title={file.name}>
+            {file.name}
+          </p>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <span className={`text-xs ${STATUS_TONES[status]}`}>{t(STATUS_KEYS[status])}</span>
+          <p className={`flex items-center gap-1.5 text-base sm:text-sm ${STATUS_TONES[status]}`}>
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
 
-          <Button
-            aria-label={t("files.remove", { name: file.name })}
-            onClick={handleRemove}
-            size="icon-sm"
-            variant="ghost"
-          >
-            <XIcon aria-hidden />
-          </Button>
+            {t(STATUS_KEYS[status])}
+
+            {inFlight && stage !== undefined ? (
+              <>
+                <span aria-hidden>·</span>
+
+                <span className="text-muted-foreground truncate">{t(stage)}</span>
+              </>
+            ) : null}
+          </p>
         </div>
+
+        <Button
+          aria-label={t("files.remove", { name: file.name })}
+          className="relative shrink-0"
+          onClick={handleRemove}
+          size="icon-sm"
+          variant="ghost"
+        >
+          {/* Widens the tap area to the 48px minimum on touch without moving
+              anything a pointer user can see. */}
+          <span
+            aria-hidden
+            className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+          />
+
+          <XIcon aria-hidden />
+        </Button>
       </div>
 
       {inFlight ? <Progress label={file.name} value={progress} /> : null}
 
-      {inFlight && stage !== undefined ? (
-        <p className="text-muted-foreground text-xs">{t(stage)}</p>
-      ) : null}
-
       {summary === undefined ? null : (
-        <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
+        <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{summary}</p>
       )}
 
       {status === "error" && error !== undefined ? (
-        <p className="text-destructive text-xs">{error}</p>
+        <p className="text-destructive text-base text-pretty sm:text-sm">{error}</p>
       ) : null}
 
       {result?.warnings.map((warning) => (
-        <p className="text-warning text-xs" key={warning}>
+        <p
+          className="text-warning-foreground bg-warning/10 rounded-lg px-3 py-2 text-base text-pretty sm:text-sm"
+          key={warning}
+        >
           {t(warning)}
         </p>
       ))}
@@ -99,13 +124,25 @@ const JobList = ({ jobs, onRemove }: JobListProps) => {
   const { t } = useTranslations();
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="font-medium">{t("files.heading")}</h2>
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
 
+        {jobs.length === 0 ? null : (
+          <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
+        )}
+      </div>
+
+      {/* No panel and no second dashed box: the dropzone above already says what to
+          do, and repeating its outline here only competes with it. */}
       {jobs.length === 0 ? (
-        <p className="text-muted-foreground text-sm">{t("files.empty")}</p>
+        <p className="text-muted-foreground text-base text-pretty sm:text-sm">{t("files.empty")}</p>
       ) : (
-        <ul aria-live="polite" className="flex flex-col gap-2">
+        <ul
+          aria-live="polite"
+          className="ring-foreground/10 divide-foreground/5 divide-y rounded-xl ring-1"
+          role="list"
+        >
           {jobs.map((job) => (
             <JobRow job={job} key={job.id} onRemove={onRemove} />
           ))}

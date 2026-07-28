@@ -14,6 +14,12 @@ const en = {
   "files.noRedactions": "Nothing found to redact",
   "files.redactions": "{count} redacted",
   "files.remove": "Remove {name}",
+  "footer.github": "Source on GitHub",
+  "footer.heading": "About localveil",
+  "footer.model": "Detection model",
+  "footer.offline": "Works offline once the model is cached.",
+  "footer.summary":
+    "localveil finds names, emails, phone numbers, addresses, dates and account numbers in your files and paints over them. Detection runs in this tab on your own machine, so nothing you drop here is uploaded.",
   "model.downloading": "Downloading the detection model ({percent})",
   "model.ready": "Detection model ready",
   "model.slowDevice": "Running without GPU acceleration, this will be slow.",

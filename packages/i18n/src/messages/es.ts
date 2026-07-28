@@ -16,6 +16,12 @@ const es: Messages = {
   "files.noRedactions": "No se encontró nada que ocultar",
   "files.redactions": "{count} ocultados",
   "files.remove": "Quitar {name}",
+  "footer.github": "Código en GitHub",
+  "footer.heading": "Acerca de localveil",
+  "footer.model": "Modelo de detección",
+  "footer.offline": "Funciona sin conexión una vez descargado el modelo.",
+  "footer.summary":
+    "localveil encuentra nombres, correos, teléfonos, direcciones, fechas y números de cuenta en tus archivos y los tapa. La detección se ejecuta en esta pestaña, en tu propia máquina, así que nada de lo que sueltas aquí se envía.",
   "model.downloading": "Descargando el modelo de detección ({percent})",
   "model.ready": "Modelo de detección listo",
   "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",

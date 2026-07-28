@@ -29,16 +29,20 @@ const ModelStatus = ({ model }: ModelStatusProps) => {
   const downloadMessage = t("model.downloading", { percent: percentFormat.format(fraction) });
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="ring-foreground/10 flex flex-col gap-3 rounded-xl px-4 py-4 ring-1 sm:px-5">
       {downloading ? (
         <>
-          <p className="text-muted-foreground text-sm tabular-nums">{downloadMessage}</p>
+          <p className="text-base text-pretty tabular-nums sm:text-sm">{downloadMessage}</p>
 
-          <Progress className="max-w-sm" label={downloadMessage} value={fraction} />
+          <Progress label={downloadMessage} value={fraction} />
         </>
       ) : null}
 
-      {slowDevice ? <p className="text-warning text-sm">{t("model.slowDevice")}</p> : null}
+      {slowDevice ? (
+        <p className="text-muted-foreground text-base text-pretty sm:text-sm">
+          {t("model.slowDevice")}
+        </p>
+      ) : null}
     </div>
   );
 };
