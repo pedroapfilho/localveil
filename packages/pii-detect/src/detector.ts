@@ -6,6 +6,7 @@ import type { RawToken } from "./decode.ts";
 import { decodeBioes } from "./decode.ts";
 import { locateTokens } from "./offsets.ts";
 import { createResumableCache } from "./resumable-cache.ts";
+import { collectShouting, toSourceSpans } from "./shouting.ts";
 
 const CHUNK_OVERLAP = 200;
 const CHUNK_SIZE = 4000;
@@ -118,16 +119,6 @@ const toRawTokens = (output: unknown, text: string, classifier: TokenClassifier)
   });
 };
 
-// Named-entity models lean on capitalisation so heavily that recall collapses when
-// it is gone: an invoice header reading PEDRO AFONSO PEDROSA FILHO went undetected at
-// every threshold, while the same text in title case was tagged immediately. Changing
-// case never changes string length, so spans found in the recased copy land on the
-// original without any remapping.
-const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['\u2019]\p{Lu}+)?/gv;
-
-const titleCased = (text: string) =>
-  text.replaceAll(RUN_OF_CAPITALS, (word) => word[0] + word.slice(1).toLowerCase());
-
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
     chunkSize = CHUNK_SIZE,
@@ -177,13 +168,21 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
     const parts = await chunks.reduce<Promise<Array<ChunkSpans>>>(async (pending, chunk) => {
       const collected = await pending;
-      const spans = await spansOf(chunk.text);
-      const recased = titleCased(chunk.text);
 
-      // Only worth a second pass when there was something to recase.
-      const shouted = recased === chunk.text ? [] : await spansOf(recased);
+      collected.push({ offset: chunk.offset, spans: await spansOf(chunk.text) });
 
-      collected.push({ offset: chunk.offset, spans: [...spans, ...shouted] });
+      const shouting = collectShouting(chunk.text);
+
+      // Nothing shouted means nothing the first pass has not already read in a case
+      // the model can work with, so most chunks stop here.
+      if (shouting.text.length > 0) {
+        const found = await spansOf(shouting.text);
+
+        collected.push({
+          offset: chunk.offset,
+          spans: toSourceSpans(found, shouting.segments),
+        });
+      }
 
       return collected;
     }, Promise.resolve([]));

@@ -198,18 +198,57 @@ describe("shouting text", () => {
     expect(classifier.mock.calls.length).toBe(1);
   });
 
-  it("keeps what the first pass found as well as what the second did", async () => {
+  // What the gate is for: an acronym is not a name, and treating one as shouting put
+  // every line of a log file through the model twice.
+  it("does not pay for a second pass over a lone acronym", async () => {
+    const classifier = stubClassifier(() => []);
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    await detect("2026-01-01 INFO user signed in");
+
+    expect(classifier.mock.calls.length).toBe(1);
+  });
+
+  it("sends the second pass the shouted line rather than the whole chunk", async () => {
+    const classifier = stubClassifier(() => []);
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+
+    await detect("an invoice\nPEDRO AFONSO\ntotal 210");
+
+    expect(classifier.mock.calls.at(1)?.at(0)).toBe("Pedro Afonso");
+  });
+
+  it("places a span from the second pass back where the shouted line sits", async () => {
     const classifier = stubClassifier((text) =>
-      text === "ANA" ? [{ entity: "S-private_person", index: 0, score: 0.9 }] : [],
+      text === "Pedro Afonso" ? tokensFor("private_person", 5) : [],
     );
 
     stubPipeline(classifier);
 
     const detect = await createDetector();
 
-    const spans = await detect("ANA");
+    expect(await detect("an invoice\nPEDRO AFONSO\ntotal 210")).toEqual([
+      { end: 16, label: "private_person", score: 0.9, start: 11 },
+    ]);
+  });
 
-    expect(spans.length).toBe(1);
+  it("keeps what the first pass found as well as what the second did", async () => {
+    const classifier = stubClassifier((text) =>
+      text.startsWith("PEDRO") ? tokensFor("private_email", 2) : tokensFor("private_person", 3),
+    );
+
+    stubPipeline(classifier);
+
+    const detect = await createDetector();
+    const spans = await detect("PEDRO AFONSO");
+
+    expect(spans.map((span) => span.label)).toEqual(["private_email", "private_person"]);
   });
 });
 
