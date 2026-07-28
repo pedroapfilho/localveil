@@ -9,7 +9,6 @@ const en = {
   "dropzone.hint": "or drag and drop them here",
   "dropzone.label": "Choose files",
   "error.unknown": "Something went wrong.",
-  "files.empty": "No files yet.",
   "files.heading": "Files",
   "files.noRedactions": "Nothing found to redact",
   "files.redactions": "{count} redacted",

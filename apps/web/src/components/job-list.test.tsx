@@ -23,10 +23,20 @@ const setup = (jobs: Array<Job>) => {
 };
 
 describe("JobList", () => {
-  it("shows the empty state with no files", () => {
+  // A heading over an empty box, under a dropzone that already says what to do, is a
+  // second thing to read that carries nothing.
+  it("renders nothing at all with no files", () => {
     setup([]);
 
-    expect(screen.getByText("No files yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
+    expect(screen.queryByRole("list")).toBeNull();
+  });
+
+  it("counts the files it is showing", () => {
+    setup([job(), job({ id: "job-2" })]);
+
+    expect(screen.getByRole("heading", { name: "Files" })).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
   });
 
   it("names each file and its status", () => {

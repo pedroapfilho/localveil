@@ -21,30 +21,36 @@ const setup = (jobs: Array<Job>) => {
 
   renderWithI18n(<DownloadPanel jobs={jobs} onDownload={onDownload} />);
 
-  return { button: screen.getByRole("button"), onDownload };
+  return { onDownload };
 };
 
-describe("DownloadPanel", () => {
-  it("stays disabled with nothing to download", () => {
-    const { button } = setup([]);
+const theButton = () => screen.getByRole("button");
 
-    expect(button).toBeDisabled();
+describe("DownloadPanel", () => {
+  // A disabled button counting nothing is the loudest thing on an empty page.
+  it("renders nothing before there is a file to download", () => {
+    setup([]);
+
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("stays disabled while the first file is still queued", () => {
+    setup([job()]);
+
+    expect(theButton()).toBeDisabled();
     expect(screen.getByText("Redact a file to enable the download.")).toBeInTheDocument();
   });
 
   it("stays disabled while a file is still running", () => {
-    const { button } = setup([job({ result, status: "done" }), job({ id: "job-2" })]);
+    setup([job({ result, status: "done" }), job({ id: "job-2" })]);
 
-    expect(button).toBeDisabled();
+    expect(theButton()).toBeDisabled();
   });
 
   it("counts only the files that produced something", () => {
-    const { button } = setup([
-      job({ result, status: "done" }),
-      job({ error: "boom", id: "job-2", status: "error" }),
-    ]);
+    setup([job({ result, status: "done" }), job({ error: "boom", id: "job-2", status: "error" })]);
 
-    expect(button).toHaveTextContent("Download ZIP (1)");
+    expect(theButton()).toHaveTextContent("Download ZIP (1)");
   });
 
   it("says how many files were left out", () => {
@@ -54,9 +60,9 @@ describe("DownloadPanel", () => {
   });
 
   it("hands the download over when clicked", () => {
-    const { button, onDownload } = setup([job({ result, status: "done" })]);
+    const { onDownload } = setup([job({ result, status: "done" })]);
 
-    fireEvent.click(button);
+    fireEvent.click(theButton());
 
     expect(onDownload).toHaveBeenCalledTimes(1);
   });

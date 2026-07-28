@@ -26,11 +26,25 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
+  // Nothing but the dropzone and the footer until a file arrives: no file list over
+  // an empty box, no download button counting nothing.
   it("renders the shell with nothing queued", () => {
     renderWithI18n(<App />);
 
     expect(screen.getByRole("heading", { level: 1, name: "localveil" })).toBeInTheDocument();
-    expect(screen.getByText("No files yet.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/choose files/iv)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /download zip/iv })).toBeNull();
+  });
+
+  it("brings out the list and the download once a file is queued", () => {
+    renderWithI18n(<App />);
+
+    fireEvent.change(screen.getByLabelText(/choose files/iv), {
+      target: { files: [new File(["hello"], "notes.txt", { type: "text/plain" })] },
+    });
+
+    expect(screen.getByRole("heading", { name: "Files" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /download zip/iv })).toBeDisabled();
   });
 
@@ -70,7 +84,8 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByLabelText("Remove notes.txt"));
 
-    expect(screen.getByText("No files yet.")).toBeInTheDocument();
+    expect(screen.queryByText("notes.txt")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
   });
 
   it("renders in the language the browser asked for", () => {
@@ -78,8 +93,8 @@ describe("App", () => {
 
     renderWithI18n(<App />);
 
-    expect(screen.getByText("Arquivos")).toBeInTheDocument();
-    expect(screen.getByText("Nenhum arquivo ainda.")).toBeInTheDocument();
+    expect(screen.getByText("Escolher arquivos")).toBeInTheDocument();
+    expect(screen.getByText("Sobre o localveil")).toBeInTheDocument();
   });
 
   it("offers no way to override the browser language", () => {

@@ -68,17 +68,17 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 ## Architecture
 
 ```mermaid
-graph TD
-  web["**web**<br>React app · dropzone · job list"]
-  worker["**redact-worker**<br>one file at a time"]
-  core["**@repo/redact-core**<br>types · chunking · spans · rects · zip"]
-  detect["**@repo/pii-detect**<br>token classification · resumable model cache"]
-  ocr["**@repo/ocr**<br>Tesseract · language detection"]
-  text["**@repo/redact-text**"]
-  pdf["**@repo/redact-pdf**"]
-  image["**@repo/redact-image**"]
-  i18n["**@repo/i18n**"]
-  ui["**@repo/ui**"]
+flowchart LR
+  web["<b>web</b><br/>React app · dropzone · job list"]
+  worker["<b>redact-worker</b><br/>one file at a time"]
+  core["<b>@repo/redact-core</b><br/>types · chunking · spans · rects · zip"]
+  detect["<b>@repo/pii-detect</b><br/>token classification · resumable model cache"]
+  ocr["<b>@repo/ocr</b><br/>Tesseract · language detection"]
+  text["<b>@repo/redact-text</b>"]
+  pdf["<b>@repo/redact-pdf</b>"]
+  image["<b>@repo/redact-image</b>"]
+  i18n["<b>@repo/i18n</b>"]
+  ui["<b>@repo/ui</b>"]
 
   web --> worker
   web --> i18n

@@ -123,31 +123,29 @@ type JobListProps = {
 const JobList = ({ jobs, onRemove }: JobListProps) => {
   const { t } = useTranslations();
 
+  // A heading over an empty box, under a dropzone that already says what to do, is a
+  // second thing to read that carries nothing. The list arrives with the first file.
+  if (jobs.length === 0) {
+    return null;
+  }
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
 
-        {jobs.length === 0 ? null : (
-          <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
-        )}
+        <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
       </div>
 
-      {/* No panel and no second dashed box: the dropzone above already says what to
-          do, and repeating its outline here only competes with it. */}
-      {jobs.length === 0 ? (
-        <p className="text-muted-foreground text-base text-pretty sm:text-sm">{t("files.empty")}</p>
-      ) : (
-        <ul
-          aria-live="polite"
-          className="ring-foreground/10 divide-foreground/5 divide-y rounded-xl ring-1"
-          role="list"
-        >
-          {jobs.map((job) => (
-            <JobRow job={job} key={job.id} onRemove={onRemove} />
-          ))}
-        </ul>
-      )}
+      <ul
+        aria-live="polite"
+        className="ring-foreground/10 divide-foreground/5 divide-y rounded-xl ring-1"
+        role="list"
+      >
+        {jobs.map((job) => (
+          <JobRow job={job} key={job.id} onRemove={onRemove} />
+        ))}
+      </ul>
     </section>
   );
 };
