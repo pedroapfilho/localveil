@@ -1,5 +1,5 @@
 import type { OcrLanguage } from "@repo/ocr";
-import { detectLanguage, readabilityOf, readImageText } from "@repo/ocr";
+import { detectLanguage, droppedAnyWords, legibleWords, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -180,9 +180,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
 
     language ??= reading.language;
 
-    const readability = readabilityOf(reading);
-
-    if (readability !== "good" && reading.words.length > 0) {
+    if (droppedAnyWords(reading)) {
       warnings.add("warning.lowConfidence");
     }
 
@@ -190,9 +188,10 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
 
     onProgress(progress, "stage.detecting");
 
-    const { text, words } = buildWordIndex(reading.words);
-    // Nothing is looked for in text the recogniser could not read: see readable.ts.
-    const spans = readability === "unreadable" ? [] : await detect(text);
+    // Only the words the recogniser was sure of: see readable.ts. A page it could not
+    // read at all leaves nothing here, so nothing is searched and nothing is painted.
+    const { text, words } = buildWordIndex(legibleWords(reading));
+    const spans = await detect(text);
 
     for (const token of tokensFromSpans(text, spans)) {
       tokens.set(token.text.toLowerCase(), token);

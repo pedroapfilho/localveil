@@ -1,4 +1,4 @@
-import { readabilityOf, readImageText } from "@repo/ocr";
+import { droppedAnyWords, legibleWords, readImageText } from "@repo/ocr";
 import type { Rect, Redactor, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -61,19 +61,18 @@ const imageRedactor: Redactor = {
     const reading = await readImageText(file);
     const warnings: Array<WarningKey> = [];
 
-    const readability = readabilityOf(reading);
-
-    if (readability === "unreadable") {
-      warnings.push(reading.words.length === 0 ? "warning.noText" : "warning.lowConfidence");
-    } else if (readability === "shaky") {
+    if (reading.words.length === 0) {
+      warnings.push("warning.noText");
+    } else if (droppedAnyWords(reading)) {
       warnings.push("warning.lowConfidence");
     }
 
     onProgress(0.6, "stage.detecting");
 
-    const { text, words } = buildWordIndex(reading.words);
-    // Nothing is looked for in text the recogniser could not read: see readable.ts.
-    const detected = readability === "unreadable" ? [] : await detect(text);
+    // Only the words the recogniser was sure of: see readable.ts. An image it could
+    // not read at all leaves nothing here, so nothing is searched and nothing painted.
+    const { text, words } = buildWordIndex(legibleWords(reading));
+    const detected = await detect(text);
     // A name the model tagged once but missed later is still that name.
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
 

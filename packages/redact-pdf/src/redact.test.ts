@@ -1,3 +1,4 @@
+import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,11 +11,12 @@ type FakePage = { layer: string; words: Array<string> };
 
 const state = {
   confidence: 90,
+  confidenceOf: (_text: string) => 95,
   drawn: [] as Array<Array<string>>,
   drawTextThrowsOn: undefined as string | undefined,
   language: "en" as "en" | "es" | "pt",
   pages: [] as Array<FakePage>,
-  readability: "good" as "good" | "shaky" | "unreadable",
+  painted: [] as Array<string>,
   recognisedIn: [] as Array<string | undefined>,
 };
 
@@ -92,9 +94,11 @@ vi.mock("pdf-lib", () => ({
   StandardFonts: { Helvetica: "Helvetica" },
 }));
 
-vi.mock("@repo/ocr", () => ({
+// Only the two functions that reach outside are stubbed. The word filter under test
+// is the real one, so these tests measure the rule rather than a copy of it.
+vi.mock("@repo/ocr", async (importOriginal) => ({
+  ...(await importOriginal<typeof Ocr>()),
   detectLanguage: () => ({ confidence: 0.9, language: state.language }),
-  readabilityOf: () => state.readability,
   readImageText: (_image: unknown, options: { known?: string } = {}) => {
     state.recognisedIn.push(options.known);
 
@@ -103,7 +107,11 @@ vi.mock("@repo/ocr", () => ({
     return Promise.resolve({
       confidence: state.confidence,
       language: state.language,
-      words: page.words.map((text, index) => ({ bbox: boxFor(index), text })),
+      words: page.words.map((text, index) => ({
+        bbox: boxFor(index),
+        confidence: state.confidenceOf(text),
+        text,
+      })),
     });
   },
 }));
@@ -119,7 +127,12 @@ class FakeCanvas {
   }
 
   getContext() {
-    return { fillRect: () => undefined, fillStyle: "" };
+    return {
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        state.painted.push(`${x},${y},${w},${h}`);
+      },
+      fillStyle: "",
+    };
   }
 }
 
@@ -160,7 +173,8 @@ beforeEach(() => {
   state.drawTextThrowsOn = undefined;
   state.language = "en";
   state.pages = [page("Invoice for Ana Lima")];
-  state.readability = "good";
+  state.confidenceOf = () => 95;
+  state.painted = [];
   state.recognisedIn = [];
 
   vi.stubGlobal("OffscreenCanvas", FakeCanvas);
@@ -223,29 +237,42 @@ describe("pdfRedactor", () => {
   });
 
   // A wall of .notdef boxes recognises as gibberish, which the model tags as one long
-  // name, which paints a rectangle over every line of a page nobody could read.
-  it("looks for nothing in a page the recogniser could not read", async () => {
-    state.readability = "unreadable";
-    state.confidence = 28;
+  // name, which paints a rectangle over every line of a page nobody could read. Every
+  // word on such a page scores low, so none of it reaches the model.
+  it("finds nothing to search in a page the recogniser could not read", async () => {
+    state.confidenceOf = () => 28;
 
     const detect = detecting(["Ana Lima"]);
-
     const { warnings } = await run(detect);
 
-    expect(detect).not.toHaveBeenCalled();
+    expect(detect).toHaveBeenCalledWith("");
     expect(warnings).toContain("warning.lowConfidence");
   });
 
   it("leaves an unreadable page whole rather than blacking it out", async () => {
-    state.readability = "unreadable";
+    state.confidenceOf = () => 28;
 
     await run(detecting(["Ana Lima"]));
 
-    expect(state.drawn[0]).toEqual(["Invoice", "for", "Ana", "Lima"]);
+    expect(state.painted).toEqual([]);
   });
 
-  it("warns when the recogniser was unsure rather than confident", async () => {
-    state.readability = "shaky";
+  // The case this floor exists for. A Brazilian driving licence recognised 244 words:
+  // the fields at 90-plus, the guilloche background as junk near zero, and a page
+  // average of 46 that vetoed all of it. The readable words get covered now.
+  it("covers the words it could read on a page the average would have condemned", async () => {
+    state.confidence = 46;
+    state.confidenceOf = (text) => (text === "Ana" || text === "Lima" ? 95 : 20);
+
+    const { redactionCount, warnings } = await run(detecting(["Ana Lima"]));
+
+    expect(redactionCount).toBe(1);
+    expect(state.painted.length).toBeGreaterThan(0);
+    expect(warnings).toContain("warning.lowConfidence");
+  });
+
+  it("warns when the recogniser had to guess at any of the words", async () => {
+    state.confidenceOf = () => 40;
 
     const { warnings } = await run();
 
@@ -268,7 +295,6 @@ describe("pdfRedactor", () => {
 
   it("warns when a file gave up no text at all", async () => {
     state.pages = [{ layer: "", words: [] }];
-    state.readability = "unreadable";
 
     const { warnings } = await run();
 

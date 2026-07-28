@@ -4,9 +4,14 @@ import type { Block, ImageLike, Word, Worker } from "tesseract.js";
 import type { OcrLanguage } from "./languages.ts";
 import { traineddataFor } from "./languages.ts";
 
+// Tesseract scores every word, and that per-word number is the useful one. The page
+// average it also reports is a mean over two populations on anything security-printed:
+// the real fields and the noise the background pattern produces.
+type RecognisedWord = WordInput & { confidence: number };
+
 type Recognition = {
   confidence: number;
-  words: Array<WordInput>;
+  words: Array<RecognisedWord>;
 };
 
 // Loading a language costs a traineddata download, so workers are kept and reused
@@ -34,11 +39,11 @@ const workerFor = (language: OcrLanguage) => {
 };
 
 const wordsOf = (blocks: Array<Block>) => {
-  const collected: Array<WordInput> = [];
+  const collected: Array<RecognisedWord> = [];
 
   const take = (word: Word) => {
     if (word.text.trim().length > 0) {
-      collected.push({ bbox: word.bbox, text: word.text });
+      collected.push({ bbox: word.bbox, confidence: word.confidence, text: word.text });
     }
   };
 
@@ -61,4 +66,4 @@ const recognizeWords = async (image: ImageLike, language: OcrLanguage): Promise<
 };
 
 export { recognizeWords };
-export type { Recognition };
+export type { Recognition, RecognisedWord };

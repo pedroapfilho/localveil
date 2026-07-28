@@ -1,32 +1,36 @@
+import type { WordInput } from "@repo/redact-core";
+
 import type { Recognition } from "./recognize.ts";
 
-// Tesseract reports confidence out of 100. Above this a page is worth trusting;
-// below it, some words are guesses and the reader should be told.
-const GOOD = 70;
-
-// Below this the recogniser is not reading, it is hallucinating. A page that came
-// back at 28 was a wall of "sn ssss inan fs n inn", and the detection model tagged
-// the whole run, confidently, as one person's name. Fed to the redactor that is a
-// black rectangle over every line: a page destroyed rather than protected.
+// This used to be a page-average threshold that vetoed the whole page, and it threw
+// away real documents. Measured on a Brazilian driving licence: Tesseract found 244
+// words, 56 of them above 90, and still reported a page average of 46, because the
+// guilloche background produces a second population of junk readings sitting near
+// zero. The mean of two populations describes neither, and one number under the line
+// meant nothing on that page was ever looked at.
 //
-// Nothing legible can be found in text like that, so nothing is looked for. The page
-// comes back untouched and carries a warning, which is the honest outcome: a reader
-// who can see the page was unreadable can go and check it themselves.
-const LEGIBLE = 50;
+// So the score is read per word instead. On a clean page almost everything clears the
+// floor and nothing changes. On a noisy one the fields survive and the background does
+// not. A page of .notdef boxes, which is what the old floor was added for, still comes
+// back untouched: every word on it scores low, so nothing survives to be searched.
+const LEGIBLE_WORD = 60;
 
-type Readability = "good" | "shaky" | "unreadable";
+const legibleWords = ({ words }: Recognition, floor: number = LEGIBLE_WORD): Array<WordInput> => {
+  const kept: Array<WordInput> = [];
 
-const readabilityOf = ({ confidence, words }: Recognition): Readability => {
-  if (words.length === 0) {
-    return "unreadable";
+  for (const { bbox, confidence, text } of words) {
+    if (confidence >= floor) {
+      kept.push({ bbox, text });
+    }
   }
 
-  if (confidence < LEGIBLE) {
-    return "unreadable";
-  }
-
-  return confidence < GOOD ? "shaky" : "good";
+  return kept;
 };
 
-export { GOOD, LEGIBLE, readabilityOf };
-export type { Readability };
+// Whether the reader should be told some of the page was too rough to read. Separate
+// from the filtering above on purpose: dropping a word changes what gets redacted,
+// saying so changes what the reader trusts, and those are different decisions.
+const droppedAnyWords = (reading: Recognition, floor: number = LEGIBLE_WORD) =>
+  legibleWords(reading, floor).length < reading.words.length;
+
+export { droppedAnyWords, LEGIBLE_WORD, legibleWords };
