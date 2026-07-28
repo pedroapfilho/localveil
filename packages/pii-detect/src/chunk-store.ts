@@ -3,8 +3,8 @@ type Manifest = { etag: string; loaded: number; total: number };
 type ChunkStore = {
   append: (url: string, start: number, bytes: ArrayBuffer) => Promise<void>;
   clear: (url: string) => Promise<void>;
-  readAll: (url: string) => Promise<Array<ArrayBuffer>>;
   readManifest: (url: string) => Promise<Manifest | undefined>;
+  readParts: (url: string) => Promise<Array<Blob>>;
   writeManifest: (url: string, manifest: Manifest) => Promise<void>;
 };
 
@@ -69,6 +69,12 @@ const isManifest = (value: unknown): value is Manifest =>
   typeof Reflect.get(value, "loaded") === "number" &&
   typeof Reflect.get(value, "total") === "number";
 
+const isChunkRecord = (value: unknown): value is ChunkRecord =>
+  typeof value === "object" &&
+  value !== null &&
+  Reflect.get(value, "bytes") instanceof ArrayBuffer &&
+  typeof Reflect.get(value, "url") === "string";
+
 const rangeFor = (url: string) =>
   IDBKeyRange.bound([url, Number.NEGATIVE_INFINITY], [url, Number.POSITIVE_INFINITY]);
 
@@ -103,24 +109,51 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 
       await settled(transaction);
     },
-    readAll: async (url) => {
-      const db = await database();
-      const transaction = db.transaction(CHUNKS, "readonly");
-      const records: Array<unknown> = await promisify(
-        transaction.objectStore(CHUNKS).getAll(rangeFor(url)),
-      );
-
-      return records
-        .filter((record): record is ChunkRecord => Reflect.get(record ?? {}, "url") === url)
-        .toSorted((left, right) => left.start - right.start)
-        .map((record) => record.bytes);
-    },
     readManifest: async (url) => {
       const db = await database();
       const transaction = db.transaction(MANIFESTS, "readonly");
       const record: unknown = await promisify(transaction.objectStore(MANIFESTS).get(url));
 
       return isManifest(record) ? record : undefined;
+    },
+    // A cursor rather than `getAll`, which would put all 809 MB of a model on the
+    // heap at once and then copy it again into the blob. Each record becomes a Blob
+    // as it arrives, so only one chunk is ever in memory, and the blob that gets
+    // assembled from them references their storage rather than copying it.
+    //
+    // The store's key is `[url, start]`, so a cursor over the range walks the chunks
+    // in the order they were downloaded without anything having to sort them.
+    readParts: async (url) => {
+      const db = await database();
+      const transaction = db.transaction(CHUNKS, "readonly");
+      const request = transaction.objectStore(CHUNKS).openCursor(rangeFor(url));
+      const parts: Array<Blob> = [];
+
+      await new Promise<void>((resolve, reject) => {
+        request.addEventListener("success", () => {
+          const cursor = request.result;
+
+          if (cursor === null) {
+            resolve();
+
+            return;
+          }
+
+          const record: unknown = cursor.value;
+
+          if (isChunkRecord(record) && record.url === url) {
+            parts.push(new Blob([record.bytes]));
+          }
+
+          cursor.continue();
+        });
+
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error("The chunk store could not be read"));
+        });
+      });
+
+      return parts;
     },
     writeManifest: async (url, manifest) => {
       const db = await database();

@@ -91,7 +91,9 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
     onProgress(loaded, total);
   }
 
-  const parts = await store.readAll(url);
+  // Blobs, not buffers: a blob built out of other blobs references their storage, so
+  // the finished file is never held on the heap in one piece.
+  const parts = await store.readParts(url);
   const blob = new Blob(parts);
 
   if (blob.size !== total) {

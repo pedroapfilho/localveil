@@ -24,13 +24,13 @@ const memoryStore = () => {
 
       return Promise.resolve();
     },
-    readAll: (url) =>
+    readManifest: (url) => Promise.resolve(manifests.get(url)),
+    readParts: (url) =>
       Promise.resolve(
         [...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).entries()]
           .toSorted(([left], [right]) => left - right)
-          .map(([, bytes]) => bytes),
+          .map(([, bytes]) => new Blob([bytes])),
       ),
-    readManifest: (url) => Promise.resolve(manifests.get(url)),
     writeManifest: (url, manifest) => {
       manifests.set(url, manifest);
 
@@ -224,7 +224,10 @@ describe("downloadResumable", () => {
 
   it("refuses to hand back an assembly that is the wrong size", async () => {
     const { store } = memoryStore();
-    const short: ChunkStore = { ...store, readAll: () => Promise.resolve([bodyOf(3).buffer]) };
+    const short: ChunkStore = {
+      ...store,
+      readParts: () => Promise.resolve([new Blob([bodyOf(3)])]),
+    };
     const { fetchRange } = rangeServer(bodyOf(10));
 
     await expect(run(fetchRange, short)).rejects.toThrow(/chunks are corrupt/v);
