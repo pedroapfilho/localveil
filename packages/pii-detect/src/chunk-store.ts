@@ -4,6 +4,7 @@ type ChunkStore = {
   append: (url: string, start: number, bytes: ArrayBuffer) => Promise<void>;
   clear: (url: string) => Promise<void>;
   readManifest: (url: string) => Promise<Manifest | undefined>;
+  readOffsets: (url: string) => Promise<Array<number>>;
   readParts: (url: string) => Promise<Array<Blob>>;
   writeManifest: (url: string, manifest: Manifest) => Promise<void>;
 };
@@ -75,6 +76,9 @@ const isChunkRecord = (value: unknown): value is ChunkRecord =>
   Reflect.get(value, "bytes") instanceof ArrayBuffer &&
   typeof Reflect.get(value, "url") === "string";
 
+const isChunkKey = (key: unknown): key is [string, number] =>
+  Array.isArray(key) && typeof key.at(0) === "string" && typeof key.at(1) === "number";
+
 const rangeFor = (url: string) =>
   IDBKeyRange.bound([url, Number.NEGATIVE_INFINITY], [url, Number.POSITIVE_INFINITY]);
 
@@ -115,6 +119,41 @@ const createIndexedDbChunkStore = (): ChunkStore => {
       const record: unknown = await promisify(transaction.objectStore(MANIFESTS).get(url));
 
       return isManifest(record) ? record : undefined;
+    },
+    // A key cursor: which offsets a half-finished download already holds is a question
+    // about the keys, and answering it with `getAll` or a value cursor would read all
+    // 809 MB of bodies to look at their offsets.
+    readOffsets: async (url) => {
+      const db = await database();
+      const transaction = db.transaction(CHUNKS, "readonly");
+      const request = transaction.objectStore(CHUNKS).openKeyCursor(rangeFor(url));
+      const offsets: Array<number> = [];
+
+      await new Promise<void>((resolve, reject) => {
+        request.addEventListener("success", () => {
+          const cursor = request.result;
+
+          if (cursor === null) {
+            resolve();
+
+            return;
+          }
+
+          const { key } = cursor;
+
+          if (isChunkKey(key) && key[0] === url) {
+            offsets.push(key[1]);
+          }
+
+          cursor.continue();
+        });
+
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error("The chunk store could not be read"));
+        });
+      });
+
+      return offsets;
     },
     // A cursor rather than `getAll`, which would put all 809 MB of a model on the
     // heap at once and then copy it again into the blob. Each record becomes a Blob

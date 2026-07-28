@@ -2,14 +2,18 @@ import type { ChunkStore } from "./chunk-store.ts";
 
 type Probe = { etag: string; total: number };
 
+type Resume = { chunkSize: number; etag: string; store: ChunkStore; total: number; url: string };
+
 type DownloadOptions = {
   chunkSize: number;
+  concurrency?: number;
   fetchRange: typeof fetch;
   onProgress: (loaded: number, total: number) => void;
   store: ChunkStore;
 };
 
 const CONTENT_RANGE = /^bytes \d+-\d+\/(?<total>\d+)$/v;
+const DEFAULT_CONCURRENCY = 6;
 
 const rangeHeader = (start: number, endInclusive: number) => ({
   Range: `bytes=${String(start)}-${String(endInclusive)}`,
@@ -37,58 +41,109 @@ const probe = async (url: string, fetchRange: typeof fetch): Promise<Probe> => {
   return { etag: response.headers.get("etag") ?? url, total: Number(total) };
 };
 
-const startingPoint = async (url: string, etag: string, store: ChunkStore) => {
+const isRejected = (outcome: PromiseSettledResult<void>): outcome is PromiseRejectedResult =>
+  outcome.status === "rejected";
+
+const chunkStarts = (total: number, chunkSize: number) =>
+  Array.from({ length: Math.ceil(total / chunkSize) }, (_entry, index) => index * chunkSize);
+
+// What a resumed run still owes is derived from the offsets the store holds, not from a
+// byte watermark: ranges fetched in parallel finish out of order, and "everything below
+// byte N is here" cannot describe a file with a hole in the middle of it.
+const storedOffsets = async ({ chunkSize, etag, store, total, url }: Resume) => {
   const manifest = await store.readManifest(url);
 
-  if (manifest === undefined) {
-    return 0;
+  if (manifest?.etag === etag) {
+    const stored = await store.readOffsets(url);
+
+    // Offsets banked by a run with a different chunk size sit across the ranges this
+    // run asks for, so keeping them would assemble a file with the overlap inside it.
+    if (stored.every((start) => start % chunkSize === 0 && start < total)) {
+      return new Set(stored);
+    }
   }
 
-  if (manifest.etag !== etag) {
-    await store.clear(url);
+  await store.clear(url);
 
-    return 0;
-  }
-
-  return manifest.loaded;
+  return new Set<number>();
 };
 
 const downloadResumable = async (url: string, options: DownloadOptions): Promise<Blob> => {
-  const { chunkSize, fetchRange, onProgress, store } = options;
+  const { chunkSize, concurrency = DEFAULT_CONCURRENCY, fetchRange, onProgress, store } = options;
   const { etag, total } = await probe(url, fetchRange);
+  const held = await storedOffsets({ chunkSize, etag, store, total, url });
+  const spanOf = (start: number) => Math.min(chunkSize, total - start);
+  const queue = chunkStarts(total, chunkSize).filter((start) => !held.has(start));
 
-  let loaded = await startingPoint(url, etag, store);
+  // Only ever added to, so progress climbs in the bursts that parallel chunks land in
+  // and never walks backwards.
+  let loaded = [...held].reduce((sum, start) => sum + spanOf(start), 0);
+  let stopped = false;
+
+  await store.writeManifest(url, { etag, loaded, total });
 
   onProgress(loaded, total);
 
-  while (loaded < total) {
-    const end = Math.min(loaded + chunkSize, total) - 1;
-    // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
-    const response = await fetchRange(url, { headers: rangeHeader(loaded, end) });
+  const bank = async (start: number) => {
+    const response = await fetchRange(url, {
+      headers: rangeHeader(start, start + spanOf(start) - 1),
+    });
 
     if (response.status !== 206) {
       throw new Error(
-        `${url} answered ${String(response.status)} partway through, at byte ${String(loaded)}`,
+        `${url} answered ${String(response.status)} partway through, at byte ${String(start)}`,
       );
     }
 
-    // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
     const bytes = await response.arrayBuffer();
 
-    // An empty chunk would leave `loaded` where it is and spin here forever.
+    // Banking an empty body would leave an offset that later runs read as done, so the
+    // bytes it stands for would never be asked for again.
     if (bytes.byteLength === 0) {
-      throw new Error(`${url} returned an empty chunk at byte ${String(loaded)}`);
+      throw new Error(`${url} returned an empty chunk at byte ${String(start)}`);
     }
 
-    // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
-    await store.append(url, loaded, bytes);
+    await store.append(url, start, bytes);
 
     loaded += bytes.byteLength;
 
-    // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
     await store.writeManifest(url, { etag, loaded, total });
 
     onProgress(loaded, total);
+  };
+
+  const worker = async () => {
+    while (!stopped) {
+      const start = queue.shift();
+
+      if (start === undefined) {
+        return;
+      }
+
+      try {
+        // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
+        await bank(start);
+      } catch (error) {
+        // The download is going to reject on this, and piling more ranges onto a
+        // connection that just broke would only draw the failure out. Whatever the
+        // other workers banked stays in the store for the next run to build on.
+        stopped = true;
+
+        throw error;
+      }
+    }
+  };
+
+  const workers = Math.min(Math.max(concurrency, 1), queue.length);
+  const outcomes = await Promise.allSettled(Array.from({ length: workers }, worker));
+  const failure = outcomes.find(isRejected);
+
+  if (failure !== undefined) {
+    const reason: unknown = failure.reason;
+
+    throw reason instanceof Error
+      ? reason
+      : new Error(`${url} failed partway through: ${String(reason)}`);
   }
 
   // Blobs, not buffers: a blob built out of other blobs references their storage, so
