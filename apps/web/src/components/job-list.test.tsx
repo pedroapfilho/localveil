@@ -15,11 +15,12 @@ const job = (patch: Partial<Job> = {}): Job => ({
 });
 
 const setup = (jobs: Array<Job>) => {
+  const onClear = vi.fn<() => void>();
   const onRemove = vi.fn<(id: string) => void>();
 
-  renderWithI18n(<JobList jobs={jobs} onRemove={onRemove} />);
+  renderWithI18n(<JobList jobs={jobs} onClear={onClear} onRemove={onRemove} />);
 
-  return { onRemove };
+  return { onClear, onRemove };
 };
 
 describe("JobList", () => {
@@ -93,6 +94,20 @@ describe("JobList", () => {
 
     expect(screen.getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText("The worker gave up")).toBeInTheDocument();
+  });
+
+  it("offers no way to clear a list that is already empty", () => {
+    setup([]);
+
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("empties the whole list when asked", () => {
+    const { onClear } = setup([job(), job({ id: "job-2" })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(onClear).toHaveBeenCalledTimes(1);
   });
 
   it("removes the file it was asked to remove", () => {

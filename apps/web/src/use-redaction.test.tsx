@@ -57,7 +57,7 @@ class FakeWorker {
 }
 
 const Harness = () => {
-  const { remove, submit } = useRedaction();
+  const { clear, remove, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -83,6 +83,10 @@ const Harness = () => {
       <button onClick={handleRemoveFirst} type="button">
         remove
       </button>
+
+      <button onClick={clear} type="button">
+        clear
+      </button>
     </>
   );
 };
@@ -106,6 +110,10 @@ const filesSentTo = (index: number) =>
 
 const removeFirst = () => {
   fireEvent.click(screen.getByRole("button", { name: "remove" }));
+};
+
+const clearAll = () => {
+  fireEvent.click(screen.getByRole("button", { name: "clear" }));
 };
 
 const submitTwo = () => {
@@ -361,5 +369,43 @@ describe("removing a file", () => {
     removeFirst();
 
     expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+  });
+});
+
+describe("clearing the list", () => {
+  it("empties the page", () => {
+    submitTwo();
+    clearAll();
+
+    expect(jobsNow()).toEqual([]);
+  });
+
+  // Emptying the list without telling the worker would leave it grinding through
+  // files nobody is waiting for, which is the bug the per-row cancel already fixed.
+  it("tells the worker to stop every one of them", () => {
+    submitTwo();
+
+    const ids = jobsNow().map((job) => job.id);
+
+    clearAll();
+
+    expect(workerAt(0).posted.filter((request) => request.type === "cancel")).toEqual(
+      ids.map((id) => ({ id, type: "cancel" })),
+    );
+  });
+
+  it("leaves the worker alive for whatever is dropped next", () => {
+    submitTwo();
+    clearAll();
+
+    expect(workerAt(0).terminated).toBe(false);
+    expect(FakeWorker.instances.length).toBe(1);
+  });
+
+  it("shrugs off a clear with nothing to clear", () => {
+    renderWithI18n(<Harness />);
+    clearAll();
+
+    expect(jobsNow()).toEqual([]);
   });
 });

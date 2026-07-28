@@ -9,6 +9,7 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@repo/ui/components/attachment";
+import { Button } from "@repo/ui/components/button";
 import { Progress } from "@repo/ui/components/progress";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { FileTextIcon, XIcon } from "lucide-react";
@@ -134,10 +135,11 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
 
 type JobListProps = {
   jobs: Array<Job>;
+  onClear: () => void;
   onRemove: (id: string) => void;
 };
 
-const JobList = ({ jobs, onRemove }: JobListProps) => {
+const JobList = ({ jobs, onClear, onRemove }: JobListProps) => {
   const { t } = useTranslations();
 
   if (jobs.length === 0) {
@@ -151,7 +153,13 @@ const JobList = ({ jobs, onRemove }: JobListProps) => {
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
 
-        <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
+
+          <Button onClick={onClear} size="sm" variant="ghost">
+            {t("files.clear")}
+          </Button>
+        </div>
       </div>
 
       <ScrollArea

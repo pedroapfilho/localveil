@@ -265,6 +265,20 @@ const useRedaction = () => {
     armWatchdogRef.current?.();
   }, []);
 
+  const clear = useCallback(() => {
+    const worker = workerRef.current;
+    const { jobs, reset } = useJobStore.getState();
+
+    if (worker !== null) {
+      for (const job of jobs) {
+        sendCancel(worker, job.id);
+      }
+    }
+
+    reset();
+    armWatchdogRef.current?.();
+  }, []);
+
   const downloadZip = useCallback(async () => {
     const ready = completedJobs(useJobStore.getState().jobs);
 
@@ -275,7 +289,7 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { downloadZip, model, remove, submit };
+  return { clear, downloadZip, model, remove, submit };
 };
 
 export { useRedaction };

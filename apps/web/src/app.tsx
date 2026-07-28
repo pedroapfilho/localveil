@@ -48,7 +48,7 @@ const BrandMark = () => (
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const { downloadZip, model, remove, submit } = useRedaction();
+  const { clear, downloadZip, model, remove, submit } = useRedaction();
 
   useDocumentLocale();
 
@@ -116,7 +116,7 @@ const App = () => {
                 transition={APPEAR}
                 {...SLIDE}
               >
-                <JobList jobs={jobs} onRemove={remove} />
+                <JobList jobs={jobs} onClear={clear} onRemove={remove} />
 
                 <DownloadPanel jobs={jobs} onDownload={handleDownload} />
               </motion.div>

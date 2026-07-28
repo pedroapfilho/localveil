@@ -12,6 +12,7 @@ const es: Messages = {
   "dropzone.hint": "o arrástralos aquí",
   "dropzone.label": "Elegir archivos",
   "error.unknown": "Algo salió mal.",
+  "files.clear": "Limpiar",
   "files.heading": "Archivos",
   "files.noRedactions": "No se encontró nada que ocultar",
   "files.redactions": "{count} ocultados",

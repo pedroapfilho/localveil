@@ -12,6 +12,7 @@ const pt: Messages = {
   "dropzone.hint": "ou arraste e solte aqui",
   "dropzone.label": "Escolher arquivos",
   "error.unknown": "Algo deu errado.",
+  "files.clear": "Limpar",
   "files.heading": "Arquivos",
   "files.noRedactions": "Nada encontrado para ocultar",
   "files.redactions": "{count} ocultados",
