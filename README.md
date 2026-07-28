@@ -168,7 +168,7 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 - **Documents:** `pdfjs-dist` for rendering, `pdf-lib` for rebuilding, `tesseract.js` for recognition, `fflate` for the ZIP.
 - **Build:** Turborepo + pnpm workspaces.
 - **Linting / formatting:** oxlint + oxfmt.
-- **Testing:** Vitest, 272 unit and component tests.
+- **Testing:** Vitest, 368 unit and component tests.
 
 ## Setup
 

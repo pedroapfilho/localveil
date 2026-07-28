@@ -60,19 +60,5 @@ const recognizeWords = async (image: ImageLike, language: OcrLanguage): Promise<
   return { confidence: data.confidence, words: wordsOf(data.blocks ?? []) };
 };
 
-const releaseRecognizers = async () => {
-  const running = [...workers.values()];
-
-  workers.clear();
-
-  await Promise.allSettled(
-    running.map(async (pending) => {
-      const worker = await pending;
-
-      return worker.terminate();
-    }),
-  );
-};
-
-export { recognizeWords, releaseRecognizers };
+export { recognizeWords };
 export type { Recognition };

@@ -50,5 +50,5 @@ const readImageText = async (
   return { ...(await recognizeWords(image, language)), language };
 };
 
-export { MIN_CONFIDENCE, PROBE, readImageText };
+export { readImageText };
 export type { ImageReading, ReadOptions };

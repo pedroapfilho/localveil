@@ -67,4 +67,4 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
 export { completedJobs, failedJobs, hasCompletedJobs, useJobStore };
-export type { CompletedJob, Job, JobPatch, JobResult, JobStatus, JobStore };
+export type { CompletedJob, Job, JobResult, JobStatus };
