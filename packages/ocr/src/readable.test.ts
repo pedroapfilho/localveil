@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { droppedAnyWords, LEGIBLE_WORD, legibleWords } from "./readable.ts";
+import { LEGIBLE_WORD, legibleWords, muchWasUnreadable } from "./readable.ts";
 import type { Recognition } from "./recognize.ts";
 
 const BOX = { x0: 0, x1: 10, y0: 0, y1: 10 };
 
 const reading = (...confidences: Array<number>): Recognition => ({
-  // The page average, which is the number that used to decide everything and now
-  // decides nothing.
   confidence: confidences.reduce((sum, value) => sum + value, 0) / (confidences.length || 1),
   words: confidences.map((confidence, index) => ({
     bbox: BOX,
@@ -36,9 +34,8 @@ describe("legibleWords", () => {
     expect(kept(LEGIBLE_WORD - 1)).toEqual([]);
   });
 
-  // The whole point. A Brazilian driving licence recognised 244 words: 56 above 90,
-  // and enough junk from the guilloche background to average the page down to 46. The
-  // old page-average floor threw all 244 away.
+  // A driving licence recognised 244 words, 56 of them above 90, and still averaged
+  // 46. The old page-average floor threw all 244 away.
   it("keeps the readable half of a page the average would have condemned", () => {
     const page = reading(95, 92, 91, 4, 7, 11, 3, 9);
 
@@ -65,16 +62,26 @@ describe("legibleWords", () => {
   });
 });
 
-describe("droppedAnyWords", () => {
-  it("says nothing was dropped when every word cleared the floor", () => {
-    expect(droppedAnyWords(reading(95, 88, 74))).toBe(false);
+describe("muchWasUnreadable", () => {
+  it("stays quiet when every word cleared the floor", () => {
+    expect(muchWasUnreadable(reading(95, 88, 74))).toBe(false);
   });
 
-  it("says so when even one word was too rough to trust", () => {
-    expect(droppedAnyWords(reading(95, 88, 12))).toBe(true);
+  // Every real scan has a stray mark under the floor.
+  it("stays quiet about the odd word it could not make out", () => {
+    expect(muchWasUnreadable(reading(95, 92, 88, 91, 90, 87, 94, 12))).toBe(false);
   });
 
-  it("says nothing was dropped from a page that had no words to drop", () => {
-    expect(droppedAnyWords(reading())).toBe(false);
+  it("speaks up when a quarter of the page was beyond it", () => {
+    expect(muchWasUnreadable(reading(95, 92, 12, 8))).toBe(true);
+  });
+
+  // The measured shape of a driving licence: mostly background, fields in a minority.
+  it("speaks up about a page that was mostly background", () => {
+    expect(muchWasUnreadable(reading(95, 91, 4, 7, 11, 3, 9, 14))).toBe(true);
+  });
+
+  it("stays quiet about a page that had no words to lose", () => {
+    expect(muchWasUnreadable(reading())).toBe(false);
   });
 });

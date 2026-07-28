@@ -1,5 +1,5 @@
 import type { OcrLanguage } from "@repo/ocr";
-import { detectLanguage, droppedAnyWords, legibleWords, readImageText } from "@repo/ocr";
+import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -14,16 +14,11 @@ import { OffscreenCanvasFactory } from "./canvas-factory.ts";
 import { isCovered } from "./covered.ts";
 import { NoFilterFactory } from "./filter-factory.ts";
 
-// Two device pixels per point: enough that the rebuilt page still reads well at
-// normal zoom, and enough resolution for the recogniser to place words precisely.
+// Enough resolution for the recogniser to place words precisely.
 const SCALE = 2;
 
-// A page carrying almost nothing in its text layer is a scan, so there is no
-// language to read off it and the recogniser has to work that out itself.
 const MIN_TEXT_WORDS = 4;
 
-// Below this the language guess is not worth acting on, and the recogniser falls
-// back to probing in English.
 const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
 // pdf.js normally parses in a worker it spawns itself, which would be a worker
@@ -52,9 +47,6 @@ const installParser = async () => {
 // a .notdef box: a page of tofu, which the recogniser reads as gibberish and the
 // model then tags as one long name, so the whole page comes back black. Building the
 // glyph outlines instead needs no DOM.
-//
-// A base-14 font like Helvetica renders either way, so a fixture built from one will
-// not notice if this goes missing. That is what the test on this function is for.
 const documentOptions = (data: Uint8Array) => ({
   CanvasFactory: OffscreenCanvasFactory,
   data,
@@ -162,8 +154,6 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
       .join(" ")
       .trim();
 
-    // Settled once, from the first page that says anything, so a hundred-page
-    // document does not ask a hundred times.
     if (language === undefined && layerText.split(/\s+/v).length >= MIN_TEXT_WORDS) {
       const guess = detectLanguage(layerText);
 
@@ -180,7 +170,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
 
     language ??= reading.language;
 
-    if (droppedAnyWords(reading)) {
+    if (muchWasUnreadable(reading)) {
       warnings.add("warning.lowConfidence");
     }
 
@@ -188,8 +178,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
 
     onProgress(progress, "stage.detecting");
 
-    // Only the words the recogniser was sure of: see readable.ts. A page it could not
-    // read at all leaves nothing here, so nothing is searched and nothing is painted.
+    // See readable.ts for why the words are filtered rather than the page vetoed.
     const { text, words } = buildWordIndex(legibleWords(reading));
     const spans = await detect(text);
 

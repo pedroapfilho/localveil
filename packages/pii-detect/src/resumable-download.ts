@@ -47,9 +47,9 @@ const isRejected = (outcome: PromiseSettledResult<void>): outcome is PromiseReje
 const chunkStarts = (total: number, chunkSize: number) =>
   Array.from({ length: Math.ceil(total / chunkSize) }, (_entry, index) => index * chunkSize);
 
-// What a resumed run still owes is derived from the offsets the store holds, not from a
-// byte watermark: ranges fetched in parallel finish out of order, and "everything below
-// byte N is here" cannot describe a file with a hole in the middle of it.
+// Derived from the offsets the store holds rather than a byte watermark: ranges fetched
+// in parallel finish out of order, and "everything below byte N is here" cannot describe
+// a file with a hole in the middle.
 const storedOffsets = async ({ chunkSize, etag, store, total, url }: Resume) => {
   const manifest = await store.readManifest(url);
 
@@ -75,8 +75,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   const spanOf = (start: number) => Math.min(chunkSize, total - start);
   const queue = chunkStarts(total, chunkSize).filter((start) => !held.has(start));
 
-  // Only ever added to, so progress climbs in the bursts that parallel chunks land in
-  // and never walks backwards.
   let loaded = [...held].reduce((sum, start) => sum + spanOf(start), 0);
   let stopped = false;
 
@@ -124,9 +122,8 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
         // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
         await bank(start);
       } catch (error) {
-        // The download is going to reject on this, and piling more ranges onto a
-        // connection that just broke would only draw the failure out. Whatever the
-        // other workers banked stays in the store for the next run to build on.
+        // Piling more ranges onto a connection that just broke only draws the failure
+        // out. What the other workers banked stays in the store for the next run.
         stopped = true;
 
         throw error;

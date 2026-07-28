@@ -5,8 +5,6 @@ type PiiToken = { label: PiiLabel; score: number; text: string };
 // Shorter than this and a name fragment starts colliding with ordinary words.
 const MIN_LENGTH = 3;
 
-// Word-ish runs, including the punctuation that lives inside an address or an email
-// rather than between words.
 const TOKEN = /[\p{Letter}\p{Number}][\p{Letter}\p{Number}._@+\-]*/gv;
 
 const BOUNDARY = String.raw`[\p{Letter}\p{Number}]`;
@@ -34,9 +32,7 @@ const tokensFromSpans = (text: string, spans: Array<Span>): Array<PiiToken> => {
   return [...byText.values()];
 };
 
-// A PDF asks for the same token on every page, so the pattern is built once per
-// distinct name rather than once per page per name. `matchAll` clones the regex
-// before walking it, so a shared one carries no `lastIndex` between calls.
+// `matchAll` clones the regex, so a cached one carries no `lastIndex` between calls.
 const PATTERNS = new Map<string, RegExp>();
 
 const patternFor = (token: string) => {

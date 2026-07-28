@@ -1,9 +1,8 @@
 import type { PiiLabel, Span } from "./types.ts";
 
-// A model can walk past an identifier; a pattern cannot. These cover the shapes that
-// are worth matching literally, and every one of them carries a check digit, so a
-// number that merely looks right is rejected rather than blacked out. That matters
-// on an invoice, where a page is mostly digits that are not identifiers.
+// Every one of these carries a check digit, so a number that merely looks right is
+// rejected rather than blacked out. An invoice is mostly digits that are not
+// identifiers.
 type Pattern = {
   label: PiiLabel;
   matcher: RegExp;
@@ -132,9 +131,8 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: luhn,
   },
   {
-    // A country code, brackets, or a hyphen is required. Two runs of digits either
-    // side of a space is an amount or half a card number far more often than it is a
-    // telephone number, and an invoice is full of both.
+    // A country code, brackets or a hyphen is required: two runs of digits either side
+    // of a space is an amount far more often than a telephone number.
     label: "private_phone",
     matcher:
       /\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{3,5}|\(\d{2,4}\)\s?\d{3,5}[\s\-]\d{3,5}|\b\d{3,4}-\d{4}\b/gv,

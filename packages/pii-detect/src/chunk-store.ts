@@ -82,9 +82,8 @@ const isChunkKey = (key: unknown): key is [string, number] =>
 const rangeFor = (url: string) =>
   IDBKeyRange.bound([url, Number.NEGATIVE_INFINITY], [url, Number.POSITIVE_INFINITY]);
 
-// Chunks are keyed by their own start offset rather than appended to one growing
-// record: rewriting an 800 MB value on every 8 MB that arrives would cost more than
-// the download.
+// Keyed by start offset rather than appended to one growing record: rewriting an
+// 800 MB value on every 8 MB that arrives would cost more than the download.
 const createIndexedDbChunkStore = (): ChunkStore => {
   let pending: Promise<IDBDatabase> | undefined;
 
@@ -120,9 +119,8 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 
       return isManifest(record) ? record : undefined;
     },
-    // A key cursor: which offsets a half-finished download already holds is a question
-    // about the keys, and answering it with `getAll` or a value cursor would read all
-    // 809 MB of bodies to look at their offsets.
+    // A key cursor: `getAll` or a value cursor would read all 809 MB of bodies just to
+    // look at their offsets.
     readOffsets: async (url) => {
       const db = await database();
       const transaction = db.transaction(CHUNKS, "readonly");
@@ -155,13 +153,8 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 
       return offsets;
     },
-    // A cursor rather than `getAll`, which would put all 809 MB of a model on the
-    // heap at once and then copy it again into the blob. Each record becomes a Blob
-    // as it arrives, so only one chunk is ever in memory, and the blob that gets
-    // assembled from them references their storage rather than copying it.
-    //
-    // The store's key is `[url, start]`, so a cursor over the range walks the chunks
-    // in the order they were downloaded without anything having to sort them.
+    // A cursor rather than `getAll`, which would put all 809 MB on the heap at once.
+    // The key is `[url, start]`, so the cursor walks them in order already.
     readParts: async (url) => {
       const db = await database();
       const transaction = db.transaction(CHUNKS, "readonly");

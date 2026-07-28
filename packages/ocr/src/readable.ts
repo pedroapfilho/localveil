@@ -2,17 +2,10 @@ import type { WordInput } from "@repo/redact-core";
 
 import type { Recognition } from "./recognize.ts";
 
-// This used to be a page-average threshold that vetoed the whole page, and it threw
-// away real documents. Measured on a Brazilian driving licence: Tesseract found 244
-// words, 56 of them above 90, and still reported a page average of 46, because the
-// guilloche background produces a second population of junk readings sitting near
-// zero. The mean of two populations describes neither, and one number under the line
-// meant nothing on that page was ever looked at.
-//
-// So the score is read per word instead. On a clean page almost everything clears the
-// floor and nothing changes. On a noisy one the fields survive and the background does
-// not. A page of .notdef boxes, which is what the old floor was added for, still comes
-// back untouched: every word on it scores low, so nothing survives to be searched.
+// Per word, because a page average is a mean over two populations on anything
+// security-printed. Measured on a driving licence: 244 words, 56 of them above 90, and
+// a page average of 46 that vetoed all of it. A page of .notdef boxes still comes back
+// untouched, since every word on one scores low and nothing survives the floor.
 const LEGIBLE_WORD = 60;
 
 const legibleWords = ({ words }: Recognition, floor: number = LEGIBLE_WORD): Array<WordInput> => {
@@ -27,10 +20,19 @@ const legibleWords = ({ words }: Recognition, floor: number = LEGIBLE_WORD): Arr
   return kept;
 };
 
-// Whether the reader should be told some of the page was too rough to read. Separate
-// from the filtering above on purpose: dropping a word changes what gets redacted,
-// saying so changes what the reader trusts, and those are different decisions.
-const droppedAnyWords = (reading: Recognition, floor: number = LEGIBLE_WORD) =>
-  legibleWords(reading, floor).length < reading.words.length;
+// A share rather than a count: every real scan has a stray mark under the floor, so
+// warning on one warned on everything. Measured: a clean page dropped 0 of 39 words, a
+// driving licence 65% of 244.
+const UNREADABLE_SHARE = 0.25;
 
-export { droppedAnyWords, LEGIBLE_WORD, legibleWords };
+const muchWasUnreadable = (reading: Recognition, floor: number = LEGIBLE_WORD) => {
+  const total = reading.words.length;
+
+  if (total === 0) {
+    return false;
+  }
+
+  return (total - legibleWords(reading, floor).length) / total > UNREADABLE_SHARE;
+};
+
+export { LEGIBLE_WORD, legibleWords, muchWasUnreadable, UNREADABLE_SHARE };

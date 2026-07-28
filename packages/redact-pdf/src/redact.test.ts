@@ -23,8 +23,7 @@ const state = {
 const WORD_WIDTH = 40;
 const LINE_HEIGHT = 20;
 
-// One word per column on a single line, which keeps the geometry obvious: word `i`
-// sits between x = 40i and x = 40i + 40.
+// Word `i` sits between x = 40i and x = 40i + 40.
 const boxFor = (index: number): Bbox => ({
   x0: index * WORD_WIDTH,
   x1: index * WORD_WIDTH + WORD_WIDTH,
@@ -140,7 +139,6 @@ const { pdfRedactor } = await import("./index.ts");
 
 const file = () => new File([new Uint8Array([37, 80, 68, 70])], "statement.pdf");
 
-// Tags whatever it is told to, wherever it appears in the page it is given.
 const detecting = (targets: Array<string>): Detect =>
   vi.fn((text: string) =>
     Promise.resolve(
@@ -210,7 +208,6 @@ describe("pdfRedactor", () => {
   it("covers a name on the page where the model missed it", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima today")];
 
-    // Tagged only where the word "Signed" is, which is page two.
     await run(detecting(["Signed by Ana Lima"]));
 
     expect(state.drawn[0]).toEqual(["Invoice", "for"]);
@@ -237,8 +234,7 @@ describe("pdfRedactor", () => {
   });
 
   // A wall of .notdef boxes recognises as gibberish, which the model tags as one long
-  // name, which paints a rectangle over every line of a page nobody could read. Every
-  // word on such a page scores low, so none of it reaches the model.
+  // name and paints over end to end. Every word on such a page scores low.
   it("finds nothing to search in a page the recogniser could not read", async () => {
     state.confidenceOf = () => 28;
 
@@ -257,9 +253,8 @@ describe("pdfRedactor", () => {
     expect(state.painted).toEqual([]);
   });
 
-  // The case this floor exists for. A Brazilian driving licence recognised 244 words:
-  // the fields at 90-plus, the guilloche background as junk near zero, and a page
-  // average of 46 that vetoed all of it. The readable words get covered now.
+  // The case this floor exists for: a driving licence whose fields read at 90-plus
+  // while the background averaged the page down to 46.
   it("covers the words it could read on a page the average would have condemned", async () => {
     state.confidence = 46;
     state.confidenceOf = (text) => (text === "Ana" || text === "Lima" ? 95 : 20);
@@ -271,12 +266,22 @@ describe("pdfRedactor", () => {
     expect(warnings).toContain("warning.lowConfidence");
   });
 
-  it("warns when the recogniser had to guess at any of the words", async () => {
+  it("warns when most of the page was beyond the recogniser", async () => {
     state.confidenceOf = () => 40;
 
     const { warnings } = await run();
 
     expect(warnings).toContain("warning.lowConfidence");
+  });
+
+  // Every real scan has a stray mark under the floor.
+  it("says nothing about the odd word it could not make out", async () => {
+    state.pages = [page("Invoice for Ana Lima on the fourteenth of March")];
+    state.confidenceOf = (text) => (text === "fourteenth" ? 20 : 95);
+
+    const { warnings } = await run();
+
+    expect(warnings).toEqual([]);
   });
 
   it("says nothing when the page read cleanly", async () => {
@@ -309,8 +314,6 @@ describe("pdfRedactor", () => {
     expect(warnings).toContain("warning.droppedCharacters");
   });
 
-  // Settled once, from the first page that says anything, so a hundred-page document
-  // does not ask a hundred times.
   it("reads the language off the text layer and recognises in it", async () => {
     state.language = "pt";
     state.pages = [page("Fatura para Ana Lima"), page("Assinado por Ana Lima")];

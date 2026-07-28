@@ -9,10 +9,8 @@ const TRAINEDDATA: Record<OcrLanguage, string> = {
   pt: "por",
 };
 
-// Function words only, and only ones that do not appear in the other two lists: the
-// point is to tell these three apart, not to describe them. Written without accents
-// because the first OCR pass runs in English and drops most of them, which is
-// exactly the text this has to work on.
+// Function words that appear in one of the three lists only. Written without accents
+// because the first OCR pass runs in English and drops most of them.
 const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
   en: new Set([
     "and",
@@ -120,8 +118,6 @@ const detectLanguage = (text: string, fallback: OcrLanguage = "en"): DetectedLan
     return { confidence: 0, language: fallback };
   }
 
-  // Two things have to hold before a guess is worth acting on: the winner took most
-  // of the matches, and there were enough matches for that share to mean anything.
   // One lucky hit would otherwise score a perfect share.
   const share = top[1] / hits;
   const volume = Math.min(1, hits / MIN_HITS);

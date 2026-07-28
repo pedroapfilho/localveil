@@ -23,8 +23,6 @@ const setup = (jobs: Array<Job>) => {
 };
 
 describe("JobList", () => {
-  // A heading over an empty box, under a dropzone that already says what to do, is a
-  // second thing to read that carries nothing.
   it("renders nothing at all with no files", () => {
     setup([]);
 

@@ -1,9 +1,8 @@
 import type { RedactRequest } from "./worker-protocol";
 
-// Cancelling has to reach code that is several loops deep inside a redactor, and none
-// of them knows what a job is. The progress callback they were all handed is the one
-// thing that runs on every page, so it doubles as the checkpoint: it throws once the
-// job is gone, the redactor unwinds, and no redactor had to learn anything new.
+// Cancelling has to reach code several loops deep inside a redactor, and none of them
+// knows what a job is. The progress callback runs on every page, so it doubles as the
+// checkpoint and no redactor had to learn anything new.
 class CancelledError extends Error {
   constructor(id: string) {
     super(`Job ${id} was cancelled`);
@@ -32,8 +31,7 @@ const createJobQueue = ({ onError, run }: JobQueueOptions): JobQueue => {
   let running: string | undefined;
   let abandoned = false;
 
-  // Built outside the loop rather than inside it: the flag it reads has to be the one
-  // the queue owns, not a copy taken when the job started.
+  // Outside the loop so the flag it reads is the queue's, not a copy.
   const checkpointFor = (id: string) => () => {
     if (abandoned) {
       throw new CancelledError(id);
@@ -77,8 +75,6 @@ const createJobQueue = ({ onError, run }: JobQueueOptions): JobQueue => {
     cancel: (id) => {
       const waiting = queue.findIndex((request) => request.id === id);
 
-      // A file that never started leaves at once. The one that is running stops at
-      // its next progress report, which for a PDF is partway through a page.
       if (waiting !== -1) {
         queue.splice(waiting, 1);
 

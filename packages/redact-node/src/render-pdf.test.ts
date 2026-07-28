@@ -1,3 +1,4 @@
+import type * as Ocr from "@repo/ocr";
 import type { Detect } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,10 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // page, and a faked canvas would have sailed straight past it.
 const recognised: Array<Uint8Array> = [];
 
-vi.mock("@repo/ocr", () => ({
+vi.mock("@repo/ocr", async (importOriginal) => ({
+  ...(await importOriginal<typeof Ocr>()),
   detectLanguage: () => ({ confidence: 0.9, language: "en" }),
-  droppedAnyWords: () => false,
-  legibleWords: () => [],
   readImageText: (image: Iterable<number>) => {
     recognised.push(new Uint8Array(image));
 

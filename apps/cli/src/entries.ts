@@ -95,8 +95,6 @@ const resolveArguments = async (
     }
   }
 
-  // Start beside the first named file so its tick is on screen, and only fall back
-  // to a named directory when no file was given.
   const first = selection[0];
   const directory = first === undefined ? (directories[0] ?? workingDirectory) : dirname(first);
 

@@ -30,9 +30,7 @@ type FileStageKey =
 
 type StageKey = FileStageKey | ModelStageKey;
 
-// Warnings reach the same screen as the stages and cross the same worker boundary,
-// so they are keys for the same reason. They carry no values: a reader needs to know
-// the result is shaky, not which page scored what.
+// Keys for the same reason as the stages above.
 type WarningKey =
   | "warning.droppedCharacters"
   | "warning.lowConfidence"

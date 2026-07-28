@@ -29,8 +29,6 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  // Nothing but the dropzone and the footer until a file arrives: no file list over
-  // an empty box, no download button counting nothing.
   it("renders the shell with nothing queued", () => {
     renderWithI18n(<App />);
 
@@ -111,8 +109,6 @@ describe("App", () => {
     expect(screen.getByRole("combobox", { name: "Language" })).toHaveTextContent("English");
   });
 
-  // Each language names itself, so a reader hunting for Portuguese looks for the word
-  // they already know rather than for whatever the current interface calls it.
   it("names every language in its own language", async () => {
     renderWithI18n(<App />);
 

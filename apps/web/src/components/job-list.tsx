@@ -1,12 +1,17 @@
-// Safari drops list semantics from a `ul` whose bullets are removed, and these have
-// none, so `role="list"` restores what the styling took away rather than repeating
-// what the element already says.
-/* oxlint-disable jsx-a11y/no-redundant-roles */
 import type { MessageKey } from "@repo/i18n";
 import { useTranslations } from "@repo/i18n";
-import { Button } from "@repo/ui/components/button";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from "@repo/ui/components/attachment";
 import { Progress } from "@repo/ui/components/progress";
-import { XIcon } from "lucide-react";
+import { ScrollArea } from "@repo/ui/components/scroll-area";
+import { FileTextIcon, XIcon } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import type { Job, JobStatus } from "../store";
@@ -18,8 +23,14 @@ const STATUS_KEYS: Record<JobStatus, MessageKey> = {
   running: "status.running",
 };
 
-// The dot carries the same meaning as the word beside it and never on its own, so a
-// reader who cannot tell the colours apart still has the label.
+const ATTACHMENT_STATES = {
+  done: "done",
+  error: "error",
+  queued: "idle",
+  running: "processing",
+} as const;
+
+// The dot repeats the word beside it, so colour is never the only cue.
 const STATUS_TONES: Record<JobStatus, string> = {
   done: "text-success",
   error: "text-destructive",
@@ -27,10 +38,11 @@ const STATUS_TONES: Record<JobStatus, string> = {
   running: "text-foreground",
 };
 
-// The strong ease-out from the house animation standards. Built-in easings are too
-// weak to read as deliberate at this duration, and ease-in would hold back the frame
-// the reader is actually watching.
+// A strong ease-out: the built-in curves are too weak to read at this duration.
 const ENTER = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+
+const VISIBLE_ROWS = 4;
+const ROW_HEIGHT = 88;
 
 type JobRowProps = {
   job: Job;
@@ -61,19 +73,20 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
   return (
     <motion.li
       animate={{ opacity: 1, transform: "translateY(0px)" }}
-      className="flex flex-col gap-3 px-4 py-4 sm:px-5"
       exit={{ opacity: 0, transform: "translateY(-4px)" }}
       initial={{ opacity: 0, transform: "translateY(-6px)" }}
       layout="position"
       transition={ENTER}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <p className="truncate text-base font-medium sm:text-sm" title={file.name}>
-            {file.name}
-          </p>
+      <Attachment state={ATTACHMENT_STATES[status]}>
+        <AttachmentMedia>
+          <FileTextIcon aria-hidden className="size-4 shrink-0" />
+        </AttachmentMedia>
 
-          <p className={`flex items-center gap-1.5 text-base sm:text-sm ${STATUS_TONES[status]}`}>
+        <AttachmentContent>
+          <AttachmentTitle title={file.name}>{file.name}</AttachmentTitle>
+
+          <AttachmentDescription className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}>
             <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
 
             {t(STATUS_KEYS[status])}
@@ -85,45 +98,36 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
                 <span className="text-muted-foreground truncate">{t(stage)}</span>
               </>
             ) : null}
-          </p>
-        </div>
+          </AttachmentDescription>
 
-        <Button
-          aria-label={t("files.remove", { name: file.name })}
-          className="relative shrink-0"
-          onClick={handleRemove}
-          size="icon-sm"
-          variant="ghost"
-        >
-          {/* Widens the tap area to the 48px minimum on touch without moving
-              anything a pointer user can see. */}
-          <span
-            aria-hidden
-            className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-          />
+          {inFlight ? <Progress className="mt-1.5" label={file.name} value={progress} /> : null}
 
-          <XIcon aria-hidden />
-        </Button>
-      </div>
+          {summary === undefined ? null : (
+            <AttachmentDescription className="tabular-nums">{summary}</AttachmentDescription>
+          )}
 
-      {inFlight ? <Progress label={file.name} value={progress} /> : null}
+          {status === "error" && error !== undefined ? (
+            <AttachmentDescription className="text-destructive text-pretty">
+              {error}
+            </AttachmentDescription>
+          ) : null}
 
-      {summary === undefined ? null : (
-        <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{summary}</p>
-      )}
+          {result?.warnings.map((warning) => (
+            <AttachmentDescription className="text-warning-foreground text-pretty" key={warning}>
+              {t(warning)}
+            </AttachmentDescription>
+          ))}
+        </AttachmentContent>
 
-      {status === "error" && error !== undefined ? (
-        <p className="text-destructive text-base text-pretty sm:text-sm">{error}</p>
-      ) : null}
-
-      {result?.warnings.map((warning) => (
-        <p
-          className="text-warning-foreground bg-warning/10 rounded-lg px-3 py-2 text-base text-pretty sm:text-sm"
-          key={warning}
-        >
-          {t(warning)}
-        </p>
-      ))}
+        <AttachmentActions>
+          <AttachmentAction
+            aria-label={t("files.remove", { name: file.name })}
+            onClick={handleRemove}
+          >
+            <XIcon aria-hidden />
+          </AttachmentAction>
+        </AttachmentActions>
+      </Attachment>
     </motion.li>
   );
 };
@@ -136,11 +140,11 @@ type JobListProps = {
 const JobList = ({ jobs, onRemove }: JobListProps) => {
   const { t } = useTranslations();
 
-  // A heading over an empty box, under a dropzone that already says what to do, is a
-  // second thing to read that carries nothing. The list arrives with the first file.
   if (jobs.length === 0) {
     return null;
   }
+
+  const scrolls = jobs.length > VISIBLE_ROWS;
 
   return (
     <section className="flex flex-col gap-3">
@@ -150,17 +154,19 @@ const JobList = ({ jobs, onRemove }: JobListProps) => {
         <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
       </div>
 
-      <ul
-        aria-live="polite"
-        className="ring-foreground/10 divide-foreground/5 divide-y rounded-xl ring-1"
-        role="list"
+      <ScrollArea
+        className={scrolls ? "-mx-1" : "-mx-1 max-h-none"}
+        style={scrolls ? { maxHeight: VISIBLE_ROWS * ROW_HEIGHT } : undefined}
+        viewportClassName={scrolls ? "scroll-fade no-scrollbar px-1" : "px-1"}
       >
-        <AnimatePresence initial={false}>
-          {jobs.map((job) => (
-            <JobRow job={job} key={job.id} onRemove={onRemove} />
-          ))}
-        </AnimatePresence>
-      </ul>
+        <ul aria-live="polite" className="flex flex-col gap-2">
+          <AnimatePresence initial={false}>
+            {jobs.map((job) => (
+              <JobRow job={job} key={job.id} onRemove={onRemove} />
+            ))}
+          </AnimatePresence>
+        </ul>
+      </ScrollArea>
     </section>
   );
 };

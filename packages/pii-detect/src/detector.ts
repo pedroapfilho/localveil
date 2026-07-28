@@ -13,11 +13,8 @@ const CHUNK_SIZE = 4000;
 const MIN_SCORE = 0.5;
 const MODEL_ID = "openai/privacy-filter";
 
-// Left unpinned, this reads whatever `main` points at today. Two things go wrong
-// then: the weights a reader has cached stop matching the ones this code was tested
-// against, and a download resumed across an update splices bytes from two different
-// revisions into one file. A commit id in the URL makes the cache key move when the
-// model does.
+// Unpinned, a download resumed across an update splices bytes from two revisions
+// into one file. A commit id in the URL moves the cache key when the model moves.
 const MODEL_REVISION = "7ffa9a043d54d1be65afb281eddf0ffbe629385b";
 
 type Device = "wasm" | "webgpu";
@@ -67,10 +64,9 @@ const isClassifiedToken = (value: unknown): value is ClassifiedToken =>
   typeof Reflect.get(value, "index") === "number" &&
   typeof Reflect.get(value, "score") === "number";
 
-// The weights are 809 MB, and transformers.js only writes a file to the cache once
-// it has the whole thing, so a refresh partway through throws the download away.
-// Its own cache hook runs before the fetch, which makes it the place to put a
-// resumable one: `match` does the downloading, in ranges it can pick back up.
+// transformers.js only writes a file to the cache once it has all 809 MB, so a
+// refresh partway through throws the download away. Its cache hook runs before the
+// fetch, so `match` is where the resumable download goes.
 const installResumableCache = (report: ModelProgress) => {
   env.useCustomCache = true;
   env.customCache = createResumableCache({
@@ -80,10 +76,8 @@ const installResumableCache = (report: ModelProgress) => {
   });
 };
 
-// No `progress_callback` on purpose. transformers.js fires it while reading a file
-// back out of the cache too, so a reader whose model was already downloaded watched
-// a download bar count to 100% for something that never touched the network. The
-// resumable cache below reports only bytes it actually fetched.
+// No `progress_callback`: transformers.js fires it on cache reads too, so a reader
+// whose model was already on disk watched a download bar for nothing.
 const loadClassifier = (device: Device) =>
   pipeline("token-classification", MODEL_ID, {
     device,
@@ -190,8 +184,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
       const shouting = collectShouting(chunk.text);
 
-      // Nothing shouted means nothing the first pass has not already read in a case
-      // the model can work with, so most chunks stop here.
       if (shouting.text.length > 0) {
         const found = await spansOf(shouting.text);
 
@@ -205,8 +197,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     }, Promise.resolve([]));
     /* oxlint-enable react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-    // Patterns run over the whole text rather than per chunk: they are cheap, and a
-    // check digit is a fact the model can only guess at.
+    // A check digit is a fact the model can only guess at.
     return [...mergeChunkSpans(parts), ...patternSpans(text)];
   };
 };

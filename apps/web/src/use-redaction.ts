@@ -10,11 +10,9 @@ import type { CancelRequest, RedactRequest, WorkerResponse } from "./worker-prot
 
 const ZIP_NAME = "localveil.zip";
 
-// A worker the browser kills for running out of memory does not raise `error` on the
-// page: it simply stops answering, and a row sits on "Working" for ever. Nothing but
-// silence distinguishes that from slow work, so the only signal is how long it lasts.
-// Progress arrives several times per page even on the slow wasm path, so two minutes
-// of nothing at all means the worker is gone rather than busy.
+// A worker the browser kills for running out of memory raises no `error` on the page:
+// it simply stops answering, so silence is the only signal there is. Progress arrives
+// several times per page even on the slow wasm path.
 const SILENCE_LIMIT = 120_000;
 
 type ModelState = { fraction: number; slowDevice: boolean; stage?: ModelStageKey };
@@ -59,8 +57,6 @@ const useRedaction = () => {
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translateRef = useRef(t);
 
-  // Set by whichever worker is current, so `submit` can start the clock without
-  // knowing which one it is talking to.
   const armWatchdogRef = useRef<(() => void) | null>(null);
 
   const stopWatchdog = useCallback(() => {
@@ -74,9 +70,7 @@ const useRedaction = () => {
     translateRef.current = t;
   }, [t]);
 
-  // Named so the failure handler below can build its own replacement. A worker that
-  // dies used to leave this hook holding a corpse: every later file was posted into
-  // nothing and sat on "queued" until the page was reloaded.
+  // Named so the failure handler below can build its own replacement.
   const ensureWorker = useCallback(
     function spawn(): Worker {
       const running = workerRef.current;
@@ -87,8 +81,6 @@ const useRedaction = () => {
 
       const worker = new Worker(new URL("redact-worker.ts", import.meta.url), { type: "module" });
 
-      // One signal unhooks all three listeners at once, so retiring a worker does not
-      // have to name handlers that are declared further down.
       const listeners = new AbortController();
 
       const nameOf = (id: string) =>
@@ -133,9 +125,6 @@ const useRedaction = () => {
         }
       };
 
-      // Re-armed on every message. While anything is queued or running the worker owes
-      // us a sign of life; when the queue empties the timer is dropped so an idle page
-      // is not waiting on a worker with nothing to do.
       const armWatchdog = () => {
         stopWatchdog();
 
@@ -190,10 +179,8 @@ const useRedaction = () => {
           return;
         }
 
-        // Anything else is not ours. A worker's message port is shared with whatever
-        // else runs inside it, and treating a stranger's message as a job failure is
-        // how "Could not redact ." reached the screen: no id, so no name, on a file
-        // that was redacting perfectly well.
+        // A worker's message port is shared with whatever else runs inside it, so a
+        // stranger's message is not a job failure.
         if (message.type !== "error") {
           return;
         }
@@ -264,10 +251,6 @@ const useRedaction = () => {
     [ensureWorker],
   );
 
-  // Taking a row off the page has to reach the worker. Without this it carried on
-  // rendering and recognising every page of a file nobody was waiting for, with the
-  // rest of the queue stuck behind it and no row left to show that it was still
-  // going.
   const remove = useCallback((id: string) => {
     const worker = workerRef.current;
 

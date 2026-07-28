@@ -16,10 +16,9 @@ const clampFraction = (value: number) => {
   return Math.min(1, Math.max(0, value));
 };
 
-// The fill travels by transform rather than by growing a box: width is a layout
-// property, and a download arriving in eight-megabyte steps would jerk through three
-// rendering stages on every one of them. The transform sits on the fill itself rather
-// than on a variable the track owns, so moving it restyles one element.
+// By transform rather than by growing a box: width is a layout property, and a
+// download arriving in eight-megabyte steps would jerk through three rendering stages
+// on every one.
 const Progress = ({ className, label, value, ...props }: ProgressProps) => {
   const fraction = clampFraction(value);
 

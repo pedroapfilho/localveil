@@ -3,9 +3,8 @@ import { isLocale } from "./locale";
 
 const STORAGE_KEY = "localveil.locale";
 
-// A language that fails to stick is a preference, not the reader's data, and
-// there is no UI channel for something they cannot act on. Staying completely
-// quiet would hide a broken key from whoever is debugging it.
+// A language that fails to stick is a preference, not the reader's data, but silence
+// would hide a broken key from whoever is debugging it.
 const warnStorageFailed = (action: string, error: unknown) => {
   // oxlint-disable-next-line eslint/no-console
   console.warn(`Could not ${action} the saved language`, error);
@@ -19,8 +18,7 @@ const readStoredLocale = (): Locale | undefined => {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
 
-    // Anything can end up under this key: an older build, another tab, a reader
-    // with devtools open. Only a language this build ships is trusted.
+    // An older build or a reader with devtools open can leave anything here.
     if (stored !== null && isLocale(stored)) {
       return stored;
     }

@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { basename, extname } from "node:path";
 
-// Every redactor asks the MIME type first and the file name second, and a path off a
-// disk carries neither, so the extension has to answer for both. The list is the
-// three redactors' own extensions minus the ones no node image decoder reads: .heic
-// and .tiff route to the image redactor in a browser but cannot be opened here.
+// The redactors ask the MIME type first, and a path off a disk carries none, so the
+// extension answers for both. Narrower than the browser's list: .heic and .tiff route
+// to the image redactor there but no node decoder opens them.
 const MIME_TYPES = new Map([
   [".avif", "image/avif"],
   [".bmp", "image/bmp"],
@@ -23,11 +22,7 @@ const MIME_TYPES = new Map([
 
 const SUPPORTED_EXTENSIONS: ReadonlyArray<string> = [...MIME_TYPES.keys()];
 
-// tesseract.js picks its image loader at resolution time, and the node one ends in
-// `new Uint8Array(image)` with no branch for a File: only the browser loader knows to
-// read a Blob out first. An iterator over the bytes is the one shape that call reads,
-// so this is how an image reaches the recogniser without redact-image having to know
-// which runtime it is in.
+// A byte iterator for tesseract.js's node image loader: see canvas.ts.
 const iterableFile = (bytes: Uint8Array<ArrayBuffer>, name: string, type: string) =>
   Object.assign(new File([bytes], name, { type }), {
     *[Symbol.iterator]() {

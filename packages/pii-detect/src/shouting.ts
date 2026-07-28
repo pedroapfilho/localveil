@@ -1,22 +1,15 @@
 import type { Span } from "@repo/redact-core";
 
-// Named-entity models lean on capitalisation so heavily that recall collapses when
-// it is gone: an invoice header reading PEDRO AFONSO PEDROSA FILHO went undetected at
-// every threshold, while the same text in title case was tagged immediately. So the
-// shouting gets read a second time in a case the model can work with.
-//
-// Only the shouting, though. A line with no run of capitals reads identically in both
-// passes, so anything on it was already found the first time, and recasing the whole
-// chunk to reach one header meant classifying the entire document twice.
+// Named-entity models lean on capitalisation so heavily that recall collapses without
+// it: a shouted invoice header went undetected at every threshold, while the same text
+// in title case was tagged at once. A line with no capitals reads identically either
+// way, so only the shouted lines are worth a second pass.
 const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['’]\p{Lu}+)?/gv;
 
-// Two capitalised words in a row. One on its own is an acronym far more often than a
-// name: INFO, WARN, CPF and PDF all trip a single run, and a log file trips it on
-// every line.
+// Two capitalised words in a row. One alone is an acronym far more often than a name,
+// and INFO on every line of a log would send the whole file through twice.
 const SHOUTED = /\p{Lu}{2,}(?:['’]\p{Lu}+)?[^\p{Letter}\p{Number}]{1,3}\p{Lu}{2,}/v;
 
-// Where one line of the second pass came from. `at` is its start in the source, and
-// `start`/`end` bound it in the joined text the model is handed.
 type Segment = { at: number; end: number; start: number };
 
 type Shouting = { segments: Array<Segment>; text: string };
@@ -33,9 +26,8 @@ const collectShouting = (text: string): Shouting => {
   for (const line of text.split("\n")) {
     const recased = SHOUTED.test(line) ? titleCased(line) : line;
 
-    // Case is length-preserving for almost every letter, but not all of them: U+0130
-    // lowercases to two code units. A line that changed length would put every offset
-    // after it one place out, so it is left to the first pass.
+    // U+0130 lowercases to two code units. A line that changed length would put every
+    // offset after it one place out.
     if (recased !== line && recased.length === line.length) {
       segments.push({ at: source, end: joined + recased.length, start: joined });
       lines.push(recased);
@@ -48,9 +40,8 @@ const collectShouting = (text: string): Shouting => {
   return { segments, text: lines.join("\n") };
 };
 
-// The second pass sees lines that may be pages apart in the document. A span the
-// model runs across the join between two of them is an artefact of standing them
-// side by side, so it is cut back to the line it started on.
+// A span the model runs across the join between two lines is an artefact of standing
+// them side by side, so it is cut back to the line it started on.
 const toSourceSpans = (spans: Array<Span>, segments: Array<Segment>): Array<Span> => {
   const mapped: Array<Span> = [];
 

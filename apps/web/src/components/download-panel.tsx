@@ -16,8 +16,6 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
   const ready = hasCompletedJobs(jobs);
   const excluded = failedJobs(jobs).length;
 
-  // A disabled button counting nothing is the loudest thing on an empty page. It
-  // appears with the first file, which is the first moment it could ever be pressed.
   if (jobs.length === 0) {
     return null;
   }

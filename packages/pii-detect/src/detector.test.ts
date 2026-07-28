@@ -169,8 +169,6 @@ describe("createDetector", () => {
   });
 });
 
-// A name in an invoice header goes undetected at every threshold while the same
-// text in title case is tagged immediately, so the chunk is read both ways.
 describe("shouting text", () => {
   it("reads a chunk again in title case when it holds runs of capitals", async () => {
     const classifier = stubClassifier((text) =>
@@ -198,8 +196,7 @@ describe("shouting text", () => {
     expect(classifier.mock.calls.length).toBe(1);
   });
 
-  // What the gate is for: an acronym is not a name, and treating one as shouting put
-  // every line of a log file through the model twice.
+  // An acronym is not a name, and treating one as shouting doubled every log file.
   it("does not pay for a second pass over a lone acronym", async () => {
     const classifier = stubClassifier(() => []);
 

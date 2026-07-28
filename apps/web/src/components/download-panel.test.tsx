@@ -27,7 +27,6 @@ const setup = (jobs: Array<Job>) => {
 const theButton = () => screen.getByRole("button");
 
 describe("DownloadPanel", () => {
-  // A disabled button counting nothing is the loudest thing on an empty page.
   it("renders nothing before there is a file to download", () => {
     setup([]);
 

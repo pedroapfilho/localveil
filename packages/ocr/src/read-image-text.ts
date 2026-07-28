@@ -21,9 +21,7 @@ const MIN_CONFIDENCE = 0.5;
 const textOf = (recognition: Recognition) => recognition.words.map((word) => word.text).join(" ");
 
 // An image carries no text until it has been read once, so the language cannot be
-// known in advance: read it in English, work out what it actually is, and read it
-// again only when the answer is something else. A caller that already knows the
-// language (a PDF whose text layer gave it away) skips the probe entirely.
+// known in advance. A caller that already knows it skips the probe.
 const readImageText = async (
   image: ImageLike,
   options: ReadOptions = {},

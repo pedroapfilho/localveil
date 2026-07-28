@@ -1,4 +1,4 @@
-import { droppedAnyWords, legibleWords, readImageText } from "@repo/ocr";
+import { legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { Rect, Redactor, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
@@ -63,17 +63,15 @@ const imageRedactor: Redactor = {
 
     if (reading.words.length === 0) {
       warnings.push("warning.noText");
-    } else if (droppedAnyWords(reading)) {
+    } else if (muchWasUnreadable(reading)) {
       warnings.push("warning.lowConfidence");
     }
 
     onProgress(0.6, "stage.detecting");
 
-    // Only the words the recogniser was sure of: see readable.ts. An image it could
-    // not read at all leaves nothing here, so nothing is searched and nothing painted.
+    // See readable.ts for why the words are filtered rather than the page vetoed.
     const { text, words } = buildWordIndex(legibleWords(reading));
     const detected = await detect(text);
-    // A name the model tagged once but missed later is still that name.
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
 
     onProgress(0.85, "stage.redacting");

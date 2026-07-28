@@ -63,8 +63,6 @@ const FileBrowser = ({
   const [cursor, setCursor] = useState(0);
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set(initialSelection));
 
-  // The listing carries the directory it belongs to, so "still loading" is read off
-  // the two rather than kept in a third piece of state that has to be reset in step.
   const [listing, setListing] = useState<Listing>(() => ({
     directory: initialDirectory,
     entries: null,

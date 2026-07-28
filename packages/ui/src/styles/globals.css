@@ -126,6 +126,76 @@
   }
 }
 
+/* The shadcn package publishes only its CLI, not the stylesheet its docs import, so
+   the scroll-fade utilities are written out here. Behaviour follows the documented
+   one: the mask dissolves the content rather than laying a colour over it, so it
+   works on any background, and a container whose content does not overflow shows no
+   fade at all because there is nothing for the timeline to drive.
+
+   Custom properties cannot be interpolated until they are registered, which is what
+   `@property` is for. A browser without scroll-driven animations keeps the initial
+   values and gets a plain bottom fade, which is the honest degradation. */
+@property --scroll-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --scroll-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes scroll-fade-reveal-top {
+  from {
+    --scroll-fade-top: 0px;
+  }
+  to {
+    --scroll-fade-top: var(--scroll-fade-size);
+  }
+}
+
+@keyframes scroll-fade-settle-bottom {
+  from {
+    --scroll-fade-bottom: var(--scroll-fade-size);
+  }
+  to {
+    --scroll-fade-bottom: 0px;
+  }
+}
+
+@utility scroll-fade {
+  --scroll-fade-size: 40px;
+  --scroll-fade-reveal: 96px;
+  --scroll-fade-top: 0px;
+  --scroll-fade-bottom: var(--scroll-fade-size);
+
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-top),
+    black calc(100% - var(--scroll-fade-bottom)),
+    transparent 100%
+  );
+
+  animation:
+    scroll-fade-reveal-top linear,
+    scroll-fade-settle-bottom linear;
+  animation-timeline: scroll(self block), scroll(self block);
+  animation-range:
+    0 var(--scroll-fade-reveal),
+    calc(100% - var(--scroll-fade-reveal)) 100%;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -20,8 +20,7 @@ const settle = async () => {
   await Promise.resolve();
 };
 
-// A job that reports progress a few times, checking for cancellation each time, the
-// way a redactor does once per page.
+// Reports progress a few times, the way a redactor does once per page.
 const pages = (count: number, onPage?: (page: number) => void) => {
   const done: Array<string> = [];
 
@@ -88,8 +87,7 @@ describe("createJobQueue", () => {
     });
   });
 
-  // The point of the whole thing: a hundred-page PDF used to keep rendering after
-  // its row was gone, with everything behind it waiting.
+  // A hundred-page PDF used to keep rendering after its row was gone.
   it("stops the running file at its next page", async () => {
     const seen: Array<number> = [];
     const { done, run } = pages(20, (page) => {

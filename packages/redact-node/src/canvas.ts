@@ -9,10 +9,9 @@ type ConvertToBlobOptions = { quality?: number; type?: string };
 // methods unreachable. What works is the native canvas with the two browser-only
 // methods hung off it as own properties.
 //
-// This is not cosmetic. pdf.js asks its CanvasFactory for a scratch surface whenever
-// an image has to shrink by more than half, draws the decoded image onto it, then
-// draws that surface onto the page. Get it wrong and every PDF carrying a photo throws
-// while a text-only one renders perfectly, which is how it got past the first round.
+// pdf.js asks its CanvasFactory for a scratch surface only when an image has to shrink
+// by more than half, so getting this wrong throws on every PDF carrying a photo while a
+// text-only one renders perfectly.
 const createNodeCanvas = (width: number, height: number) => {
   const canvas = createCanvas(width, height);
   // Taken before the assignment below shadows it, which is also what keeps
@@ -29,11 +28,9 @@ const createNodeCanvas = (width: number, height: number) => {
       return encoded;
     },
 
-    // tesseract.js picks its image loader at resolution time, and the node one ends in
-    // `new Uint8Array(image)` with no branch for a canvas: only the browser loader
-    // knows to call `convertToBlob` first. An iterator over the encoded page is the one
-    // shape that call reads, so this is how a rendered PDF page reaches the recogniser
-    // without redact-pdf having to know which runtime it is in.
+    // tesseract.js resolves its node image loader statically, and it ends in
+    // `new Uint8Array(image)` with no branch for a canvas. A byte iterator is the one
+    // shape that call reads.
     *[Symbol.iterator]() {
       yield* canvas.toBuffer("image/png");
     },
@@ -59,8 +56,6 @@ const createNodeImageBitmap = async (source: Blob) => {
 
 let installed = false;
 
-// Installed once at the edge rather than branched on inside each redactor: the
-// redactors are written against the browser canvas and stay that way.
 const installCanvas = () => {
   if (installed) {
     return;
