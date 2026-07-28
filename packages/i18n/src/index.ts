@@ -1,5 +1,5 @@
 export type { I18nValue } from "./context";
-export { DEFAULT_LOCALE, isLocale, LOCALES, resolveLocale } from "./locale";
+export { DEFAULT_LOCALE, isLocale, LOCALE_NAMES, LOCALES, resolveLocale } from "./locale";
 export type { Locale } from "./locale";
 export type { MessageKey, Messages } from "./messages/en";
 export { I18nProvider } from "./provider";
