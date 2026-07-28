@@ -4,10 +4,18 @@ import { buildZip } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { Job } from "./store";
 import { completedJobs, useJobStore } from "./store";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
 
 const ZIP_NAME = "localveil.zip";
+
+// A worker the browser kills for running out of memory does not raise `error` on the
+// page: it simply stops answering, and a row sits on "Working" for ever. Nothing but
+// silence distinguishes that from slow work, so the only signal is how long it lasts.
+// Progress arrives several times per page even on the slow wasm path, so two minutes
+// of nothing at all means the worker is gone rather than busy.
+const SILENCE_LIMIT = 120_000;
 
 type ModelState = { fraction: number; slowDevice: boolean; stage?: ModelStageKey };
 
@@ -28,114 +36,226 @@ const triggerDownload = (blob: Blob) => {
   }, 0);
 };
 
+const sendJob = (worker: Worker, job: Job) => {
+  const request: WorkerRequest = { file: job.file, id: job.id, type: "redact" };
+
+  // Worker#postMessage has no target origin; its second argument is a transfer
+  // list, so the window-to-window rule does not apply here.
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin
+  worker.postMessage(request);
+};
+
 const useRedaction = () => {
   const { t } = useTranslations();
   const [model, setModel] = useState<ModelState>(INITIAL_MODEL);
   const workerRef = useRef<Worker | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translateRef = useRef(t);
+
+  // Set by whichever worker is current, so `submit` can start the clock without
+  // knowing which one it is talking to.
+  const armWatchdogRef = useRef<(() => void) | null>(null);
+
+  const stopWatchdog = useCallback(() => {
+    if (watchdogRef.current !== null) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     translateRef.current = t;
   }, [t]);
 
-  useEffect(() => {
-    const worker = new Worker(new URL("redact-worker.ts", import.meta.url), { type: "module" });
+  // Named so the failure handler below can build its own replacement. A worker that
+  // dies used to leave this hook holding a corpse: every later file was posted into
+  // nothing and sat on "queued" until the page was reloaded.
+  const ensureWorker = useCallback(
+    function spawn(): Worker {
+      const running = workerRef.current;
 
-    const nameOf = (id: string) =>
-      useJobStore.getState().jobs.find((job) => job.id === id)?.file.name ?? "";
-
-    const handleMessage = (event: MessageEvent<WorkerResponse>) => {
-      const message = event.data;
-      const { updateJob } = useJobStore.getState();
-
-      if (message.type === "model-progress") {
-        setModel((current) => ({
-          fraction: message.fraction,
-          slowDevice: current.slowDevice || message.stage === "model.slowDevice",
-          stage: message.stage,
-        }));
-
-        return;
+      if (running !== null) {
+        return running;
       }
 
-      if (message.type === "progress") {
-        updateJob(message.id, {
-          progress: message.fraction,
-          stage: message.stage,
-          status: "running",
-        });
+      const worker = new Worker(new URL("redact-worker.ts", import.meta.url), { type: "module" });
 
-        return;
-      }
+      // One signal unhooks all three listeners at once, so retiring a worker does not
+      // have to name handlers that are declared further down.
+      const listeners = new AbortController();
 
-      if (message.type === "done") {
-        updateJob(message.id, {
-          progress: 1,
-          result: {
-            blob: message.blob,
-            redactionCount: message.redactionCount,
-            warnings: message.warnings,
-          },
-          stage: "stage.finished",
-          status: "done",
-        });
+      const nameOf = (id: string) =>
+        useJobStore.getState().jobs.find((job) => job.id === id)?.file.name ?? "";
 
-        return;
-      }
+      const retire = () => {
+        stopWatchdog();
+        listeners.abort();
+        worker.terminate();
 
-      updateJob(message.id, { error: message.message, status: "error" });
-
-      const name = nameOf(message.id);
-
-      toast.error(
-        message.unsupported
-          ? translateRef.current("toast.unsupported", { name })
-          : translateRef.current("toast.failed", { name }),
-      );
-    };
-
-    // A worker that dies takes every queued job with it, so the failure is shown
-    // rather than left as a row that never moves.
-    const handleError = (event: ErrorEvent) => {
-      const { jobs, updateJob } = useJobStore.getState();
-
-      for (const job of jobs) {
-        if (job.status === "queued" || job.status === "running") {
-          updateJob(job.id, { error: event.message, status: "error" });
+        // Only if it is still the current one: a later worker must not be unhooked by
+        // an event arriving late from an earlier one.
+        if (workerRef.current === worker) {
+          workerRef.current = null;
         }
-      }
+      };
 
-      toast.error(translateRef.current("error.unknown"));
-    };
+      // The worker runs one file at a time, so whichever job is running when it dies
+      // is the one that killed it. That job stays failed; handing it straight back to
+      // a fresh worker is how a crash becomes a crash loop. The files behind it in the
+      // queue never got a turn and are innocent, so they go to the replacement.
+      const recover = (reason: string) => {
+        retire();
 
-    worker.addEventListener("error", handleError);
-    worker.addEventListener("message", handleMessage);
-    workerRef.current = worker;
+        const { jobs, updateJob } = useJobStore.getState();
+        const waiting = jobs.filter((job) => job.status === "queued");
+
+        for (const job of jobs.filter((entry) => entry.status === "running")) {
+          updateJob(job.id, { error: reason, status: "error" });
+        }
+
+        toast.error(translateRef.current("error.unknown"));
+
+        if (waiting.length === 0) {
+          return;
+        }
+
+        const replacement = spawn();
+
+        for (const job of waiting) {
+          sendJob(replacement, job);
+        }
+      };
+
+      // Re-armed on every message. While anything is queued or running the worker owes
+      // us a sign of life; when the queue empties the timer is dropped so an idle page
+      // is not waiting on a worker with nothing to do.
+      const armWatchdog = () => {
+        stopWatchdog();
+
+        const busy = useJobStore
+          .getState()
+          .jobs.some((job) => job.status === "queued" || job.status === "running");
+
+        if (!busy) {
+          return;
+        }
+
+        watchdogRef.current = setTimeout(() => {
+          recover("The redaction worker stopped answering");
+        }, SILENCE_LIMIT);
+      };
+
+      const applyMessage = (message: WorkerResponse) => {
+        const { updateJob } = useJobStore.getState();
+
+        if (message.type === "model-progress") {
+          setModel((current) => ({
+            fraction: message.fraction,
+            slowDevice: current.slowDevice || message.stage === "model.slowDevice",
+            stage: message.stage,
+          }));
+
+          return;
+        }
+
+        if (message.type === "progress") {
+          updateJob(message.id, {
+            progress: message.fraction,
+            stage: message.stage,
+            status: "running",
+          });
+
+          return;
+        }
+
+        if (message.type === "done") {
+          updateJob(message.id, {
+            progress: 1,
+            result: {
+              blob: message.blob,
+              redactionCount: message.redactionCount,
+              warnings: message.warnings,
+            },
+            stage: "stage.finished",
+            status: "done",
+          });
+
+          return;
+        }
+
+        // Anything else is not ours. A worker's message port is shared with whatever
+        // else runs inside it, and treating a stranger's message as a job failure is
+        // how "Could not redact ." reached the screen: no id, so no name, on a file
+        // that was redacting perfectly well.
+        if (message.type !== "error") {
+          return;
+        }
+
+        updateJob(message.id, { error: message.message, status: "error" });
+
+        const name = nameOf(message.id);
+
+        toast.error(
+          message.unsupported
+            ? translateRef.current("toast.unsupported", { name })
+            : translateRef.current("toast.failed", { name }),
+        );
+      };
+
+      // Armed after the store has been updated, not before: a "done" for the last file
+      // has to empty the queue first, or the page would sit under a timer waiting on a
+      // worker with nothing left to do.
+      const handleMessage = (event: MessageEvent<WorkerResponse>) => {
+        applyMessage(event.data);
+        armWatchdog();
+      };
+
+      const handleError = (event: ErrorEvent) => {
+        recover(event.message);
+      };
+
+      // Raised instead of `error` when a reply cannot be deserialised, which leaves
+      // the worker alive but out of touch, so it is retired the same way.
+      const handleMessageError = () => {
+        recover("The redaction worker sent a reply that could not be read");
+      };
+
+      armWatchdogRef.current = armWatchdog;
+
+      const { signal } = listeners;
+
+      worker.addEventListener("error", handleError, { signal });
+      worker.addEventListener("message", handleMessage, { signal });
+      worker.addEventListener("messageerror", handleMessageError, { signal });
+      workerRef.current = worker;
+
+      return worker;
+    },
+    [stopWatchdog],
+  );
+
+  useEffect(() => {
+    ensureWorker();
 
     return () => {
-      worker.removeEventListener("error", handleError);
-      worker.removeEventListener("message", handleMessage);
-      worker.terminate();
+      stopWatchdog();
+      workerRef.current?.terminate();
       workerRef.current = null;
     };
-  }, []);
+  }, [ensureWorker, stopWatchdog]);
 
-  const submit = useCallback((files: Array<File>) => {
-    const worker = workerRef.current;
+  const submit = useCallback(
+    (files: Array<File>) => {
+      const worker = ensureWorker();
 
-    if (worker === null) {
-      throw new Error("The redaction worker is not running");
-    }
+      for (const job of useJobStore.getState().addFiles(files)) {
+        sendJob(worker, job);
+      }
 
-    for (const job of useJobStore.getState().addFiles(files)) {
-      const request: WorkerRequest = { file: job.file, id: job.id, type: "redact" };
-
-      // Worker#postMessage has no target origin; its second argument is a transfer
-      // list, so the window-to-window rule does not apply here.
-      // oxlint-disable-next-line unicorn/require-post-message-target-origin
-      worker.postMessage(request);
-    }
-  }, []);
+      armWatchdogRef.current?.();
+    },
+    [ensureWorker],
+  );
 
   const downloadZip = useCallback(async () => {
     const ready = completedJobs(useJobStore.getState().jobs);
