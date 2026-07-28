@@ -47,6 +47,21 @@ const installParser = async () => {
   }
 };
 
+// Embedded fonts normally reach the canvas through an `@font-face` rule, and there
+// is no document in a worker to put one in. Left alone, pdf.js draws every glyph as
+// a .notdef box: a page of tofu, which the recogniser reads as gibberish and the
+// model then tags as one long name, so the whole page comes back black. Building the
+// glyph outlines instead needs no DOM.
+//
+// A base-14 font like Helvetica renders either way, so a fixture built from one will
+// not notice if this goes missing. That is what the test on this function is for.
+const documentOptions = (data: Uint8Array) => ({
+  CanvasFactory: OffscreenCanvasFactory,
+  data,
+  disableFontFace: true,
+  FilterFactory: NoFilterFactory,
+});
+
 const contextOf = (canvas: OffscreenCanvas) => {
   const context = canvas.getContext("2d");
 
@@ -93,20 +108,8 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
     parserInstalled,
   ]);
 
-  const [pdf, out] = await Promise.all([
-    pdfjs.getDocument({
-      CanvasFactory: OffscreenCanvasFactory,
-      data: new Uint8Array(source),
-      // Embedded fonts normally reach the canvas through an `@font-face` rule, and
-      // there is no document in a worker to put one in. Left alone, pdf.js draws
-      // every glyph as a .notdef box: a wall of tofu that the recogniser reads as
-      // gibberish and the model then tags as one long name. This makes it build the
-      // glyph outlines itself, which needs no DOM.
-      disableFontFace: true,
-      FilterFactory: NoFilterFactory,
-    }).promise,
-    pdfLib.PDFDocument.create(),
-  ]);
+  const opened = pdfjs.getDocument(documentOptions(new Uint8Array(source)));
+  const [pdf, out] = await Promise.all([opened.promise, pdfLib.PDFDocument.create()]);
 
   const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
 
@@ -270,4 +273,4 @@ const pdfRedactor: Redactor = {
   redact: redactPdf,
 };
 
-export { pdfRedactor };
+export { documentOptions, pdfRedactor };
