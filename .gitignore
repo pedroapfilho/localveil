@@ -27,6 +27,15 @@ playwright/.cache/
 .fallow/
 *.log
 
+# models
+# Tesseract drops a 5 MB language pack into whatever directory the process ran in,
+# and transformers.js caches the 809 MB detection model to ./.cache. Neither belongs
+# in the repository, and the second one is larger than GitHub will accept.
+*.traineddata
+.cache/
+*.onnx
+*.onnx_data
+
 # editor / os
 .DS_Store
 .vscode/
