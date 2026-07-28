@@ -1,0 +1,33 @@
+{
+  "name": "@repo/redact-node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf node_modules coverage",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.3",
+    "@repo/pii-detect": "workspace:*",
+    "@repo/redact-core": "workspace:*",
+    "@repo/redact-image": "workspace:*",
+    "@repo/redact-pdf": "workspace:*",
+    "@repo/redact-text": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/config-vitest": "workspace:*",
+    "@repo/ocr": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^26.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

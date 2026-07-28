@@ -27,6 +27,9 @@ type DetectorOptions = {
   minScore?: number;
   onProgress?: ModelProgress;
   overlap?: number;
+  // The cache below is built on the Cache API and IndexedDB, so a runtime with
+  // neither turns it off and lets transformers.js keep the weights its own way.
+  resumableCache?: boolean;
 };
 
 type ChunkSpans = { offset: number; spans: Array<Span> };
@@ -136,13 +139,16 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     minScore = MIN_SCORE,
     onProgress,
     overlap = CHUNK_OVERLAP,
+    resumableCache = true,
   } = options;
 
   const report: ModelProgress = (fraction, stage) => {
     onProgress?.(fraction, stage);
   };
 
-  installResumableCache(report);
+  if (resumableCache) {
+    installResumableCache(report);
+  }
 
   let device: Device = "webgpu";
   let classifier: TokenClassifier;
