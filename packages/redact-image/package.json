@@ -1,0 +1,27 @@
+{
+  "name": "@repo/redact-image",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf node_modules coverage",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/ocr": "workspace:*",
+    "@repo/redact-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/config-vitest": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}

@@ -73,7 +73,7 @@ describe("textRedactor.redact", () => {
     const detect = vi.fn<Detect>(() => Promise.resolve([]));
     const result = await textRedactor.redact(file("a.txt", "text/plain", ""), detect, noProgress);
 
-    expect(result.warnings).toEqual(["File is empty"]);
+    expect(result.warnings).toEqual(["warning.noText"]);
     expect(result.redactionCount).toBe(0);
     expect(detect).not.toHaveBeenCalled();
   });

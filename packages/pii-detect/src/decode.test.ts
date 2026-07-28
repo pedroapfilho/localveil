@@ -89,7 +89,9 @@ describe("decodeBioes", () => {
   it("throws when a token carries no character offsets", () => {
     const offsetless = { end: undefined, entity: "S-secret", score: 0.9, start: 0 };
 
-    expect(() => decodeBioes([offsetless as unknown as RawToken], 0.5)).toThrow(/offsets/v);
+    expect(() => decodeBioes([offsetless as unknown as RawToken], 0.5)).toThrow(
+      /could not be placed/v,
+    );
   });
 
   it("emits a span for a B- that is never closed by an E-", () => {

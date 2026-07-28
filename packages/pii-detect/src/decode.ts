@@ -27,7 +27,7 @@ const parseTag = (entity: string): Tag | undefined => {
 const assertOffsets = (token: RawToken) => {
   if (!Number.isFinite(token.start) || !Number.isFinite(token.end)) {
     throw new TypeError(
-      `Token "${token.entity}" carries no character offsets; the tokenizer must be run with offset mapping`,
+      `Token "${token.entity}" could not be placed in the text it was classified from`,
     );
   }
 };

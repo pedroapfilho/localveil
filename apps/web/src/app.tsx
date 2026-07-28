@@ -1,17 +1,35 @@
 import { useTranslations } from "@repo/i18n";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
-import { useState } from "react";
+import { toast } from "@repo/ui/components/sonner";
 
+import { DownloadPanel } from "./components/download-panel";
+import { JobList } from "./components/job-list";
+import { ModelStatus } from "./components/model-status";
+import { useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
+import { useRedaction } from "./use-redaction";
+
+const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
 
 const App = () => {
   const { t } = useTranslations();
-  const [names, setNames] = useState<Array<string>>([]);
+  const jobs = useJobStore((state) => state.jobs);
+  const removeJob = useJobStore((state) => state.removeJob);
+  const { downloadZip, model, submit } = useRedaction();
 
   useDocumentLocale();
 
-  const handleFilesSelected = (files: Array<File>) => {
-    setNames((current) => [...current, ...files.map((file) => file.name)]);
+  const runDownload = async () => {
+    try {
+      await downloadZip();
+      toast.success(t("toast.downloaded"));
+    } catch {
+      toast.error(t("error.unknown"));
+    }
+  };
+
+  const handleDownload = () => {
+    void runDownload();
   };
 
   return (
@@ -27,25 +45,22 @@ const App = () => {
       </header>
 
       <main className="flex flex-col gap-8" id="main">
-        <FileDropzone
-          hint={t("dropzone.hint")}
-          label={t("dropzone.label")}
-          onFilesSelected={handleFilesSelected}
-        />
+        <ModelStatus model={model} />
 
-        <section className="flex flex-col gap-2">
-          <h2 className="font-medium">{t("files.heading")}</h2>
+        <div className="flex flex-col items-center gap-2">
+          <FileDropzone
+            accept={ACCEPTED_FILES}
+            hint={t("dropzone.hint")}
+            label={t("dropzone.label")}
+            onFilesSelected={submit}
+          />
 
-          {names.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{t("files.empty")}</p>
-          ) : (
-            <ul className="flex flex-col gap-1 text-sm">
-              {names.map((name, index) => (
-                <li key={`${name}-${String(index)}`}>{name}</li>
-              ))}
-            </ul>
-          )}
-        </section>
+          <p className="text-muted-foreground text-xs">{t("dropzone.formats")}</p>
+        </div>
+
+        <JobList jobs={jobs} onRemove={removeJob} />
+
+        <DownloadPanel jobs={jobs} onDownload={handleDownload} />
       </main>
     </div>
   );

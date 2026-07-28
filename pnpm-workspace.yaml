@@ -7,6 +7,9 @@ allowBuilds:
   onnxruntime-node: true
   protobufjs: true
   sharp: false
+  # Its install script fetches the Node build's native deps; the browser bundle we
+  # ship needs none of it.
+  tesseract.js: false
 
 minimumReleaseAgeExclude:
   - cnfast@0.0.8

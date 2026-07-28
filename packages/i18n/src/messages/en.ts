@@ -5,7 +5,7 @@ const en = {
   "download.button": "Download ZIP ({count})",
   "download.excluded": "{count} files were left out because they failed.",
   "download.waiting": "Redact a file to enable the download.",
-  "dropzone.formats": "Text, Markdown, CSV, JSON and log files",
+  "dropzone.formats": "Text, Markdown, CSV, JSON, log, PDF and image files",
   "dropzone.hint": "or drag and drop them here",
   "dropzone.label": "Choose files",
   "error.unknown": "Something went wrong.",
@@ -14,15 +14,18 @@ const en = {
   "files.noRedactions": "Nothing found to redact",
   "files.redactions": "{count} redacted",
   "files.remove": "Remove {name}",
-  "locale.label": "Language",
   "model.downloading": "Downloading the detection model ({percent})",
   "model.ready": "Detection model ready",
   "model.slowDevice": "Running without GPU acceleration, this will be slow.",
+  "stage.assembling": "Rebuilding the file",
   "stage.detecting": "Looking for personal data",
+  "stage.extracting": "Reading the document",
   "stage.finished": "Finished",
   "stage.loadingModel": "Loading the detection model",
   "stage.reading": "Reading the file",
+  "stage.recognising": "Reading the text in the image",
   "stage.redacting": "Redacting",
+  "stage.rendering": "Rendering the pages",
   "status.done": "Done",
   "status.error": "Failed",
   "status.queued": "Queued",
@@ -30,6 +33,12 @@ const en = {
   "toast.downloaded": "Your ZIP is downloading.",
   "toast.failed": "Could not redact {name}.",
   "toast.unsupported": "{name} is not a supported file type.",
+  "warning.droppedCharacters":
+    "Some characters could not be written back into the PDF, so parts of it are no longer searchable.",
+  "warning.lowConfidence":
+    "Some text was hard to read, so a little personal data may have been missed.",
+  "warning.noText": "No readable text was found in this file.",
+  "warning.scannedPages": "This file was scanned rather than typed, so it was read with OCR.",
 } as const;
 
 type MessageKey = keyof typeof en;

@@ -6,7 +6,6 @@ import type { TranslationValues } from "./translate";
 
 type I18nValue = {
   locale: Locale;
-  setLocale: (locale: Locale) => void;
   t: (key: MessageKey, values?: TranslationValues) => string;
 };
 

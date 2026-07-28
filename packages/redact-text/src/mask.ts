@@ -1,6 +1,8 @@
 import type { Range, Span } from "@repo/redact-core";
 import { mergeOverlappingRanges } from "@repo/redact-core";
 
+import { isLineBreak } from "./line-break.ts";
+
 const BLOCK = "█";
 
 // Graphemes, not UTF-16 units: an emoji or an accented letter is one block, so the
@@ -25,9 +27,11 @@ const maskSpans = (text: string, spans: Array<Span>): string => {
   // Right to left, so the offsets of the ranges still ahead stay valid even when a
   // replacement changes length (an emoji is two units but one block).
   return ranges.toReversed().reduce((masked, range) => {
-    const covered = [...GRAPHEMES.segment(masked.slice(range.start, range.end))];
+    const covered = [...GRAPHEMES.segment(masked.slice(range.start, range.end))]
+      .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
+      .join("");
 
-    return masked.slice(0, range.start) + BLOCK.repeat(covered.length) + masked.slice(range.end);
+    return masked.slice(0, range.start) + covered + masked.slice(range.end);
   }, text);
 };
 

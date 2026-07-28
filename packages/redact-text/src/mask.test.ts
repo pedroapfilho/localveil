@@ -41,3 +41,19 @@ describe("maskSpans", () => {
     expect(() => maskSpans("short", [span(-1, 2)])).toThrow(/outside/v);
   });
 });
+
+describe("maskSpans across lines", () => {
+  it("keeps the line break when a span runs past the end of a line", () => {
+    const text = "ana@example.com\n2024-03-14 next";
+
+    expect(maskSpans(text, [{ end: 26, label: "private_email", score: 0.9, start: 0 }])).toBe(
+      "███████████████\n██████████ next",
+    );
+  });
+
+  it("keeps a carriage return pair intact", () => {
+    const text = "a\r\nb";
+
+    expect(maskSpans(text, [{ end: 4, label: "secret", score: 0.9, start: 0 }])).toBe("█\r\n█");
+  });
+});

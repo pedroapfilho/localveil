@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { I18nProvider, STORAGE_KEY } from "./provider";
+import { I18nProvider } from "./provider";
 import { useTranslations } from "./use-translations";
 
 const Probe = () => {
-  const { locale, setLocale, t } = useTranslations();
+  const { locale, t } = useTranslations();
 
   return (
     <div>
@@ -14,15 +14,6 @@ const Probe = () => {
       <span data-testid="message">{t("app.skipToContent")}</span>
 
       <span data-testid="interpolated">{t("download.button", { count: 2 })}</span>
-
-      <button
-        onClick={() => {
-          setLocale("es");
-        }}
-        type="button"
-      >
-        Español
-      </button>
     </div>
   );
 };
@@ -44,10 +35,6 @@ const setup = () => {
   };
 };
 
-beforeEach(() => {
-  window.localStorage.clear();
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -62,6 +49,12 @@ describe("I18nProvider", () => {
     expect(message.textContent).toBe("Ir para o conteúdo");
   });
 
+  it("takes the first supported language when the browser lists several", () => {
+    preferLanguages(["de-DE", "es-AR", "pt-BR"]);
+
+    expect(setup().locale.textContent).toBe("es");
+  });
+
   it("falls back to English when no browser language is supported", () => {
     preferLanguages(["de-DE"]);
 
@@ -69,34 +62,6 @@ describe("I18nProvider", () => {
 
     expect(locale.textContent).toBe("en");
     expect(message.textContent).toBe("Skip to content");
-  });
-
-  it("lets the stored locale win over the browser languages", () => {
-    window.localStorage.setItem(STORAGE_KEY, "es");
-    preferLanguages(["pt-BR"]);
-
-    const { locale, message } = setup();
-
-    expect(locale.textContent).toBe("es");
-    expect(message.textContent).toBe("Ir al contenido");
-  });
-
-  it("ignores a stored value that is not a locale", () => {
-    window.localStorage.setItem(STORAGE_KEY, "klingon");
-    preferLanguages(["pt-BR"]);
-
-    expect(setup().locale.textContent).toBe("pt");
-  });
-
-  it("re-renders in the new catalogue and persists the choice", () => {
-    preferLanguages(["en-US"]);
-
-    const { message } = setup();
-
-    fireEvent.click(screen.getByRole("button", { name: "Español" }));
-
-    expect(message.textContent).toBe("Ir al contenido");
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBe("es");
   });
 
   it("interpolates values into the active catalogue", () => {
