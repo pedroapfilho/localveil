@@ -40,10 +40,18 @@ describe("ModelStatus", () => {
   it("shows the download percentage as text and on a progress bar", () => {
     renderWithI18n(<ModelStatus model={model({ fraction: 0.42, stage: "model.downloading" })} />);
 
-    const bar = screen.getByLabelText("Downloading the detection model (42%)");
+    const bar = screen.getByRole("progressbar", { name: "Downloading the detection model" });
 
-    expect(bar).toBeInstanceOf(HTMLProgressElement);
-    expect(screen.getByText("Downloading the detection model (42%)")).toBeInTheDocument();
+    expect(bar.getAttribute("aria-valuenow")).toBe("42");
+    expect(screen.getByText("Downloading the detection model")).toBeInTheDocument();
+    expect(screen.getByText("42%")).toBeInTheDocument();
+  });
+
+  // The percentage is read in the reader's own locale, not with a hardcoded point.
+  it("formats the percentage for the locale in use", () => {
+    renderWithI18n(<ModelStatus model={model({ fraction: 0.07, stage: "model.downloading" })} />);
+
+    expect(screen.getByText("7%")).toBeInTheDocument();
   });
 
   it("warns about a slow device while the model downloads", () => {

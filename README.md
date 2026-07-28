@@ -27,7 +27,7 @@ pnpm dev --filter=web
 
 Open `http://localhost:5173` and drop a file on the page.
 
-The first run downloads the detection model, which is 809 MB and takes a while. It is fetched in ranges and written to browser storage as it arrives, so a refresh part way through picks up where it left off rather than starting again. Every run after that loads from cache in a few seconds.
+The first run downloads the detection model, which is 809 MB and takes a while. It is fetched as six ranges at a time and each one is written to browser storage as it lands, so a refresh part way through picks up the ranges it is missing rather than starting again. Every run after that loads from cache in a few seconds.
 
 ## What gets covered
 
@@ -61,7 +61,7 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 - **Files stay in the tab:** the app reads them with `FileReader`, processes them in a Web Worker, and writes them back through `Blob`. No `fetch` anywhere touches them.
 - **The only request is the model:** weights come from Hugging Face on first use and stay cached. After that the page works with the network off.
 - **Nothing is stored server-side** because there is no server. The app is a static bundle.
-- **Language comes from the browser:** the interface follows `navigator.languages` across English, Portuguese and Spanish. There is no picker and nothing stored.
+- **Language starts from the browser:** the interface follows `navigator.languages` across English, Portuguese and Spanish, and a picker in the corner overrides it. That choice is the only thing the app keeps in `localStorage`, and it is a language tag, not your data.
 
 `vercel.json` sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so the page is cross-origin isolated, which is what lets ONNX Runtime use `SharedArrayBuffer` and multithreaded wasm. The dev server sends the same pair.
 
@@ -163,12 +163,12 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 
 ## Stack
 
-- **App:** React 19 + Vite 8, Tailwind CSS 4, zustand for job state, sonner for toasts.
+- **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI, motion for the few animations, zustand for job state, sonner for toasts.
 - **Detection:** `@huggingface/transformers` running `openai/privacy-filter` (q4f16) on WebGPU, falling back to wasm.
 - **Documents:** `pdfjs-dist` for rendering, `pdf-lib` for rebuilding, `tesseract.js` for recognition, `fflate` for the ZIP.
 - **Build:** Turborepo + pnpm workspaces.
 - **Linting / formatting:** oxlint + oxfmt.
-- **Testing:** Vitest, 368 unit and component tests.
+- **Testing:** Vitest, 392 unit and component tests.
 
 ## Setup
 
@@ -215,4 +215,4 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.
 - **Recognition sets the ceiling on scanned input.** A blurry photo or a PDF with broken fonts yields text nothing can redact, and the app says so rather than guessing.
 - **A redacted PDF is images.** The text layer is rebuilt from recognised words, so it is searchable but not identical to the original, and the file is larger.
-- **The first run is a large download.** 809 MB, once, resumable.
+- **The first run is a large download.** 809 MB, once, resumable, and fetched several ranges at a time.

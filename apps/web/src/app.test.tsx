@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./app";
@@ -18,6 +18,9 @@ class WorkerStub {
 describe("App", () => {
   beforeEach(() => {
     useJobStore.getState().reset();
+    // The picker remembers the choice, so a test that switches language would
+    // otherwise decide the language of every test that follows it.
+    localStorage.clear();
     vi.stubGlobal("Worker", WorkerStub);
   });
 
@@ -74,7 +77,7 @@ describe("App", () => {
     expect(screen.getByText("Queued")).toBeInTheDocument();
   });
 
-  it("drops a file from the list when it is removed", () => {
+  it("drops a file from the list when it is removed", async () => {
     renderWithI18n(<App />);
 
     const input = screen.getByLabelText(/choose files/iv);
@@ -84,7 +87,12 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByLabelText("Remove notes.txt"));
 
-    expect(screen.queryByText("notes.txt")).toBeNull();
+    // The row plays its way out before it goes, so the assertion waits for the
+    // animation rather than racing it.
+    await waitFor(() => {
+      expect(screen.queryByText("notes.txt")).toBeNull();
+    });
+
     expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
   });
 
@@ -97,9 +105,40 @@ describe("App", () => {
     expect(screen.getByText("Sobre o localveil")).toBeInTheDocument();
   });
 
-  it("offers no way to override the browser language", () => {
+  it("starts in the language the browser asked for, with the picker showing it", () => {
     renderWithI18n(<App />);
 
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Language" })).toHaveTextContent("English");
+  });
+
+  // Each language names itself, so a reader hunting for Portuguese looks for the word
+  // they already know rather than for whatever the current interface calls it.
+  it("names every language in its own language", async () => {
+    renderWithI18n(<App />);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
+
+    for (const name of ["English", "Español", "Português"]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
+      expect(await screen.findByRole("option", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("switches the interface when another language is picked", async () => {
+    renderWithI18n(<App />);
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
+
+    const option = await screen.findByRole("option", { name: "Português" });
+
+    // The full pointer sequence, not a bare click: the menu commits its choice on
+    // pointer-up, the way a real one has to so a drag off the list can cancel.
+    fireEvent.pointerDown(option);
+    fireEvent.pointerUp(option);
+    fireEvent.click(option);
+
+    await waitFor(() => {
+      expect(screen.getByText("Escolher arquivos")).toBeInTheDocument();
+    });
   });
 });

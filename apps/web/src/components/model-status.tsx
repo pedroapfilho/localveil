@@ -26,15 +26,24 @@ const ModelStatus = ({ model }: ModelStatusProps) => {
     return null;
   }
 
-  const downloadMessage = t("model.downloading", { percent: percentFormat.format(fraction) });
-
+  // A hairline and two lines of text rather than a boxed notice. This is the app
+  // working, not something that happened to it, and a card around it says the page
+  // has been interrupted.
   return (
-    <div className="ring-foreground/10 flex flex-col gap-3 rounded-xl px-4 py-4 ring-1 sm:px-5">
+    <div className="flex flex-col gap-2">
       {downloading ? (
         <>
-          <p className="text-base text-pretty tabular-nums sm:text-sm">{downloadMessage}</p>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-muted-foreground text-base text-pretty sm:text-sm">
+              {t("model.downloading")}
+            </p>
 
-          <Progress label={downloadMessage} value={fraction} />
+            <p className="text-muted-foreground shrink-0 text-base tabular-nums sm:text-sm">
+              {percentFormat.format(fraction)}
+            </p>
+          </div>
+
+          <Progress className="h-0.5" label={t("model.downloading")} value={fraction} />
         </>
       ) : null}
 

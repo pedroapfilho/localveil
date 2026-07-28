@@ -50,9 +50,9 @@ describe("JobList", () => {
   it("shows progress and the current stage while a file is running", () => {
     setup([job({ progress: 0.8, stage: "stage.redacting", status: "running" })]);
 
-    const bar = screen.getByLabelText("notes.txt");
+    const bar = screen.getByRole("progressbar", { name: "notes.txt" });
 
-    expect(bar).toBeInstanceOf(HTMLProgressElement);
+    expect(bar.getAttribute("aria-valuenow")).toBe("80");
     expect(screen.getByText("Redacting")).toBeInTheDocument();
   });
 
@@ -65,7 +65,7 @@ describe("JobList", () => {
       }),
     ]);
 
-    expect(screen.queryByLabelText("notes.txt")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("reports how many spans were redacted", () => {

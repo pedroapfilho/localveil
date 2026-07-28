@@ -7,6 +7,7 @@ import { useTranslations } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Progress } from "@repo/ui/components/progress";
 import { XIcon } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 import type { Job, JobStatus } from "../store";
 
@@ -25,6 +26,11 @@ const STATUS_TONES: Record<JobStatus, string> = {
   queued: "text-muted-foreground",
   running: "text-foreground",
 };
+
+// The strong ease-out from the house animation standards. Built-in easings are too
+// weak to read as deliberate at this duration, and ease-in would hold back the frame
+// the reader is actually watching.
+const ENTER = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
 type JobRowProps = {
   job: Job;
@@ -53,7 +59,14 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
   const summary = describeResult();
 
   return (
-    <li className="flex flex-col gap-3 px-4 py-4 sm:px-5">
+    <motion.li
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
+      className="flex flex-col gap-3 px-4 py-4 sm:px-5"
+      exit={{ opacity: 0, transform: "translateY(-4px)" }}
+      initial={{ opacity: 0, transform: "translateY(-6px)" }}
+      layout="position"
+      transition={ENTER}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <p className="truncate text-base font-medium sm:text-sm" title={file.name}>
@@ -111,7 +124,7 @@ const JobRow = ({ job, onRemove }: JobRowProps) => {
           {t(warning)}
         </p>
       ))}
-    </li>
+    </motion.li>
   );
 };
 
@@ -142,9 +155,11 @@ const JobList = ({ jobs, onRemove }: JobListProps) => {
         className="ring-foreground/10 divide-foreground/5 divide-y rounded-xl ring-1"
         role="list"
       >
-        {jobs.map((job) => (
-          <JobRow job={job} key={job.id} onRemove={onRemove} />
-        ))}
+        <AnimatePresence initial={false}>
+          {jobs.map((job) => (
+            <JobRow job={job} key={job.id} onRemove={onRemove} />
+          ))}
+        </AnimatePresence>
       </ul>
     </section>
   );

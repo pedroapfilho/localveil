@@ -1,9 +1,11 @@
 import { useTranslations } from "@repo/i18n";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
+import { AnimatePresence, motion } from "motion/react";
 
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
+import { LanguagePicker } from "./components/language-picker";
 import { ModelStatus } from "./components/model-status";
 import { SiteFooter } from "./components/site-footer";
 import { useJobStore } from "./store";
@@ -11,6 +13,16 @@ import { useDocumentLocale } from "./use-document-locale";
 import { useRedaction } from "./use-redaction";
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
+
+// The strong ease-out from the house animation standards, and short enough that the
+// page reads as arranging itself rather than performing.
+const APPEAR = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+
+const SLIDE = {
+  animate: { opacity: 1, transform: "translateY(0px)" },
+  exit: { opacity: 0, transform: "translateY(-6px)" },
+  initial: { opacity: 0, transform: "translateY(-6px)" },
+};
 
 // The same shapes as favicon.svg, inline rather than fetched: it is three rectangles,
 // and an image request for them would cost a round trip and a frame of empty box. The
@@ -53,6 +65,8 @@ const App = () => {
     void runDownload();
   };
 
+  const queued = jobs.length > 0;
+
   return (
     <div className="isolate grid min-h-dvh grid-rows-[1fr_auto]">
       <a
@@ -62,7 +76,11 @@ const App = () => {
         {t("app.skipToContent")}
       </a>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-6 py-16 sm:gap-12 sm:py-20">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
+        <div className="flex justify-end">
+          <LanguagePicker />
+        </div>
+
         <header className="flex flex-col items-center gap-5 text-center">
           <BrandMark />
 
@@ -88,9 +106,22 @@ const App = () => {
             onFilesSelected={submit}
           />
 
-          <JobList jobs={jobs} onRemove={remove} />
+          {/* Both arrive with the first file and leave with the last, so they slide in
+              rather than appearing under the reader's cursor. */}
+          <AnimatePresence initial={false}>
+            {queued ? (
+              <motion.div
+                className="flex flex-col gap-8"
+                key="queue"
+                transition={APPEAR}
+                {...SLIDE}
+              >
+                <JobList jobs={jobs} onRemove={remove} />
 
-          <DownloadPanel jobs={jobs} onDownload={handleDownload} />
+                <DownloadPanel jobs={jobs} onDownload={handleDownload} />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </main>
       </div>
 

@@ -1,6 +1,7 @@
 import type { Messages } from "./en";
 
 const es: Messages = {
+  "app.language": "Idioma",
   "app.name": "localveil",
   "app.skipToContent": "Ir al contenido",
   "app.tagline": "Oculta los datos personales de tus archivos. Nada sale de tu dispositivo.",
@@ -21,7 +22,7 @@ const es: Messages = {
   "footer.offline": "Funciona sin conexión una vez descargado el modelo.",
   "footer.summary":
     "localveil encuentra nombres, correos, teléfonos, direcciones, fechas y números de cuenta en tus archivos y los tapa. La detección se ejecuta en esta pestaña, en tu propia máquina, así que nada de lo que sueltas aquí se envía.",
-  "model.downloading": "Descargando el modelo de detección ({percent})",
+  "model.downloading": "Descargando el modelo de detección",
   "model.ready": "Modelo de detección listo",
   "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",
   "stage.assembling": "Rearmando el archivo",

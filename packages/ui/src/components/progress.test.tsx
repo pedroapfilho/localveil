@@ -6,32 +6,48 @@ import { Progress } from "./progress";
 const renderProgress = (value: number) => {
   render(<Progress label="Downloading model" value={value} />);
 
-  const bar = screen.getByLabelText("Downloading model");
+  return screen.getByRole("progressbar", { name: "Downloading model" });
+};
 
-  if (!(bar instanceof HTMLProgressElement)) {
-    throw new TypeError("Progress did not render a progress element");
+const percentOf = (bar: HTMLElement) => Number(bar.getAttribute("aria-valuenow"));
+
+const fillOf = (bar: HTMLElement) => {
+  const fill = bar.querySelector("[data-slot=progress-indicator]");
+
+  if (!(fill instanceof HTMLElement)) {
+    throw new TypeError("Progress rendered no fill to measure");
   }
 
-  return bar;
+  return fill.style.transform;
 };
 
 describe("Progress", () => {
   it("reports the fraction as a percentage of 100", () => {
     const bar = renderProgress(0.42);
 
-    expect(bar.value).toBe(42);
-    expect(bar.max).toBe(100);
+    expect(percentOf(bar)).toBe(42);
+    expect(bar.getAttribute("aria-valuemax")).toBe("100");
   });
 
   it("clamps a value above the range", () => {
-    expect(renderProgress(4).value).toBe(100);
+    expect(percentOf(renderProgress(4))).toBe(100);
   });
 
   it("clamps a value below the range", () => {
-    expect(renderProgress(-1).value).toBe(0);
+    expect(percentOf(renderProgress(-1))).toBe(0);
   });
 
   it("treats a non-finite value as no progress", () => {
-    expect(renderProgress(Number.NaN).value).toBe(0);
+    expect(percentOf(renderProgress(Number.NaN))).toBe(0);
+  });
+
+  // The fill travels on the GPU rather than by growing a box, so a download that
+  // arrives in eight-megabyte steps still reads as movement.
+  it("draws the fill with a transform", () => {
+    expect(fillOf(renderProgress(0.42))).toBe("scaleX(0.42)");
+  });
+
+  it("draws nothing at all at zero", () => {
+    expect(fillOf(renderProgress(0))).toBe("scaleX(0)");
   });
 });
