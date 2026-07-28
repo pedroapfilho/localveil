@@ -13,6 +13,13 @@ const CHUNK_SIZE = 4000;
 const MIN_SCORE = 0.5;
 const MODEL_ID = "openai/privacy-filter";
 
+// Left unpinned, this reads whatever `main` points at today. Two things go wrong
+// then: the weights a reader has cached stop matching the ones this code was tested
+// against, and a download resumed across an update splices bytes from two different
+// revisions into one file. A commit id in the URL makes the cache key move when the
+// model does.
+const MODEL_REVISION = "7ffa9a043d54d1be65afb281eddf0ffbe629385b";
+
 type Device = "wasm" | "webgpu";
 
 type DetectorOptions = {
@@ -75,7 +82,11 @@ const installResumableCache = (report: ModelProgress) => {
 // a download bar count to 100% for something that never touched the network. The
 // resumable cache below reports only bytes it actually fetched.
 const loadClassifier = (device: Device) =>
-  pipeline("token-classification", MODEL_ID, { device, dtype: "q4f16" });
+  pipeline("token-classification", MODEL_ID, {
+    device,
+    dtype: "q4f16",
+    revision: MODEL_REVISION,
+  });
 
 type TokenClassifier = Awaited<ReturnType<typeof loadClassifier>>;
 
