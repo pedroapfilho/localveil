@@ -331,6 +331,25 @@ describe("pdfRedactor", () => {
     expect(state.recognisedIn).toEqual([undefined]);
   });
 
+  // An identity card carries almost no prose to guess from, and the reader holding
+  // one already knows the answer.
+  it("recognises every page in the language the caller forced", async () => {
+    state.pages = [{ layer: "", words: ["Ana", "Lima"] }, page("Signed by Ana Lima")];
+
+    const stages: Array<FileStageKey> = [];
+
+    await pdfRedactor.redact(
+      file(),
+      detecting([]),
+      (_fraction, stage) => {
+        stages.push(stage);
+      },
+      { language: "pt" },
+    );
+
+    expect(state.recognisedIn).toEqual(["pt", "pt"]);
+  });
+
   it("reports the stages a reader watches go by", async () => {
     const { stages } = await run();
 

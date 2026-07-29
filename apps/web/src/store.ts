@@ -1,4 +1,4 @@
-import type { FileStageKey, WarningKey } from "@repo/redact-core";
+import type { DocumentLanguage, FileStageKey, WarningKey } from "@repo/redact-core";
 import { create } from "zustand";
 
 type JobStatus = "done" | "error" | "queued" | "running";
@@ -9,6 +9,9 @@ type Job = {
   error?: string;
   file: File;
   id: string;
+  // Carried on the job rather than the submit call: crash recovery re-sends jobs
+  // from here, and a forced OCR language has to survive that.
+  language?: DocumentLanguage;
   progress: number;
   result?: JobResult;
   stage?: FileStageKey;
@@ -18,7 +21,7 @@ type Job = {
 type JobPatch = Partial<Omit<Job, "file" | "id">>;
 
 type JobStore = {
-  addFiles: (files: Array<File>) => Array<Job>;
+  addFiles: (files: Array<File>, language?: DocumentLanguage) => Array<Job>;
   jobs: Array<Job>;
   removeJob: (id: string) => void;
   reset: () => void;
@@ -26,10 +29,11 @@ type JobStore = {
 };
 
 const useJobStore = create<JobStore>((set) => ({
-  addFiles: (files) => {
+  addFiles: (files, language) => {
     const created = files.map((file) => ({
       file,
       id: crypto.randomUUID(),
+      language,
       progress: 0,
       status: "queued" as const,
     }));

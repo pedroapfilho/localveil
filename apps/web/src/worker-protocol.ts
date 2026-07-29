@@ -1,6 +1,6 @@
-import type { FileStageKey, ModelStageKey, WarningKey } from "@repo/redact-core";
+import type { DocumentLanguage, FileStageKey, ModelStageKey, WarningKey } from "@repo/redact-core";
 
-type RedactRequest = { file: File; id: string; type: "redact" };
+type RedactRequest = { file: File; id: string; language?: DocumentLanguage; type: "redact" };
 
 // Sent when a row leaves the page. Without it the worker carried on rendering and
 // recognising every page of a file nobody was waiting for any more, with the rest of

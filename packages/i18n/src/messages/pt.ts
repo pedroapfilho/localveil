@@ -11,6 +11,8 @@ const pt: Messages = {
   "dropzone.formats": "Arquivos de texto, Markdown, CSV, JSON, log, PDF e imagem",
   "dropzone.hint": "ou arraste e solte aqui",
   "dropzone.label": "Escolher arquivos",
+  "dropzone.language": "Idioma do documento",
+  "dropzone.languageAuto": "Detectar automaticamente",
   "error.unknown": "Algo deu errado.",
   "files.clear": "Limpar",
   "files.heading": "Arquivos",

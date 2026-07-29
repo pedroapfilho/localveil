@@ -108,6 +108,35 @@ describe("resolveArguments", () => {
     expect(point.selection).toStrictEqual([join(directory, "notes.txt")]);
   });
 
+  it("reads a forced document language off the flag", async () => {
+    const directory = await makeDirectory();
+
+    const point = await resolveArguments(["--lang", "pt", "notes.txt"], directory);
+
+    expect(point.language).toBe("pt");
+    expect(point.selection).toStrictEqual([join(directory, "notes.txt")]);
+  });
+
+  it("reads the flag in its equals form", async () => {
+    const directory = await makeDirectory();
+
+    const point = await resolveArguments(["--lang=es"], directory);
+
+    expect(point).toStrictEqual({ directory, language: "es", selection: [] });
+  });
+
+  it("refuses a language the redactor does not speak", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--lang", "de"], directory)).rejects.toThrow(/en, es, pt/v);
+  });
+
+  it("refuses a dangling flag with nothing after it", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["notes.txt", "--lang"], directory)).rejects.toThrow(/nothing/v);
+  });
+
   it("opens a folder it was handed instead of picking anything", async () => {
     const directory = await makeDirectory();
 

@@ -62,6 +62,55 @@ describe("patternSpans", () => {
     expect(covered("call 555-0181 now")).toEqual(["555-0181"]);
   });
 
+  it("finds an IBAN printed in the conventional groups of four", () => {
+    expect(covered("pay GB82 WEST 1234 5698 7654 32 today")).toEqual([
+      "GB82 WEST 1234 5698 7654 32",
+    ]);
+  });
+
+  it("covers a whole US number rather than leaving the area code beside the box", () => {
+    expect(covered("call 555-123-4567 now")).toContain("555-123-4567");
+  });
+
+  it("finds a Brazilian mobile with a bare area code", () => {
+    expect(covered("Tel: 11 98765-4321")).toContain("11 98765-4321");
+  });
+
+  it("finds a nine-digit mobile by its leading nine", () => {
+    expect(covered("Tel: 98765-4321")).toEqual(["98765-4321"]);
+  });
+
+  it("leaves a span of years alone, which is not a telephone", () => {
+    expect(covered("operating years 2019-2024 shown")).toEqual([]);
+  });
+
+  it("finds an RG beside its label and leaves the label readable", () => {
+    expect(covered("RG 12.345.678-9 emitido")).toEqual(["12.345.678-9"]);
+    expect(labels("RG 12.345.678-9")).toEqual(["account_number"]);
+  });
+
+  it("finds a CNH registration number beside its label", () => {
+    expect(covered("Registro 02334567890 valido")).toEqual(["02334567890"]);
+  });
+
+  it("leaves a bare eleven-digit run alone without the registration label", () => {
+    expect(covered("lote 02334567890 itens")).toEqual([]);
+  });
+
+  it("finds a CEP beside its label", () => {
+    expect(covered("CEP 01310-100 centro")).toEqual(["01310-100"]);
+    expect(labels("CEP 01310-100")).toEqual(["private_address"]);
+  });
+
+  it("finds a written-out date", () => {
+    expect(covered("nascido em 12/03/1985 em Santos")).toEqual(["12/03/1985"]);
+    expect(labels("12/03/1985")).toEqual(["private_date"]);
+  });
+
+  it("leaves an impossible date alone", () => {
+    expect(covered("codigo 32/13/1985 interno")).toEqual([]);
+  });
+
   // An invoice is mostly digits. Blacking out the ones that merely look like an
   // identifier is how a page ends up unreadable.
   it("leaves an eleven-digit number that fails the CPF check alone", () => {

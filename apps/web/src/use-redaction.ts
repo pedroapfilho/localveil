@@ -1,5 +1,5 @@
 import { useTranslations } from "@repo/i18n";
-import type { ModelStageKey } from "@repo/redact-core";
+import type { DocumentLanguage, ModelStageKey } from "@repo/redact-core";
 import { buildZip } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,7 +35,12 @@ const triggerDownload = (blob: Blob) => {
 };
 
 const sendJob = (worker: Worker, job: Job) => {
-  const request: RedactRequest = { file: job.file, id: job.id, type: "redact" };
+  const request: RedactRequest = {
+    file: job.file,
+    id: job.id,
+    language: job.language,
+    type: "redact",
+  };
 
   // Worker#postMessage has no target origin; its second argument is a transfer
   // list, so the window-to-window rule does not apply here.
@@ -239,10 +244,10 @@ const useRedaction = () => {
   }, [ensureWorker, stopWatchdog]);
 
   const submit = useCallback(
-    (files: Array<File>) => {
+    (files: Array<File>, language?: DocumentLanguage) => {
       const worker = ensureWorker();
 
-      for (const job of useJobStore.getState().addFiles(files)) {
+      for (const job of useJobStore.getState().addFiles(files, language)) {
         sendJob(worker, job);
       }
 

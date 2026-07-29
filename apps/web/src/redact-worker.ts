@@ -50,7 +50,7 @@ const queue = createJobQueue({
       unsupported: error instanceof UnsupportedFileError,
     });
   },
-  run: async ({ file, id }, stopIfCancelled) => {
+  run: async ({ file, id, language }, stopIfCancelled) => {
     const redactor = registry.resolve(file);
 
     post({ fraction: 0, id, stage: "stage.loadingModel", type: "progress" });
@@ -59,10 +59,15 @@ const queue = createJobQueue({
 
     stopIfCancelled();
 
-    const result = await redactor.redact(file, detect, (fraction, stage) => {
-      stopIfCancelled();
-      post({ fraction, id, stage, type: "progress" });
-    });
+    const result = await redactor.redact(
+      file,
+      detect,
+      (fraction, stage) => {
+        stopIfCancelled();
+        post({ fraction, id, stage, type: "progress" });
+      },
+      { language },
+    );
 
     post({
       blob: result.blob,

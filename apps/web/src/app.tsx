@@ -2,7 +2,10 @@ import { useTranslations } from "@repo/i18n";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
 import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
 
+import type { DocumentLanguageChoice } from "./components/document-language-picker";
+import { DocumentLanguagePicker } from "./components/document-language-picker";
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
 import { LanguagePicker } from "./components/language-picker";
@@ -49,6 +52,7 @@ const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
   const { clear, downloadZip, model, remove, submit } = useRedaction();
+  const [documentLanguage, setDocumentLanguage] = useState<DocumentLanguageChoice>("auto");
 
   useDocumentLocale();
 
@@ -63,6 +67,10 @@ const App = () => {
 
   const handleDownload = () => {
     void runDownload();
+  };
+
+  const handleFilesSelected = (files: Array<File>) => {
+    submit(files, documentLanguage === "auto" ? undefined : documentLanguage);
   };
 
   const queued = jobs.length > 0;
@@ -103,8 +111,10 @@ const App = () => {
             formats={t("dropzone.formats")}
             hint={t("dropzone.hint")}
             label={t("dropzone.label")}
-            onFilesSelected={submit}
+            onFilesSelected={handleFilesSelected}
           />
+
+          <DocumentLanguagePicker onChange={setDocumentLanguage} value={documentLanguage} />
 
           {/* Both arrive with the first file and leave with the last, so they slide in
               rather than appearing under the reader's cursor. */}

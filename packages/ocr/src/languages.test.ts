@@ -66,6 +66,23 @@ describe("detectLanguage", () => {
     expect(strong.confidence).toBeGreaterThan(weak.confidence);
   });
 
+  // An identity card carries almost no prose: the vote has to come from name
+  // particles and the field labels printed on it.
+  it("recognises Portuguese from the fields of an identity document", () => {
+    const { confidence, language } = detectLanguage(
+      "NOME JOSE DA SILVA FILIACAO MARIA DA SILVA DATA NASCIMENTO VALIDADE EMISSAO ASSINATURA",
+    );
+
+    expect(language).toBe("pt");
+    expect(confidence).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it("recognises Spanish from the fields of an identity document", () => {
+    const { language } = detectLanguage("NOMBRE FECHA DE VALIDEZ FIRMA DEL TITULAR EL DOCUMENTO");
+
+    expect(language).toBe("es");
+  });
+
   it("maps each language to its traineddata name", () => {
     expect(traineddataFor("en")).toBe("eng");
     expect(traineddataFor("pt")).toBe("por");

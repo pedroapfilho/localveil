@@ -9,8 +9,10 @@ const TRAINEDDATA: Record<OcrLanguage, string> = {
   pt: "por",
 };
 
-// Function words that appear in one of the three lists only. Written without accents
-// because the first OCR pass runs in English and drops most of them.
+// Words that appear in one of the three lists only: function words, plus the field
+// labels identity documents print, because an ID card carries almost no prose to
+// vote with. Written without accents, since the first OCR pass runs in English and
+// drops most of them.
 const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
   en: new Set([
     "and",
@@ -43,6 +45,8 @@ const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
     "esta",
     "este",
     "esto",
+    "fecha",
+    "firma",
     "fue",
     "hasta",
     "hay",
@@ -50,24 +54,37 @@ const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
     "las",
     "los",
     "muy",
+    "nombre",
     "pero",
     "sus",
     "tambien",
     "una",
+    "validez",
     "ya",
   ]),
   pt: new Set([
+    "ao",
+    "aos",
+    "assinatura",
     "ate",
+    "da",
     "das",
     "dos",
     "ela",
     "ele",
+    "em",
+    "emissao",
     "entao",
+    "filiacao",
     "foi",
+    "habilitacao",
     "isso",
     "ja",
     "muito",
     "nao",
+    "nascimento",
+    "nome",
+    "numa",
     "pela",
     "pelo",
     "sao",
@@ -75,6 +92,7 @@ const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
     "sua",
     "tambem",
     "uma",
+    "validade",
     "voce",
   ]),
 };

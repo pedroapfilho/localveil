@@ -48,7 +48,7 @@ const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>)
 
 const imageRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),
-  redact: async (file, detect, onProgress) => {
+  redact: async (file, detect, onProgress, options) => {
     onProgress(0, "stage.reading");
 
     const bitmap = await createImageBitmap(file);
@@ -58,7 +58,10 @@ const imageRedactor: Redactor = {
     // The file goes to the recogniser rather than the bitmap: Tesseract decodes it
     // itself, and its boxes come back in the image's own pixels, which is the space
     // the canvas draws in.
-    const reading = await readImageText(file);
+    const reading = await readImageText(
+      file,
+      options?.language === undefined ? {} : { known: options.language },
+    );
     const warnings: Array<WarningKey> = [];
 
     if (reading.words.length === 0) {

@@ -1,9 +1,14 @@
 import type { PiiLabel, Span } from "./types.ts";
 
-// Every one of these carries a check digit, so a number that merely looks right is
-// rejected rather than blacked out. An invoice is mostly digits that are not
-// identifiers.
+// Most of these carry a check digit, so a number that merely looks right is
+// rejected rather than blacked out; an invoice is mostly digits that are not
+// identifiers. The rest are anchored to the label printed beside them, which is
+// the same precision by other means: RG check digits vary by state, so arithmetic
+// there would reject real documents.
 type Pattern = {
+  // With `capture`, the span is the first capture group rather than the whole
+  // match, so a label used as an anchor is not itself blacked out.
+  capture?: boolean;
   label: PiiLabel;
   matcher: RegExp;
   verify?: (value: string) => boolean;
@@ -105,6 +110,9 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
+// "2019-2024" is a span of years, not a telephone.
+const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
+
 const PATTERNS: ReadonlyArray<Pattern> = [
   {
     label: "private_email",
@@ -121,8 +129,10 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: isCnpj,
   },
   {
+    // IBANs are conventionally printed in groups of four, so single spaces are
+    // allowed between the characters; the mod-97 check still decides.
     label: "account_number",
-    matcher: /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gv,
+    matcher: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b/gv,
     verify: isIban,
   },
   {
@@ -131,25 +141,55 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: luhn,
   },
   {
+    // Brazilian RG, anchored to its printed label because the check digit differs
+    // by issuing state.
+    capture: true,
+    label: "account_number",
+    matcher: /\bRG[.:]?\s?(?<value>\d{1,2}\.?\d{3}\.?\d{3}-?[\dX])\b/dgv,
+  },
+  {
+    // CNH registration numbers, anchored to the label a licence prints beside them.
+    capture: true,
+    label: "account_number",
+    matcher: /\b(?:CNH|[Rr]egistro)[.:]?\s?(?<value>\d{9,11})\b/dgv,
+  },
+  {
+    capture: true,
+    label: "private_address",
+    matcher: /\bCEP[.:]?\s?(?<value>\d{5}-?\d{3})\b/dgv,
+  },
+  {
+    label: "private_date",
+    matcher: /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2}\b/gv,
+  },
+  {
     // A country code, brackets or a hyphen is required: two runs of digits either side
     // of a space is an amount far more often than a telephone number.
     label: "private_phone",
     matcher:
       /\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{3,5}|\(\d{2,4}\)\s?\d{3,5}[\s\-]\d{3,5}|\b\d{3,4}-\d{4}\b/gv,
+    verify: (value) => !isYearRange(value),
+  },
+  {
+    // Shapes the alternation above cannot reach: full US numbers (its tail-only
+    // match left the area code beside the box), Brazilian mobiles with a bare
+    // area code, and the nine-digit mobile whose leading 9 marks it as one.
+    label: "private_phone",
+    matcher: /\b\d{3}-\d{3}-\d{4}\b|\b\d{2}\s9?\d{4}-\d{4}\b|\b9\d{4}-\d{4}\b/gv,
   },
 ];
 
 const patternSpans = (text: string): Array<Span> => {
   const found = new Map<string, Span>();
 
-  for (const { label, matcher, verify } of PATTERNS) {
+  for (const { capture, label, matcher, verify } of PATTERNS) {
     for (const match of text.matchAll(matcher)) {
-      if (verify !== undefined && !verify(match[0])) {
+      const range = capture === true ? match.indices?.groups?.value : undefined;
+      const [start, end] = range ?? [match.index, match.index + match[0].length];
+
+      if (verify !== undefined && !verify(text.slice(start, end))) {
         continue;
       }
-
-      const start = match.index;
-      const end = start + match[0].length;
 
       found.set(`${String(start)}-${String(end)}`, { end, label, score: 1, start });
     }

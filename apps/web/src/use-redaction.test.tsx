@@ -66,6 +66,16 @@ const Harness = () => {
     ]);
   };
 
+  const handleClickForced = () => {
+    submit(
+      [
+        new File(["um"], "um.txt", { type: "text/plain" }),
+        new File(["dois"], "dois.txt", { type: "text/plain" }),
+      ],
+      "pt",
+    );
+  };
+
   const handleRemoveFirst = () => {
     const first = useJobStore.getState().jobs.at(0);
 
@@ -78,6 +88,10 @@ const Harness = () => {
     <>
       <button onClick={handleClick} type="button">
         submit
+      </button>
+
+      <button onClick={handleClickForced} type="button">
+        submit-forced
       </button>
 
       <button onClick={handleRemoveFirst} type="button">
@@ -369,6 +383,38 @@ describe("removing a file", () => {
     removeFirst();
 
     expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+  });
+});
+
+describe("a forced document language", () => {
+  it("travels with every file the reader submits", () => {
+    renderWithI18n(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
+
+    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
+
+    expect(requests.map((request) => request.language)).toEqual(["pt", "pt"]);
+  });
+
+  // Recovery re-sends jobs from the store, so a language that only lived in the
+  // submit call would quietly fall off after a crash.
+  it("survives the move to a fresh worker after a crash", () => {
+    renderWithI18n(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
+    startFirstJob();
+    killFirstWorker();
+
+    const requeued = workerAt(1).posted.filter((request) => request.type === "redact");
+
+    expect(requeued.map((request) => request.language)).toEqual(["pt"]);
+  });
+
+  it("stays absent when the reader left the picker on auto", () => {
+    submitTwo();
+
+    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
+
+    expect(requests.map((request) => request.language)).toEqual([undefined, undefined]);
   });
 });
 

@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 
 import { buildZip, toArrayBuffer, uniqueFilename } from "@repo/redact-core";
 import type { ZipEntry } from "@repo/redact-core";
+import type { DocumentLanguage } from "@repo/redact-node";
 import { createNodeRedactor } from "@repo/redact-node";
 
 import { reasonFrom } from "./errors";
@@ -36,6 +37,7 @@ type RunResult = {
 
 type RunOptions = {
   files: ReadonlyArray<string>;
+  language?: DocumentLanguage;
   onFileProgress: (progress: RunProgress) => void;
   onModelProgress: (fraction: number) => void;
   outputDirectory: string;
@@ -74,12 +76,13 @@ const writeArchive = async (
 
 const runRedaction = async ({
   files,
+  language,
   onFileProgress,
   onModelProgress,
   outputDirectory,
   signal,
 }: RunOptions): Promise<RunResult> => {
-  const redactor = await createNodeRedactor({ onModelProgress });
+  const redactor = await createNodeRedactor({ language, onModelProgress });
 
   const entries: Array<ZipEntry> = [];
   const failures: Array<FileFailure> = [];

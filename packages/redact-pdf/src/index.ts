@@ -82,7 +82,7 @@ const paint = (canvas: OffscreenCanvas, rects: Array<Rect>) => {
 // So the layer is read for its words, not their positions, and the boxes come from
 // recognising the page that was actually drawn. That costs a recogniser pass on
 // every page and buys boxes that sit where the ink is.
-const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
+const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) => {
   onProgress(0, "stage.reading");
 
   parserInstalled ??= installParser();
@@ -109,7 +109,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress) => {
   const read: Array<{ spans: Array<Span>; text: string; words: Array<PositionedWord> }> = [];
   const tokens = new Map<string, PiiToken>();
 
-  let language: OcrLanguage | undefined;
+  let language: OcrLanguage | undefined = options?.language;
   let anyText = false;
 
   const renderPage = async (number: number) => {

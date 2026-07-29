@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 
+import type { DocumentLanguage } from "@repo/redact-node";
 import { SUPPORTED_EXTENSIONS } from "@repo/redact-node";
 
 const PARENT_NAME = "..";
@@ -14,7 +15,44 @@ type DirectoryEntry = {
 
 type StartingPoint = {
   directory: string;
+  language?: DocumentLanguage;
   selection: Array<string>;
+};
+
+const DOCUMENT_LANGUAGES: ReadonlyArray<DocumentLanguage> = ["en", "es", "pt"];
+
+const isDocumentLanguage = (value: string): value is DocumentLanguage =>
+  DOCUMENT_LANGUAGES.some((language) => language === value);
+
+type ParsedFlags = { language?: DocumentLanguage; paths: Array<string> };
+
+// `--lang pt` skips the language guessing, which is the weakest stage on documents
+// that carry almost no prose, identity cards above all.
+const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
+  const paths: Array<string> = [];
+  let language: DocumentLanguage | undefined;
+
+  for (let at = 0; at < args.length; at += 1) {
+    const arg = args[at];
+    const value = arg === "--lang" ? args[at + 1] : /^--lang=(?<lang>.+)$/v.exec(arg)?.groups?.lang;
+
+    if (arg === "--lang") {
+      at += 1;
+    } else if (!arg.startsWith("--lang=")) {
+      paths.push(arg);
+      continue;
+    }
+
+    if (value === undefined || !isDocumentLanguage(value)) {
+      throw new RangeError(
+        `--lang takes one of ${DOCUMENT_LANGUAGES.join(", ")}, not ${value ?? "nothing"}`,
+      );
+    }
+
+    language = value;
+  }
+
+  return { language, paths };
 };
 
 const isSupported = (name: string): boolean =>
@@ -67,12 +105,14 @@ const resolveArguments = async (
   args: ReadonlyArray<string>,
   workingDirectory: string,
 ): Promise<StartingPoint> => {
-  if (args.length === 0) {
-    return { directory: workingDirectory, selection: [] };
+  const { language, paths } = parseFlags(args);
+
+  if (paths.length === 0) {
+    return { directory: workingDirectory, ...(language && { language }), selection: [] };
   }
 
   const settled = await Promise.allSettled(
-    args.map((arg) => describePath(resolve(workingDirectory, arg))),
+    paths.map((arg) => describePath(resolve(workingDirectory, arg))),
   );
 
   const selection: Array<string> = [];
@@ -98,7 +138,7 @@ const resolveArguments = async (
   const first = selection[0];
   const directory = first === undefined ? (directories[0] ?? workingDirectory) : dirname(first);
 
-  return { directory, selection };
+  return { directory, ...(language && { language }), selection };
 };
 
 export { isSupported, parentEntry, readDirectory, resolveArguments };

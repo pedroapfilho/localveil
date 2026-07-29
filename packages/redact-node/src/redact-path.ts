@@ -1,4 +1,4 @@
-import type { Detect } from "@repo/redact-core";
+import type { Detect, RedactOptions } from "@repo/redact-core";
 import { createRedactorRegistry } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
@@ -23,6 +23,7 @@ const redactPath = async (
   path: string,
   detect: Detect,
   onProgress: NodeRedactionProgress,
+  options: RedactOptions = {},
 ): Promise<NodeRedactionOutput> => {
   // Before the redactor runs rather than at import: pdf.js and the image redactor read
   // these globals when they draw, and both are loaded lazily.
@@ -30,7 +31,12 @@ const redactPath = async (
 
   const file = await readFileAsFile(path);
   const redactor = registry.resolve(file);
-  const { blob, redactionCount, warnings } = await redactor.redact(file, detect, onProgress);
+  const { blob, redactionCount, warnings } = await redactor.redact(
+    file,
+    detect,
+    onProgress,
+    options,
+  );
 
   return { bytes: new Uint8Array(await blob.arrayBuffer()), redactionCount, warnings };
 };

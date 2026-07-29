@@ -12,6 +12,12 @@ type Span = { end: number; label: PiiLabel; score: number; start: number };
 
 type Detect = (text: string) => Promise<Array<Span>>;
 
+// The languages OCR can be pointed at. A reader who knows what a document is can
+// say so and skip the guessing, which is the weakest stage on sparse text.
+type DocumentLanguage = "en" | "es" | "pt";
+
+type RedactOptions = { language?: DocumentLanguage };
+
 // Progress crosses a worker boundary and ends up on screen, where the redactor
 // has no idea which language the reader picked, so a stage is a translation key
 // rather than a sentence.
@@ -51,7 +57,12 @@ type RedactionResult = {
 
 type Redactor = {
   accepts: (file: File) => boolean;
-  redact: (file: File, detect: Detect, onProgress: FileProgress) => Promise<RedactionResult>;
+  redact: (
+    file: File,
+    detect: Detect,
+    onProgress: FileProgress,
+    options?: RedactOptions,
+  ) => Promise<RedactionResult>;
 };
 
 type Bbox = { x0: number; x1: number; y0: number; y1: number };
@@ -63,6 +74,7 @@ type Rect = { height: number; width: number; x: number; y: number };
 export type {
   Bbox,
   Detect,
+  DocumentLanguage,
   FileProgress,
   FileStageKey,
   ModelProgress,
@@ -71,6 +83,7 @@ export type {
   PositionedWord,
   Rect,
   RedactionResult,
+  RedactOptions,
   Redactor,
   Span,
   StageKey,

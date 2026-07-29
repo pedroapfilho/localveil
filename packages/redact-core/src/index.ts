@@ -11,6 +11,7 @@ export type { RedactorRegistry } from "./registry.ts";
 export type {
   Bbox,
   Detect,
+  DocumentLanguage,
   FileProgress,
   FileStageKey,
   ModelProgress,
@@ -19,6 +20,7 @@ export type {
   PositionedWord,
   Rect,
   RedactionResult,
+  RedactOptions,
   Redactor,
   Span,
   StageKey,
