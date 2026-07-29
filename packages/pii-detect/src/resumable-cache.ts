@@ -118,5 +118,5 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
   };
 };
 
-export { createResumableCache };
+export { CACHE_KEY, createResumableCache };
 export type { ResumableCache, ResumableCacheOptions };

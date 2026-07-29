@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#ort": {
+      "browser": "./src/ort-browser.ts",
+      "default": "./src/ort-node.ts"
+    }
+  },
   "exports": {
     ".": "./src/index.ts"
   },
@@ -16,11 +22,14 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
-    "@repo/redact-core": "workspace:*"
+    "@repo/redact-core": "workspace:*",
+    "onnxruntime-node": "1.24.3",
+    "onnxruntime-web": "1.27.0"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@types/node": "^26.1.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

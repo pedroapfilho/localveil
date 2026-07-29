@@ -7,7 +7,7 @@ import { ArrowUpRightIcon } from "lucide-react";
 
 const LINKS = [
   { href: "https://github.com/pedroapfilho/localveil", key: "footer.github" },
-  { href: "https://huggingface.co/openai/privacy-filter", key: "footer.model" },
+  { href: "https://huggingface.co/urchade/gliner_multi_pii-v1", key: "footer.model" },
 ] as const;
 
 // New tabs on purpose. Following a link in this one would throw away every file in

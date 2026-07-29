@@ -18,11 +18,13 @@ const crossOriginIsolation = (): Plugin => ({
 });
 
 export default defineConfig({
-  // Both ship their own wasm or worker and are loaded from inside a worker, where a
-  // pre-bundled copy is served from a path that worker cannot fetch. Tesseract is
-  // deliberately not in this list: it is CommonJS, so it needs the conversion that
-  // pre-bundling does.
-  optimizeDeps: { exclude: ["@huggingface/transformers", "pdfjs-dist"] },
+  // All three ship their own wasm or worker and are loaded from inside a worker,
+  // where a pre-bundled copy is served from a path that worker cannot fetch.
+  // onnxruntime-web is imported both directly and through transformers.js, and
+  // pre-bundling one of the two would split them into two runtimes with two
+  // environments. Tesseract is deliberately not in this list: it is CommonJS, so
+  // it needs the conversion that pre-bundling does.
+  optimizeDeps: { exclude: ["@huggingface/transformers", "onnxruntime-web", "pdfjs-dist"] },
   plugins: [react(), tailwindcss(), crossOriginIsolation()],
   server: { allowedHosts: [".localhost"] },
   // An iife worker cannot be split, so pdf.js and Tesseract would be inlined into

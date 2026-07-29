@@ -1,143 +1,173 @@
-import { pipeline } from "@huggingface/transformers";
+import { AutoTokenizer } from "@huggingface/transformers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDetector } from "./detector.ts";
+import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
-vi.mock("@huggingface/transformers", () => ({ env: {}, pipeline: vi.fn() }));
+import { createDetector, MAX_WIDTH } from "./detector.ts";
+import type { GlinerInput } from "./gliner-encode.ts";
+import { ENTITY_PROMPTS } from "./gliner-labels.ts";
 
-const pipelineMock = vi.mocked(pipeline);
+vi.mock("@huggingface/transformers", () => ({
+  AutoTokenizer: { from_pretrained: vi.fn() },
+  env: {},
+}));
 
-type ClassifiedToken = { entity: string; index: number; score: number };
+vi.mock("#ort", () => ({
+  createModelRunner: vi.fn(),
+  fetchModelBytes: vi.fn(),
+  // Distinct names per device so the tests can see which tier was fetched.
+  MODEL_FILES: { wasm: "model_int8.onnx", webgpu: "model_q4.onnx" },
+  pickDevice: vi.fn(),
+}));
 
-type Respond = (text: string) => Array<ClassifiedToken>;
+// A hit names the words (inclusive) and the prompt that should claim them.
+type Hit = { end: number; logit?: number; prompt: string; start: number };
 
-// One token per character keeps the arithmetic in the expectations obvious: the
-// token at index `i` covers exactly `[i, i + 1)` of the chunk it came from.
-const stubClassifier = (respond: Respond, asBigInt = false) => {
-  let pieces: Array<string> = [];
+type Respond = (words: Array<string>) => Array<Hit>;
 
-  const tokenizer = Object.assign(
-    (text: string) => {
-      // Code points are what this stub wants, so splitting emoji apart is the
-      // point rather than the hazard the rule is guarding against.
-      // oxlint-disable-next-line typescript/no-misused-spread
-      pieces = [...text];
+const FIRST_WORD_ID = 10;
 
-      const row = pieces.map((_piece, index) => (asBigInt ? BigInt(index) : index));
+// One token per word, with a registry both directions: the runner stub reads the
+// words back out of the encoded input, so tests can answer to text rather than ids.
+const createHarness = () => {
+  const idsByWord = new Map<string, number>();
+  const wordsById = new Map<number, string>();
 
-      return { input_ids: { tolist: () => [row] } };
-    },
-    { decode: (ids: Array<number>) => ids.map((id) => pieces[id] ?? "").join("") },
-  );
+  const encode = (text: string, options?: { add_special_tokens?: boolean }) => {
+    if (options?.add_special_tokens === true) {
+      return [1, 2];
+    }
 
-  const call = vi.fn((text: string) => Promise.resolve(respond(text)));
+    let id = idsByWord.get(text);
 
-  return Object.assign(call, { tokenizer });
+    if (id === undefined) {
+      id = FIRST_WORD_ID + idsByWord.size;
+      idsByWord.set(text, id);
+      wordsById.set(id, text);
+    }
+
+    return [id];
+  };
+
+  const wordsOf = (input: GlinerInput): Array<string> =>
+    input.wordsMask.flatMap((mask, at) =>
+      mask > 0 ? [wordsById.get(input.inputIds[at]) ?? ""] : [],
+    );
+
+  return { tokenizer: { encode }, wordsOf };
 };
 
-const bioesPrefix = (index: number, count: number) => {
-  if (count === 1) {
-    return "S";
+const promptIndex = (prompt: string) =>
+  ENTITY_PROMPTS.findIndex((entity) => entity.prompt === prompt);
+
+const logitsFor = (wordCount: number, hits: Array<Hit>) => {
+  const entities = ENTITY_PROMPTS.length;
+  const data = new Float32Array(wordCount * MAX_WIDTH * entities).fill(-50);
+
+  for (const hit of hits) {
+    const width = hit.end - hit.start;
+
+    data[(hit.start * MAX_WIDTH + width) * entities + promptIndex(hit.prompt)] = hit.logit ?? 50;
   }
 
-  if (index === 0) {
-    return "B";
-  }
-
-  return index === count - 1 ? "E" : "I";
+  return { data, dims: [1, wordCount, MAX_WIDTH, entities] };
 };
 
-const tokensFor = (label: string, count: number): Array<ClassifiedToken> =>
-  Array.from({ length: count }, (_entry, index) => ({
-    entity: `${bioesPrefix(index, count)}-${label}`,
-    index,
-    score: 0.9,
-  }));
+const setup = (respond: Respond) => {
+  const { tokenizer, wordsOf } = createHarness();
 
-const stubPipeline = (classifier: ReturnType<typeof stubClassifier>) => {
-  pipelineMock.mockResolvedValue(classifier as never);
+  vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+  vi.mocked(pickDevice).mockResolvedValue("webgpu");
+  vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+
+  const run = vi.fn((input: GlinerInput) => {
+    const hits = respond(wordsOf(input));
+
+    return Promise.resolve(logitsFor(input.keptWords.length, hits));
+  });
+
+  vi.mocked(createModelRunner).mockResolvedValue(run);
+
+  return { run, wordsOf };
 };
 
 beforeEach(() => {
-  pipelineMock.mockReset();
+  vi.mocked(AutoTokenizer.from_pretrained).mockReset();
+  vi.mocked(createModelRunner).mockReset();
+  vi.mocked(fetchModelBytes).mockReset();
+  vi.mocked(pickDevice).mockReset();
 });
 
 describe("createDetector", () => {
-  it("chunks a long input into more than one pipeline call", async () => {
-    const classifier = stubClassifier(() => []);
+  it("chunks a long input into more than one model call", async () => {
+    const { run } = setup(() => []);
+    const detect = await createDetector({ maxWords: 3, overlapWords: 0 });
 
-    stubPipeline(classifier);
+    await detect("aa bb cc dd ee");
 
-    const detect = await createDetector();
-
-    await detect("a".repeat(9000));
-
-    expect(classifier.mock.calls.length).toBeGreaterThan(1);
+    expect(run.mock.calls.length).toBeGreaterThan(1);
   });
 
-  it("gives a span the character offsets the pipeline never reports", async () => {
-    const classifier = stubClassifier(() => tokensFor("private_email", 4));
-
-    stubPipeline(classifier);
-
+  it("returns character offsets for the words the model flagged", async () => {
+    const { run } = setup((words) =>
+      words[0] === "mail" ? [{ end: 0, prompt: "email", start: 0 }] : [],
+    );
     const detect = await createDetector();
 
     expect(await detect("mail me")).toEqual([
-      { end: 4, label: "private_email", score: 0.9, start: 0 },
+      { end: 4, label: "private_email", score: 1, start: 0 },
     ]);
-  });
-
-  it("reads the int64 input ids the tokenizer reports as bigints", async () => {
-    const classifier = stubClassifier(() => tokensFor("private_email", 4), true);
-
-    stubPipeline(classifier);
-
-    const detect = await createDetector();
-
-    expect(await detect("mail me")).toEqual([
-      { end: 4, label: "private_email", score: 0.9, start: 0 },
-    ]);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   it("reports spans from a later chunk at absolute offsets", async () => {
-    const classifier = stubClassifier((text) =>
-      text.startsWith("second") ? tokensFor("private_email", 6) : [],
-    );
+    setup((words) => (words[0] === "cc" ? [{ end: 0, prompt: "person", start: 0 }] : []));
 
-    stubPipeline(classifier);
+    const detect = await createDetector({ maxWords: 2, overlapWords: 0 });
 
-    const detect = await createDetector({ chunkSize: 10, overlap: 0 });
-    const spans = await detect("0123456789second456");
-
-    expect(spans).toEqual([{ end: 16, label: "private_email", score: 0.9, start: 10 }]);
+    expect(await detect("aa bb cc dd")).toEqual([
+      { end: 8, label: "private_person", score: 1, start: 6 },
+    ]);
   });
 
   it("drops a span whose score sits below the floor", async () => {
-    const classifier = stubClassifier(() => [{ entity: "S-private_person", index: 0, score: 0.1 }]);
-
-    stubPipeline(classifier);
+    setup(() => [{ end: 0, logit: -1, prompt: "person", start: 0 }]);
 
     const detect = await createDetector({ minScore: 0.5 });
 
     expect(await detect("Jo")).toEqual([]);
   });
 
-  it("refuses a classifier entry that carries no index", async () => {
-    const classifier = stubClassifier(() => [
-      { entity: "S-private_person", score: 0.9 } as unknown as ClassifiedToken,
+  it("keeps only the strongest of overlapping claims", async () => {
+    setup(() => [
+      { end: 1, logit: 3, prompt: "cpf", start: 0 },
+      { end: 1, logit: 1, prompt: "phone number", start: 0 },
     ]);
 
-    stubPipeline(classifier);
+    const detect = await createDetector();
+    const spans = await detect("word pair");
 
+    expect(spans.length).toBe(1);
+    expect(spans[0].label).toBe("account_number");
+  });
+
+  it("never wakes the model for text with no words", async () => {
+    const { run } = setup(() => []);
     const detect = await createDetector();
 
-    await expect(detect("Jo")).rejects.toThrow(/entity, index or score/v);
+    expect(await detect("  \n\t")).toEqual([]);
+    expect(run.mock.calls.length).toBe(0);
   });
 
   it("retries once on wasm when the webgpu load fails", async () => {
-    pipelineMock
+    const { tokenizer } = createHarness();
+
+    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    vi.mocked(pickDevice).mockResolvedValue("webgpu");
+    vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+    vi.mocked(createModelRunner)
       .mockRejectedValueOnce(new Error("no adapter"))
-      .mockResolvedValueOnce(stubClassifier(() => []) as never);
+      .mockResolvedValueOnce(vi.fn(() => Promise.resolve(logitsFor(0, []))));
 
     const stages: Array<string> = [];
 
@@ -147,15 +177,21 @@ describe("createDetector", () => {
       },
     });
 
-    expect(pipelineMock.mock.calls.length).toBe(2);
-    expect(pipelineMock.mock.calls.at(0)?.at(2)).toMatchObject({ device: "webgpu" });
-    expect(pipelineMock.mock.calls.at(1)?.at(2)).toMatchObject({ device: "wasm" });
+    const urls = vi.mocked(fetchModelBytes).mock.calls.map(([url]) => url);
+
+    expect(urls.at(0)).toContain("model_q4.onnx");
+    expect(urls.at(1)).toContain("model_int8.onnx");
     expect(stages).toContain("model.slowDevice");
     expect(stages.at(-1)).toBe("model.ready");
   });
 
   it("rejects with the original failure visible when wasm also fails", async () => {
-    pipelineMock
+    const { tokenizer } = createHarness();
+
+    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    vi.mocked(pickDevice).mockResolvedValue("webgpu");
+    vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+    vi.mocked(createModelRunner)
       .mockRejectedValueOnce(new Error("no adapter"))
       .mockRejectedValueOnce(new Error("wasm unavailable"));
 
@@ -163,7 +199,11 @@ describe("createDetector", () => {
   });
 
   it("does not swallow a load failure into an empty detection", async () => {
-    pipelineMock.mockRejectedValue(new Error("network down"));
+    const { tokenizer } = createHarness();
+
+    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    vi.mocked(pickDevice).mockResolvedValue("wasm");
+    vi.mocked(fetchModelBytes).mockRejectedValue(new Error("network down"));
 
     await expect(createDetector()).rejects.toThrow(/network down/v);
   });
@@ -171,76 +211,67 @@ describe("createDetector", () => {
 
 describe("shouting text", () => {
   it("reads a chunk again in title case when it holds runs of capitals", async () => {
-    const classifier = stubClassifier((text) =>
-      text === "PEDRO SILVA" ? [] : tokensFor("private_person", 5),
+    setup((words) =>
+      words.join(" ") === "Pedro Silva" ? [{ end: 1, prompt: "person", start: 0 }] : [],
     );
-
-    stubPipeline(classifier);
 
     const detect = await createDetector();
 
     expect(await detect("PEDRO SILVA")).toEqual([
-      { end: 5, label: "private_person", score: 0.9, start: 0 },
+      { end: 11, label: "private_person", score: 1, start: 0 },
     ]);
   });
 
   it("does not pay for a second pass when nothing is shouting", async () => {
-    const classifier = stubClassifier(() => []);
-
-    stubPipeline(classifier);
-
+    const { run } = setup(() => []);
     const detect = await createDetector();
 
     await detect("Pedro Silva went home");
 
-    expect(classifier.mock.calls.length).toBe(1);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   // An acronym is not a name, and treating one as shouting doubled every log file.
   it("does not pay for a second pass over a lone acronym", async () => {
-    const classifier = stubClassifier(() => []);
-
-    stubPipeline(classifier);
-
+    const { run } = setup(() => []);
     const detect = await createDetector();
 
     await detect("2026-01-01 INFO user signed in");
 
-    expect(classifier.mock.calls.length).toBe(1);
+    expect(run.mock.calls.length).toBe(1);
   });
 
   it("sends the second pass the shouted line rather than the whole chunk", async () => {
-    const classifier = stubClassifier(() => []);
-
-    stubPipeline(classifier);
-
+    const { run, wordsOf } = setup(() => []);
     const detect = await createDetector();
 
     await detect("an invoice\nPEDRO AFONSO\ntotal 210");
 
-    expect(classifier.mock.calls.at(1)?.at(0)).toBe("Pedro Afonso");
+    const second = run.mock.calls.at(1)?.at(0);
+
+    expect(second && wordsOf(second)).toEqual(["Pedro", "Afonso"]);
   });
 
   it("places a span from the second pass back where the shouted line sits", async () => {
-    const classifier = stubClassifier((text) =>
-      text === "Pedro Afonso" ? tokensFor("private_person", 5) : [],
+    setup((words) =>
+      words.join(" ") === "Pedro Afonso" ? [{ end: 1, prompt: "person", start: 0 }] : [],
     );
-
-    stubPipeline(classifier);
 
     const detect = await createDetector();
 
     expect(await detect("an invoice\nPEDRO AFONSO\ntotal 210")).toEqual([
-      { end: 16, label: "private_person", score: 0.9, start: 11 },
+      { end: 23, label: "private_person", score: 1, start: 11 },
     ]);
   });
 
   it("keeps what the first pass found as well as what the second did", async () => {
-    const classifier = stubClassifier((text) =>
-      text.startsWith("PEDRO") ? tokensFor("private_email", 2) : tokensFor("private_person", 3),
-    );
+    setup((words) => {
+      if (words[0] === "PEDRO") {
+        return [{ end: 0, prompt: "email", start: 0 }];
+      }
 
-    stubPipeline(classifier);
+      return words[0] === "Pedro" ? [{ end: 1, prompt: "person", start: 0 }] : [];
+    });
 
     const detect = await createDetector();
     const spans = await detect("PEDRO AFONSO");
@@ -251,9 +282,7 @@ describe("shouting text", () => {
 
 describe("patterns", () => {
   it("finds a checksummed identifier the model walked past", async () => {
-    const classifier = stubClassifier(() => []);
-
-    stubPipeline(classifier);
+    setup(() => []);
 
     const detect = await createDetector();
     const spans = await detect("CPF 108.467.036-45 emitido");
@@ -262,9 +291,7 @@ describe("patterns", () => {
   });
 
   it("leaves a number that fails its check digits alone", async () => {
-    const classifier = stubClassifier(() => []);
-
-    stubPipeline(classifier);
+    setup(() => []);
 
     const detect = await createDetector();
 

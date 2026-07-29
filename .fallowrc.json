@@ -1,6 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "entry": ["oxlint.config.ts", "apps/web/src/main.tsx", "apps/web/src/redact-worker.ts"],
+  "entry": [
+    "oxlint.config.ts",
+    "apps/web/src/main.tsx",
+    "apps/web/src/redact-worker.ts",
+    "packages/pii-detect/src/ort-browser.ts"
+  ],
   "ignoreDependencies": ["@vitest/coverage-v8", "jsdom", "react-dom"],
   "ignoreUnresolvedImports": ["postcss-load-config"],
   "usedClassMembers": ["add*Filter", "createSelectionStyle", "create", "reset", "destroy"]

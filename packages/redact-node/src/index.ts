@@ -11,7 +11,7 @@ type NodeRedactor = {
   redactFile: (path: string, onProgress: NodeRedactionProgress) => Promise<NodeRedactionOutput>;
 };
 
-// The weights are 809 MB and take minutes to load, so they are paid for once and the
+// The weights are 349 MB and take a while to load, so they are paid for once and the
 // detector is handed to every file after that.
 const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<NodeRedactor> => {
   const { onModelProgress } = options;

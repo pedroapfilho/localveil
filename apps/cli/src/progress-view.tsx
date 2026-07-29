@@ -4,7 +4,7 @@ import { describeKey } from "./messages";
 import { ProgressBar } from "./progress-bar";
 import { truncateEnd } from "./text";
 
-const MODEL_SIZE = "809 MB";
+const MODEL_SIZE = "349 MB";
 
 const BAR_MAX = 40;
 const BAR_MIN = 10;
