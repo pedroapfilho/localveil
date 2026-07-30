@@ -26,6 +26,8 @@ playwright/.cache/
 # tooling
 .fallow/
 *.log
+# except the fixture: a redaction test needs a .log on disk to read.
+!fixtures/*.log
 
 # models
 # Tesseract drops a 5 MB language pack into whatever directory the process ran in,

@@ -12,14 +12,6 @@ import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime.t
 
 const CACHE_DIR = path.join(homedir(), ".cache", "localveil", "models");
 
-// int8 here, unlike the browser runtime's q4: the native CPU integer kernels
-// reproduce full-precision scores on this model where the browser's wasm ones
-// collapse, and at 349 MB it is the smallest correct file.
-const MODEL_FILES: Record<ModelDevice, string> = {
-  wasm: "model_int8.onnx",
-  webgpu: "model_int8.onnx",
-};
-
 // Node has no WebGPU; the CPU provider is this runtime's slow tier.
 const pickDevice = (): Promise<ModelDevice> => Promise.resolve("wasm");
 
@@ -96,4 +88,4 @@ const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promi
   };
 };
 
-export { createModelRunner, fetchModelBytes, MODEL_FILES, pickDevice };
+export { createModelRunner, fetchModelBytes, pickDevice };

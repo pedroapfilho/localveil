@@ -2,66 +2,48 @@ import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { hasCompletedJobs, useJobStore } from "./store";
+import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
-import type { WorkerRequest } from "./worker-protocol";
+import type { RedactionPoolOptions } from "./worker-pool";
 
-vi.mock("@repo/ui/components/sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+const cancelled: Array<string> = [];
+const submitted: Array<{ file: File; id: string; language?: string }> = [];
+
+let destroyed = 0;
+let pools = 0;
+let options: RedactionPoolOptions | undefined;
+
+// The pool has its own tests. What matters here is that the hook feeds it the right
+// files and turns what it reports back into rows on the page.
+vi.mock("./worker-pool", () => ({
+  createRedactionPool: (given: RedactionPoolOptions) => {
+    options = given;
+    pools += 1;
+
+    return {
+      cancel: (id: string) => {
+        cancelled.push(id);
+      },
+      destroy: () => {
+        destroyed += 1;
+      },
+      submit: (job: { file: File; id: string; language?: string }) => {
+        submitted.push(job);
+      },
+    };
+  },
 }));
 
-type Handler = (event: unknown) => void;
+const pool = () => {
+  if (options === undefined) {
+    throw new Error("The hook never built a pool");
+  }
+
+  return options;
+};
 
 const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
-
-// jsdom has no Worker. This one records what it was sent and lets a test kill it,
-// which is the whole point: the recovery path cannot be exercised any other way.
-class FakeWorker {
-  static instances: Array<FakeWorker> = [];
-
-  posted: Array<WorkerRequest> = [];
-  terminated = false;
-
-  private readonly handlers = new Map<string, Set<Handler>>();
-
-  constructor() {
-    FakeWorker.instances.push(this);
-  }
-
-  addEventListener(type: string, handler: Handler, options?: { signal?: AbortSignal }) {
-    const forType = this.handlers.get(type) ?? new Set<Handler>();
-
-    forType.add(handler);
-    this.handlers.set(type, forType);
-
-    // The hook detaches through an AbortController, so a fake that ignored the
-    // signal would keep delivering events to a worker it had already retired.
-    options?.signal?.addEventListener("abort", () => {
-      forType.delete(handler);
-    });
-  }
-
-  removeEventListener(type: string, handler: Handler) {
-    this.handlers.get(type)?.delete(handler);
-  }
-
-  postMessage(request: WorkerRequest) {
-    this.posted.push(request);
-  }
-
-  terminate() {
-    this.terminated = true;
-  }
-
-  emit(type: string, event: unknown) {
-    // A handler that retires the worker deletes itself from this set mid-loop. A Set
-    // tolerates that: entries removed before they are reached are simply skipped.
-    for (const handler of this.handlers.get(type) ?? []) {
-      handler(event);
-    }
-  }
-}
 
 const Harness = () => {
   const { clear, model, remove, removeMany, setLanguage, submit } = useRedaction();
@@ -80,6 +62,10 @@ const Harness = () => {
     ]);
   };
 
+  const handleClickForced = () => {
+    submit([new File(["um"], "um.txt", { type: "text/plain" })], "pt");
+  };
+
   const handleSetPortuguese = () => {
     setLanguage(idsNow(), "pt");
   };
@@ -90,16 +76,6 @@ const Harness = () => {
 
   const handleRemoveAll = () => {
     removeMany(idsNow());
-  };
-
-  const handleClickForced = () => {
-    submit(
-      [
-        new File(["um"], "um.txt", { type: "text/plain" }),
-        new File(["dois"], "dois.txt", { type: "text/plain" }),
-      ],
-      "pt",
-    );
   };
 
   const handleRemoveFirst = () => {
@@ -151,29 +127,6 @@ const Harness = () => {
 
 const jobsNow = () => useJobStore.getState().jobs;
 
-const workerAt = (index: number) => {
-  const worker = FakeWorker.instances[index];
-
-  if (worker === undefined) {
-    throw new Error(`No worker was created at index ${String(index)}`);
-  }
-
-  return worker;
-};
-
-const filesSentTo = (index: number) =>
-  workerAt(index)
-    .posted.filter((request) => request.type === "redact")
-    .map((request) => request.file.name);
-
-const removeFirst = () => {
-  fireEvent.click(screen.getByRole("button", { name: "remove" }));
-};
-
-const clearAll = () => {
-  fireEvent.click(screen.getByRole("button", { name: "clear" }));
-};
-
 const submitTwo = () => {
   renderWithI18n(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "submit" }));
@@ -188,266 +141,155 @@ const setPortuguese = () => {
   fireEvent.click(screen.getByRole("button", { name: "set-pt" }));
 };
 
-const requestsTo = (index: number) =>
-  workerAt(index).posted.filter((request) => request.type === "redact");
-
-// The worker takes one file at a time, so a running job is the one it was busy with.
-const startFirstJob = () => {
-  const first = jobsNow()[0];
-
-  act(() => {
-    workerAt(0).emit("message", {
-      data: {
-        fraction: 0.5,
-        id: first.id,
-        run: first.run,
-        stage: "stage.detecting",
-        type: "progress",
-      },
-    });
-  });
-};
-
-const waitOutTheSilence = () => {
-  act(() => {
-    vi.advanceTimersByTime(121_000);
-  });
-};
-
-const killFirstWorker = (message = "worker died") => {
-  act(() => {
-    workerAt(0).emit("error", { message });
-  });
-};
-
 beforeEach(() => {
-  FakeWorker.instances = [];
+  cancelled.length = 0;
+  submitted.length = 0;
+  destroyed = 0;
+  pools = 0;
+  options = undefined;
   useJobStore.getState().reset();
-  vi.stubGlobal("Worker", FakeWorker);
+  vi.spyOn(toast, "error").mockImplementation(() => "");
+  vi.spyOn(toast, "warning").mockImplementation(() => "");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe("useRedaction", () => {
-  it("sends every dropped file to the worker", () => {
+  it("hands every dropped file to the pool", () => {
     submitTwo();
 
-    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
   });
 
-  it("builds one worker for the page, not one per file", () => {
+  it("builds one pool for the page, not one per file", () => {
     submitTwo();
-
-    expect(FakeWorker.instances.length).toBe(1);
-  });
-});
-
-describe("when the worker dies", () => {
-  it("terminates the one that died", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(workerAt(0).terminated).toBe(true);
-  });
-
-  it("fails the file it was working on", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker("out of memory");
-
-    expect(jobsNow()[0]).toMatchObject({ error: "out of memory", status: "error" });
-  });
-
-  it("does not hand that file back, which would only crash again", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(filesSentTo(1)).not.toContain("one.txt");
-  });
-
-  it("gives the files that never ran to a fresh worker", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(FakeWorker.instances.length).toBe(2);
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
-  });
-
-  it("leaves the requeued file queued rather than marking it failed", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(jobsNow()[1]).toMatchObject({ status: "queued" });
-  });
-
-  it("takes new files after the crash instead of posting into a corpse", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
     fireEvent.click(screen.getByRole("button", { name: "submit" }));
 
-    expect(workerAt(1).posted.length).toBe(3);
+    expect(pools).toBe(1);
   });
 
-  it("does not spawn a replacement when nothing was waiting", () => {
-    renderWithI18n(<Harness />);
-    killFirstWorker();
-
-    expect(FakeWorker.instances.length).toBe(1);
-  });
-
-  it("recovers the same way from a reply it could not read", () => {
+  it("sizes the pool from what the device reports", () => {
     submitTwo();
-    startFirstJob();
 
-    act(() => {
-      workerAt(0).emit("messageerror", {});
-    });
-
-    expect(workerAt(0).terminated).toBe(true);
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
+    expect(pool().maxWorkers).toBeGreaterThanOrEqual(1);
   });
 
-  it("ignores a late error from a worker that was already replaced", () => {
+  // On a first visit the weights are still downloading, and a row that says nothing
+  // for a minute reads as a row that is stuck.
+  it("says the model is loading before the worker says anything", () => {
     submitTwo();
-    startFirstJob();
-    killFirstWorker();
 
-    const before = FakeWorker.instances.length;
+    expect(jobsNow()[0].stage).toBe("stage.loadingModel");
+  });
 
-    killFirstWorker();
+  it("tears the pool down when the page goes", () => {
+    const { unmount } = renderWithI18n(<Harness />);
 
-    expect(FakeWorker.instances.length).toBe(before);
+    unmount();
+
+    expect(destroyed).toBe(1);
   });
 });
 
-// A worker killed for running out of memory raises nothing at all: it just stops
-// answering. Only the length of the silence tells it apart from slow work.
-describe("when the worker goes quiet", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("gives up on a worker that says nothing for two minutes", () => {
-    submitTwo();
-    startFirstJob();
-    waitOutTheSilence();
-
-    expect(workerAt(0).terminated).toBe(true);
-  });
-
-  it("recovers exactly as it does from a crash", () => {
-    submitTwo();
-    startFirstJob();
-    waitOutTheSilence();
-
-    expect(jobsNow()[0].status).toBe("error");
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
-  });
-
-  it("waits again each time the worker speaks", () => {
-    submitTwo();
-
-    for (let tick = 0; tick < 3; tick += 1) {
-      act(() => {
-        vi.advanceTimersByTime(90_000);
-      });
-      startFirstJob();
-    }
-
-    expect(workerAt(0).terminated).toBe(false);
-  });
-
-  it("stops watching once every file has settled", () => {
+describe("what the pool reports", () => {
+  it("puts progress on the row it belongs to", () => {
     submitTwo();
 
     act(() => {
-      for (const job of jobsNow()) {
-        workerAt(0).emit("message", {
-          data: {
-            blob: new Blob(["x"]),
-            id: job.id,
-            redactionCount: 0,
-            run: job.run,
-            type: "done",
-            warnings: [],
-          },
-        });
-      }
+      pool().onProgress(jobsNow()[0].id, 0.5, "stage.detecting");
     });
 
-    waitOutTheSilence();
-
-    expect(workerAt(0).terminated).toBe(false);
-    expect(FakeWorker.instances.length).toBe(1);
+    expect(jobsNow()[0]).toMatchObject({
+      progress: 0.5,
+      stage: "stage.detecting",
+      status: "running",
+    });
   });
 
-  it("does not watch a page where nothing was ever dropped", () => {
+  it("finishes a row with the file it got back", () => {
+    submitTwo();
+
+    const blob = new Blob(["x"]);
+
+    act(() => {
+      pool().onDone(jobsNow()[0].id, { blob, redactionCount: 3, warnings: ["warning.noText"] });
+    });
+
+    expect(jobsNow()[0]).toMatchObject({
+      progress: 1,
+      result: { blob, redactionCount: 3, warnings: ["warning.noText"] },
+      stage: "stage.finished",
+      status: "done",
+    });
+  });
+
+  it("fails a row and says so", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onError(jobsNow()[0].id, "out of memory", false);
+    });
+
+    expect(jobsNow()[0]).toMatchObject({ error: "out of memory", status: "error" });
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("one.txt"));
+  });
+
+  it("tells an unsupported file apart from a broken one", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onError(jobsNow()[0].id, "nope", true);
+    });
+
+    const [unsupported] = vi.mocked(toast.error).mock.calls[0];
+
+    act(() => {
+      pool().onError(jobsNow()[1].id, "nope", false);
+    });
+
+    const [failed] = vi.mocked(toast.error).mock.calls[1];
+
+    expect(unsupported).not.toEqual(failed);
+  });
+
+  // The bar this used to sit beside has no words to spare, so it is said in a toast.
+  it("warns once about a device without GPU acceleration", () => {
     renderWithI18n(<Harness />);
-    waitOutTheSilence();
 
-    expect(workerAt(0).terminated).toBe(false);
+    act(() => {
+      pool().onModelProgress(0, "model.slowDevice");
+    });
+
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+      "Running without GPU acceleration, this will be slow.",
+    );
   });
 
-  it("stops watching a worker whose last file was taken away", () => {
-    submitTwo();
-    startFirstJob();
-    removeFirst();
-    removeFirst();
-    waitOutTheSilence();
+  // The detector raises it again when WebGPU fails and the load falls back to wasm.
+  it("does not warn twice", () => {
+    renderWithI18n(<Harness />);
 
-    expect(workerAt(0).terminated).toBe(false);
-  });
-});
+    act(() => {
+      pool().onModelProgress(0, "model.slowDevice");
+      pool().onModelProgress(0, "model.slowDevice");
+    });
 
-// Taking a row off the page used to tell only the page. The worker carried on with
-// the file, and everything behind it waited for work nobody wanted.
-describe("removing a file", () => {
-  it("tells the worker to stop as well as the page", () => {
-    submitTwo();
-
-    const id = jobsNow()[0].id;
-
-    removeFirst();
-
-    expect(workerAt(0).posted.at(-1)).toEqual({ id, type: "cancel" });
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
   });
 
-  it("takes the row off the page", () => {
-    submitTwo();
-    removeFirst();
+  // It carries a fraction of zero, and the fallback raises it after a whole download
+  // attempt has already finished.
+  it("does not let that warning send the bar back to empty", () => {
+    renderWithI18n(<Harness />);
 
-    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
-  });
+    act(() => {
+      pool().onModelProgress(0.8, "model.downloading");
+      pool().onModelProgress(0, "model.slowDevice");
+    });
 
-  it("cancels the file that is running, not whichever is first in the list", () => {
-    submitTwo();
-    startFirstJob();
-
-    const running = jobsNow().find((job) => job.status === "running");
-
-    removeFirst();
-
-    expect(workerAt(0).posted.at(-1)).toEqual({ id: running?.id, type: "cancel" });
-  });
-
-  it("leaves the rest of the queue where it was", () => {
-    submitTwo();
-    removeFirst();
-
-    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+    expect(screen.getByRole("status").textContent).toBe("0.8");
   });
 });
 
@@ -456,39 +298,37 @@ describe("a forced document language", () => {
     renderWithI18n(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
 
-    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
-
-    expect(requests.map((request) => request.language)).toEqual(["pt", "pt"]);
-  });
-
-  // Recovery re-sends jobs from the store, so a language that only lived in the
-  // submit call would quietly fall off after a crash.
-  it("survives the move to a fresh worker after a crash", () => {
-    renderWithI18n(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
-    startFirstJob();
-    killFirstWorker();
-
-    const requeued = workerAt(1).posted.filter((request) => request.type === "redact");
-
-    expect(requeued.map((request) => request.language)).toEqual(["pt"]);
+    expect(submitted.map((job) => job.language)).toEqual(["pt"]);
   });
 
   it("stays absent when the reader left the picker on auto", () => {
     submitTwo();
 
-    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
+    expect(submitted.map((job) => job.language)).toEqual([undefined, undefined]);
+  });
+});
 
-    expect(requests.map((request) => request.language)).toEqual([undefined, undefined]);
+// Taking a row off the page used to tell only the page. The worker carried on with the
+// file, and everything behind it waited for work nobody wanted.
+describe("removing a file", () => {
+  it("tells the pool to stop as well as the page", () => {
+    submitTwo();
+
+    const id = jobsNow()[0].id;
+
+    fireEvent.click(screen.getByRole("button", { name: "remove" }));
+
+    expect(cancelled).toEqual([id]);
+    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
   });
 });
 
 describe("changing a document's language", () => {
-  it("sends the file back to the worker in the new language", () => {
+  it("sends the file back to the pool in the new language", () => {
     submitScans();
     setPortuguese();
 
-    expect(requestsTo(0).map((request) => [request.file.name, request.language])).toEqual([
+    expect(submitted.map((job) => [job.file.name, job.language])).toEqual([
       ["card.pdf", undefined],
       ["scan.png", undefined],
       ["card.pdf", "pt"],
@@ -496,33 +336,27 @@ describe("changing a document's language", () => {
     ]);
   });
 
-  // The queue tracks one abandoned flag for whichever job is running and clears it as it
-  // picks up the next one, so a cancel arriving behind the replacement would kill the
-  // replacement instead.
-  it("cancels before it re-posts, never after", () => {
+  // The pool keys a running job by its id, so a cancel arriving behind the replacement
+  // would take the replacement down with it.
+  it("cancels before it re-submits, never after", () => {
     submitScans();
+
+    const ids = idsNow();
+
     setPortuguese();
 
-    const kinds = workerAt(0).posted.map((request) => request.type);
-
-    expect(kinds).toEqual(["redact", "redact", "cancel", "cancel", "redact", "redact"]);
+    expect(cancelled).toEqual(ids);
+    expect(submitted.slice(2).map((job) => job.id)).toEqual(ids);
   });
 
   it("sends the row back to the queue with the last run wiped off it", () => {
     submitScans();
 
     act(() => {
-      const first = jobsNow()[0];
-
-      workerAt(0).emit("message", {
-        data: {
-          blob: new Blob(["hi"]),
-          id: first.id,
-          redactionCount: 2,
-          run: first.run,
-          type: "done",
-          warnings: [],
-        },
+      pool().onDone(idsNow()[0], {
+        blob: new Blob(["hi"]),
+        redactionCount: 2,
+        warnings: [],
       });
     });
 
@@ -532,18 +366,9 @@ describe("changing a document's language", () => {
       language: "pt",
       progress: 0,
       result: undefined,
+      stage: "stage.loadingModel",
       status: "queued",
     });
-  });
-
-  it("keeps the row's own id so the worker replaces the same file", () => {
-    submitScans();
-
-    const before = jobsNow().map((job) => job.id);
-
-    setPortuguese();
-
-    expect(jobsNow().map((job) => job.id)).toEqual(before);
   });
 
   // A text file's output cannot change with the language, so the choice is recorded and
@@ -552,7 +377,7 @@ describe("changing a document's language", () => {
     submitTwo();
     setPortuguese();
 
-    expect(requestsTo(0).map((request) => request.file.name)).toEqual(["one.txt", "two.txt"]);
+    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
     expect(jobsNow().map((job) => job.language)).toEqual(["pt", "pt"]);
   });
 
@@ -561,191 +386,39 @@ describe("changing a document's language", () => {
     setPortuguese();
     fireEvent.click(screen.getByRole("button", { name: "set-auto" }));
 
-    expect(requestsTo(0).at(-1)?.language).toBeUndefined();
+    expect(submitted.at(-1)?.language).toBeUndefined();
     expect(jobsNow()[0].language).toBeUndefined();
-  });
-
-  it("counts a new run for every attempt at the same file", () => {
-    submitScans();
-    setPortuguese();
-
-    expect(requestsTo(0).map((request) => [request.file.name, request.run])).toEqual([
-      ["card.pdf", 0],
-      ["scan.png", 0],
-      ["card.pdf", 1],
-      ["scan.png", 1],
-    ]);
-  });
-});
-
-// A run told to stop can be several stages deep and still answer, on the same id as the
-// run that replaced it.
-describe("a superseded run answering late", () => {
-  const emitFor = (job: { id: string; run: number }, data: Record<string, unknown>) => {
-    act(() => {
-      workerAt(0).emit("message", { data: { id: job.id, run: job.run, ...data } });
-    });
-  };
-
-  const finishing = { blob: new Blob(["stale"]), redactionCount: 7, warnings: [] };
-
-  it("ignores its result rather than settling the row with it", () => {
-    submitScans();
-
-    const before = jobsNow()[0];
-
-    setPortuguese();
-    emitFor(before, { ...finishing, type: "done" });
-
-    expect(jobsNow()[0]).toMatchObject({ progress: 0, result: undefined, status: "queued" });
-  });
-
-  // The stale result would settle the queue, and a settled queue with one result in it
-  // is exactly the condition that offers the ZIP.
-  it("leaves the download unoffered", () => {
-    submitScans();
-
-    const [first, second] = jobsNow();
-
-    setPortuguese();
-    emitFor(first, { ...finishing, type: "done" });
-    emitFor(second, { ...finishing, type: "done" });
-
-    expect(hasCompletedJobs(jobsNow())).toBe(false);
-  });
-
-  it("ignores its progress rather than moving the bar backwards", () => {
-    submitScans();
-
-    const before = jobsNow()[0];
-
-    setPortuguese();
-    emitFor(before, { fraction: 0.9, stage: "stage.redacting", type: "progress" });
-
-    expect(jobsNow()[0]).toMatchObject({ progress: 0, status: "queued" });
-  });
-
-  it("ignores its failure rather than failing the run that replaced it", () => {
-    submitScans();
-
-    const before = jobsNow()[0];
-
-    setPortuguese();
-    emitFor(before, { message: "cancelled midway", type: "error", unsupported: false });
-
-    expect(jobsNow()[0]).toMatchObject({ error: undefined, status: "queued" });
-  });
-
-  it("still takes the replacement's own result", () => {
-    submitScans();
-    setPortuguese();
-
-    const after = jobsNow()[0];
-
-    emitFor(after, { ...finishing, type: "done" });
-
-    expect(jobsNow()[0]).toMatchObject({ status: "done" });
-  });
-});
-
-// The bar beside it has no words to spare, so this is said in a toast instead.
-describe("a device without GPU acceleration", () => {
-  // The module mock's own functions outlive `restoreAllMocks`, which only puts back
-  // what `spyOn` replaced.
-  beforeEach(() => {
-    vi.mocked(toast.warning).mockClear();
-  });
-
-  const reportSlow = () => {
-    act(() => {
-      workerAt(0).emit("message", {
-        data: { fraction: 0, stage: "model.slowDevice", type: "model-progress" },
-      });
-    });
-  };
-
-  it("says so once", () => {
-    submitTwo();
-    reportSlow();
-
-    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
-      "Running without GPU acceleration, this will be slow.",
-    );
-  });
-
-  // The detector raises it again when WebGPU fails and the load falls back to wasm.
-  it("does not say so twice", () => {
-    submitTwo();
-    reportSlow();
-    reportSlow();
-
-    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
-  });
-
-  // It carries a fraction of zero, and the fallback raises it after a whole download
-  // attempt has already finished.
-  it("does not send the bar back to empty", () => {
-    submitTwo();
-
-    act(() => {
-      workerAt(0).emit("message", {
-        data: { fraction: 0.8, stage: "model.downloading", type: "model-progress" },
-      });
-    });
-
-    reportSlow();
-
-    expect(screen.getByRole("status").textContent).toBe("0.8");
   });
 });
 
 describe("removing several files at once", () => {
-  it("cancels each one and drops them all", () => {
+  it("stops each one and drops them all", () => {
     submitTwo();
+
+    const ids = idsNow();
+
     fireEvent.click(screen.getByRole("button", { name: "remove-all" }));
 
-    const cancelled = workerAt(0)
-      .posted.filter((request) => request.type === "cancel")
-      .map((request) => request.id);
-
-    expect(cancelled.length).toBe(2);
+    expect(cancelled).toEqual(ids);
     expect(jobsNow()).toEqual([]);
   });
 });
 
 describe("clearing the list", () => {
-  it("empties the page", () => {
-    submitTwo();
-    clearAll();
-
-    expect(jobsNow()).toEqual([]);
-  });
-
-  // Emptying the list without telling the worker would leave it grinding through
-  // files nobody is waiting for, which is the bug the per-row cancel already fixed.
-  it("tells the worker to stop every one of them", () => {
+  it("empties the page and stops every file on it", () => {
     submitTwo();
 
     const ids = jobsNow().map((job) => job.id);
 
-    clearAll();
+    fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
-    expect(workerAt(0).posted.filter((request) => request.type === "cancel")).toEqual(
-      ids.map((id) => ({ id, type: "cancel" })),
-    );
-  });
-
-  it("leaves the worker alive for whatever is dropped next", () => {
-    submitTwo();
-    clearAll();
-
-    expect(workerAt(0).terminated).toBe(false);
-    expect(FakeWorker.instances.length).toBe(1);
+    expect(cancelled).toEqual(ids);
+    expect(jobsNow()).toEqual([]);
   });
 
   it("shrugs off a clear with nothing to clear", () => {
     renderWithI18n(<Harness />);
-    clearAll();
+    fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
     expect(jobsNow()).toEqual([]);
   });

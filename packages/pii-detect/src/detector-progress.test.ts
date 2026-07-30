@@ -13,7 +13,6 @@ vi.mock("@huggingface/transformers", () => ({
 vi.mock("#ort", () => ({
   createModelRunner: vi.fn(),
   fetchModelBytes: vi.fn(),
-  MODEL_FILES: { wasm: "model_int8.onnx", webgpu: "model_q4.onnx" },
   pickDevice: vi.fn(),
 }));
 
@@ -72,12 +71,16 @@ describe("what the detector counts as the model download", () => {
     expect(reported.length).toBe(before);
   });
 
-  it("reports the wasm weights too, whichever tier was picked", async () => {
+  // A tier that is no longer the one being loaded may still be sitting in the cache
+  // from an earlier revision, and purging it is not the download anybody is waiting on.
+  it("says nothing for a weights file that is not the one being loaded", async () => {
     const { onProgress, reported } = await installedReporter();
+
+    const before = reported.length;
 
     onProgress?.(bytes(`${HOST}/onnx/model_int8.onnx`, 50, 200));
 
-    expect(reported).toContainEqual({ fraction: 0.25, stage: "model.downloading" });
+    expect(reported.length).toBe(before);
   });
 
   it("ignores a file whose size the server never gave", async () => {

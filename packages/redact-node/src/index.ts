@@ -1,5 +1,5 @@
 import { createDetector } from "@repo/pii-detect";
-import type { DocumentLanguage } from "@repo/redact-core";
+import type { Detect, DocumentLanguage } from "@repo/redact-core";
 
 import type { NodeRedactionOutput, NodeRedactionProgress } from "./redact-path.ts";
 import { redactPath } from "./redact-path.ts";
@@ -13,7 +13,7 @@ type NodeRedactor = {
   redactFile: (path: string, onProgress: NodeRedactionProgress) => Promise<NodeRedactionOutput>;
 };
 
-// The weights are 349 MB and take a while to load, so they are paid for once and the
+// The weights take a while to load, so they are paid for once and the
 // detector is handed to every file after that.
 const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<NodeRedactor> => {
   const { language, onModelProgress } = options;
@@ -32,8 +32,19 @@ const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<No
   };
 };
 
-export { createNodeRedactor };
+// The pool needs the two halves apart: one detector on the main thread, and the
+// per-file work in a thread that reaches it over a port.
+const createNodeDetector = (options: NodeRedactorOptions = {}): Promise<Detect> =>
+  createDetector({
+    onProgress: (fraction) => {
+      options.onModelProgress?.(fraction);
+    },
+    resumableCache: false,
+  });
+
+export { createNodeDetector, createNodeRedactor };
 export { SUPPORTED_EXTENSIONS } from "./read-file.ts";
 export type { DocumentLanguage } from "@repo/redact-core";
-export type { NodeRedactionProgress } from "./redact-path.ts";
+export { redactPath } from "./redact-path.ts";
+export type { NodeRedactionOutput, NodeRedactionProgress } from "./redact-path.ts";
 export type { NodeRedactor };

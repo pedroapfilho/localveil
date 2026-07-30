@@ -4,45 +4,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./app";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
-import type { WorkerResponse } from "./worker-protocol";
+import type { RedactionPoolOptions } from "./worker-pool";
 
-type Reply = (event: { data: WorkerResponse }) => void;
+let options: RedactionPoolOptions | undefined;
 
-const workers: Array<WorkerStub> = [];
+// The pool has its own tests, and workers cannot run here. This keeps the shell
+// mountable and hands back the callbacks, so a test can answer the way the pool would.
+vi.mock("./worker-pool", () => ({
+  createRedactionPool: (given: RedactionPoolOptions) => {
+    options = given;
 
-// jsdom ships no Worker, and the redaction worker is the one part of the page that
-// cannot run here. The stub keeps the shell mountable without pretending to redact,
-// and holds the page's listeners so a test can answer the way the worker would.
-// It has to be a class: `new` on a plain arrow throws.
-class WorkerStub {
-  handlers = new Map<string, Reply>();
+    return { cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() };
+  },
+}));
 
-  addEventListener = vi.fn((name: string, handler: Reply) => {
-    this.handlers.set(name, handler);
-  });
-
-  postMessage = vi.fn();
-  removeEventListener = vi.fn();
-  terminate = vi.fn();
-
-  constructor() {
-    workers.push(this);
+const pool = () => {
+  if (options === undefined) {
+    throw new Error("The page never built a pool");
   }
-}
+
+  return options;
+};
 
 describe("App", () => {
   beforeEach(() => {
-    workers.length = 0;
+    options = undefined;
     useJobStore.getState().reset();
     // The picker remembers the choice, so a test that switches language would
     // otherwise decide the language of every test that follows it.
     localStorage.clear();
-    vi.stubGlobal("Worker", WorkerStub);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
   });
 
   it("renders the shell with nothing queued", () => {
@@ -121,9 +115,7 @@ describe("App", () => {
     });
 
     act(() => {
-      workers[0].handlers.get("message")?.({
-        data: { fraction: 0.5, stage: "model.downloading", type: "model-progress" },
-      });
+      pool().onModelProgress(0.5, "model.downloading");
     });
 
     // The download shares one bar with the file waiting behind it, so a half-finished

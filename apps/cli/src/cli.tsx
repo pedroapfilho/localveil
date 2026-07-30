@@ -15,7 +15,7 @@ const resolved = await resolveArguments(process.argv.slice(2), workingDirectory)
   },
 );
 
-const { directory, language, selection } = resolved;
+const { directory, jobs, language, selection } = resolved;
 
 // Ink's own Ctrl+C handling unmounts without telling the app, which would abandon a
 // temporary archive mid-write. The app takes the key itself instead.
@@ -23,6 +23,7 @@ const instance = render(
   <App
     initialDirectory={directory}
     initialSelection={selection}
+    jobs={jobs}
     language={language}
     outputDirectory={workingDirectory}
   />,

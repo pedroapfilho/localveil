@@ -1,37 +1,41 @@
-import type { DocumentLanguage, FileStageKey, ModelStageKey, WarningKey } from "@repo/redact-core";
+import type {
+  DocumentLanguage,
+  FileStageKey,
+  ModelStageKey,
+  RedactionResult,
+} from "@repo/redact-core";
 
-// `run` counts the attempts at one file. Changing a document's language sends the file
-// back to the worker under the same id, and the attempt being replaced can be several
-// stages deep when it is told to stop, so both sides carry the run number and the page
-// drops anything answering for an attempt it has already replaced.
-type RedactRequest = {
-  file: File;
-  id: string;
-  language?: DocumentLanguage;
-  run: number;
-  type: "redact";
+// The shape a pooled worker's `redact` task presents to `pool.exec`. Arguments are
+// positional because workerpool spreads them, and the port is one of them rather than
+// a side channel because a transfer list only moves objects the message itself
+// reaches. The result is written unwrapped because workerpool settles the task with
+// what the worker's promise resolved to, not with the promise.
+type RedactTask = (
+  file: File,
+  language: DocumentLanguage | undefined,
+  port: MessagePort,
+) => RedactionResult;
+
+// Emitted from inside a task through workerpool's event channel, which is why there
+// is no job id on it: the pool already knows which task the event came from.
+type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
+
+// Each job hands the model worker a fresh port rather than connecting once at startup,
+// so a worker the pool kills and respawns needs no repair. The id is what lets the
+// pool hang up on a job cancelled before any worker ever received its half.
+type ConnectRequest = { channel: string; port: MessagePort; type: "connect" };
+
+type DisconnectRequest = { channel: string; type: "disconnect" };
+
+type ModelRequest = ConnectRequest | DisconnectRequest;
+
+type ModelResponse = { fraction: number; stage: ModelStageKey; type: "model-progress" };
+
+export type {
+  ConnectRequest,
+  DisconnectRequest,
+  ModelRequest,
+  ModelResponse,
+  ProgressEvent,
+  RedactTask,
 };
-
-// Sent when a row leaves the page. Without it the worker carried on rendering and
-// recognising every page of a file nobody was waiting for any more, with the rest of
-// the queue stuck behind it.
-type CancelRequest = { id: string; type: "cancel" };
-
-type WorkerRequest = CancelRequest | RedactRequest;
-
-// The model is loaded once for the page rather than per file, so its progress carries
-// no id and no run.
-type WorkerResponse =
-  | {
-      blob: Blob;
-      id: string;
-      redactionCount: number;
-      run: number;
-      type: "done";
-      warnings: Array<WarningKey>;
-    }
-  | { fraction: number; id: string; run: number; stage: FileStageKey; type: "progress" }
-  | { fraction: number; stage: ModelStageKey; type: "model-progress" }
-  | { id: string; message: string; run: number; type: "error"; unsupported: boolean };
-
-export type { CancelRequest, RedactRequest, WorkerRequest, WorkerResponse };

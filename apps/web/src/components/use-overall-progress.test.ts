@@ -17,7 +17,6 @@ const job = (patch: Partial<Job> = {}): Job => ({
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
   progress: 0,
-  run: 0,
   status: "queued",
   ...patch,
 });

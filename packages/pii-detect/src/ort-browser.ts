@@ -7,18 +7,6 @@ import { toLogits } from "./gliner-decode.ts";
 import { toFeeds } from "./gliner-feeds.ts";
 import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime.ts";
 
-// q4 on both tiers, measured in a real browser against native scores: every
-// dynamic-int8 file collapses on the wasm provider's integer kernels (a name
-// scored 0.999 natively came back at 0.17), and the fp16-activation exports
-// either cannot create a session here (the model's LSTM has no fp16 CPU kernel)
-// or crush the person head on WebGPU (q4f16: 0.39). q4 keeps activations in
-// fp32 with 4-bit weights and reproduced the native scores on both providers.
-// One file for both tiers also makes the webgpu-to-wasm fallback a cache hit.
-const MODEL_FILES: Record<ModelDevice, string> = {
-  wasm: "model_q4.onnx",
-  webgpu: "model_q4.onnx",
-};
-
 const pickDevice = async (): Promise<ModelDevice> => {
   const gpu: unknown = Reflect.get(navigator, "gpu");
 
@@ -80,4 +68,4 @@ const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promis
   };
 };
 
-export { createModelRunner, fetchModelBytes, MODEL_FILES, pickDevice };
+export { createModelRunner, fetchModelBytes, pickDevice };

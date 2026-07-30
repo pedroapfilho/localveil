@@ -154,7 +154,6 @@ describe("job selectors", () => {
     file: textFile("a.txt"),
     id: "id",
     progress: 0,
-    run: 0,
     status: "queued",
     ...patch,
   });

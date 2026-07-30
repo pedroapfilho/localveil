@@ -14,10 +14,6 @@ type Job = {
   language?: DocumentLanguage;
   progress: number;
   result?: JobResult;
-  // Which attempt at this file the page is currently listening to. A cancelled run can
-  // still be several stages deep when it is told to stop, and it answers on the same id
-  // as its replacement, so the id alone cannot say which run a reply belongs to.
-  run: number;
   stage?: FileStageKey;
   status: JobStatus;
 };
@@ -51,7 +47,6 @@ const useJobStore = create<JobStore>((set) => ({
       id: crypto.randomUUID(),
       language,
       progress: 0,
-      run: 0,
       status: "queued" as const,
     }));
 
@@ -81,9 +76,7 @@ const useJobStore = create<JobStore>((set) => ({
           return job;
         }
 
-        // The run number is what makes the old attempt's replies identifiable as
-        // stale once this one is on the queue behind it.
-        const next = { ...job, ...REQUEUED, language, run: job.run + 1 };
+        const next = { ...job, ...REQUEUED, language };
 
         queued.push(next);
 

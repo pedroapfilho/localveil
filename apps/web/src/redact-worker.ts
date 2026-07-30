@@ -1,96 +1,89 @@
-import { createDetector } from "@repo/pii-detect";
-import type { Detect } from "@repo/redact-core";
-import { createRedactorRegistry, UnsupportedFileError } from "@repo/redact-core";
+import type { DocumentLanguage, RedactionResult } from "@repo/redact-core";
+import { createDetectClient, createRedactorRegistry } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
+import workerpool from "workerpool";
 
-import { createJobQueue } from "./job-queue";
-import type { WorkerRequest, WorkerResponse } from "./worker-protocol";
+import type { ProgressEvent } from "./worker-protocol";
 
 // The three predicates are disjoint (text/*, application/pdf, image/*), so the order
-// only decides which one is asked first.
+// only decides which one is asked first. At module scope so pdf.js and the Tesseract
+// weights survive from one task to the next.
 const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
 
-const post = (message: WorkerResponse) => {
-  // A worker's own postMessage takes no target origin; the rule is written for the
-  // window-to-window call of the same name.
-  // oxlint-disable-next-line unicorn/require-post-message-target-origin
-  globalThis.postMessage(message);
-};
+// The checkpoint below can only fire when the redactor next reports progress, and on a
+// scanned page that is after Tesseract has finished it. workerpool's default of one
+// second is shorter than a single page, so every cancel would time out and kill the
+// worker, which is the outcome the listener exists to avoid.
+const ABORT_LIMIT = 45_000;
 
-const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
+// Cancelling has to reach code several loops deep inside a redactor, and none of them
+// knows what a job is. The progress callback runs on every page, so it doubles as the
+// checkpoint and no redactor had to learn anything new.
+class CancelledError extends Error {
+  constructor() {
+    super("The job was cancelled");
+    this.name = "CancelledError";
+  }
+}
 
-let pendingDetector: Promise<Detect> | undefined;
+// Only ever read by the task that set it: a worker runs one at a time.
+let cancelled = false;
 
-const loadDetector = async () => {
-  pendingDetector ??= createDetector({
-    onProgress: (fraction, stage) => {
-      post({ fraction, stage, type: "model-progress" });
-    },
+const noop = () => {};
+
+type PublicWorker = { addAbortListener: (listener: () => Promise<void>) => void };
+
+// A `function` rather than an arrow because workerpool passes the task its own handle
+// through `this`, and that handle is the only way to answer a cancel. Unanswered, a
+// cancel kills the worker and its replacement reloads pdf.js and Tesseract.
+async function redact(
+  this: { worker: PublicWorker },
+  file: File,
+  language: DocumentLanguage | undefined,
+  port: MessagePort,
+): Promise<RedactionResult> {
+  cancelled = false;
+
+  let unwind = noop;
+  const unwound = new Promise<void>((resolve) => {
+    unwind = resolve;
+  });
+
+  // The listener waits for the redactor to actually stop rather than resolving on the
+  // flag. Resolving early tells workerpool the worker is free while a page is still
+  // being recognised, and the next task would then reset the flag out from under the
+  // one being cancelled.
+  this.worker.addAbortListener(async () => {
+    cancelled = true;
+
+    await unwound;
   });
 
   try {
-    return await pendingDetector;
-  } catch (error) {
-    // A failed load is worth retrying on the next file: a cached rejection would
-    // condemn every later job to the same error.
-    pendingDetector = undefined;
-
-    throw error;
-  }
-};
-
-const queue = createJobQueue({
-  onError: (request, error) => {
-    post({
-      id: request.id,
-      message: describeError(error),
-      run: request.run,
-      type: "error",
-      unsupported: error instanceof UnsupportedFileError,
-    });
-  },
-  // Every reply quotes back the run it was asked for, so the page can tell this
-  // attempt's answers from those of the one it replaced.
-  run: async ({ file, id, language, run }, stopIfCancelled) => {
-    const redactor = registry.resolve(file);
-
-    post({ fraction: 0, id, run, stage: "stage.loadingModel", type: "progress" });
-
-    const detect = await loadDetector();
-
-    stopIfCancelled();
-
-    const result = await redactor.redact(
+    return await registry.resolve(file).redact(
       file,
-      detect,
+      createDetectClient(port),
       (fraction, stage) => {
-        stopIfCancelled();
-        post({ fraction, id, run, stage, type: "progress" });
+        if (cancelled) {
+          throw new CancelledError();
+        }
+
+        workerpool.workerEmit({ fraction, stage, type: "progress" } satisfies ProgressEvent);
       },
       { language },
     );
-
-    post({
-      blob: result.blob,
-      id,
-      redactionCount: result.redactionCount,
-      run,
-      type: "done",
-      warnings: result.warnings,
-    });
-  },
-});
-
-globalThis.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
-  const request = event.data;
-
-  if (request.type === "cancel") {
-    queue.cancel(request.id);
-
-    return;
+  } finally {
+    // Inside the `finally` and covering `registry.resolve` too: an unsupported file
+    // throwing before this point would leave the listener above waiting forever, and
+    // workerpool keeps that listener for the life of the worker, so every later cancel
+    // on it would time out and kill it.
+    unwind();
+    port.close();
   }
+}
 
-  queue.enqueue(request);
-});
+workerpool.worker({ redact }, { abortListenerTimeout: ABORT_LIMIT });
+
+export { ABORT_LIMIT };

@@ -1,0 +1,35 @@
+import { workerData } from "node:worker_threads";
+
+import type { DocumentLanguage, EventPort } from "@repo/redact-core";
+import { createDetectClient } from "@repo/redact-core";
+import type { NodeRedactionOutput } from "@repo/redact-node";
+import { redactPath } from "@repo/redact-node";
+import workerpool from "workerpool";
+
+type WorkerSetup = { port: EventPort };
+
+const isSetup = (value: unknown): value is WorkerSetup =>
+  typeof value === "object" && value !== null && "port" in value && value.port !== null;
+
+// The port arrives through workerThreadOpts.workerData, which onCreateWorker refreshes
+// for a thread the pool respawns, so a replacement is never left without one.
+if (!isSetup(workerData)) {
+  throw new TypeError("The redaction thread started without a port to the model");
+}
+
+const detect = createDetectClient(workerData.port);
+
+const redact = (
+  path: string,
+  language: DocumentLanguage | undefined,
+): Promise<NodeRedactionOutput> =>
+  redactPath(
+    path,
+    detect,
+    (fraction, stage) => {
+      workerpool.workerEmit({ fraction, stage });
+    },
+    { language },
+  );
+
+workerpool.worker({ redact });

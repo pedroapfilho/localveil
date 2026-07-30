@@ -1,14 +1,15 @@
 import { AutoTokenizer, env } from "@huggingface/transformers";
 import type { ChunkSpans, Detect, ModelProgress, Span } from "@repo/redact-core";
-import { mergeChunkSpans, patternSpans } from "@repo/redact-core";
+import { describeError, mergeChunkSpans, patternSpans, serialiseDetect } from "@repo/redact-core";
 
-import { createModelRunner, fetchModelBytes, MODEL_FILES, pickDevice } from "#ort";
+import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { chunkWords } from "./chunk-words.ts";
 import { decodeSpans, suppressOverlaps } from "./gliner-decode.ts";
 import type { TokenFrame } from "./gliner-encode.ts";
 import { encodeGlinerInput } from "./gliner-encode.ts";
 import { ENTITY_PROMPTS } from "./gliner-labels.ts";
+import { MODEL_FILE } from "./model-runtime.ts";
 import type { ModelDevice } from "./model-runtime.ts";
 import { purgeStaleModels } from "./purge-stale-models.ts";
 import type { ResumableCache } from "./resumable-cache.ts";
@@ -45,16 +46,12 @@ type DetectorOptions = {
   resumableCache?: boolean;
 };
 
-const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
-const modelUrl = (device: ModelDevice) =>
-  `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILES[device]}`;
+const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILE}`;
 
 // The weights are the download. The tokenizer and the config beside them are a few
 // megabytes against nearly a gigabyte, and counting them meant every one of them ran
 // the bar to full and back before the file anybody was waiting for had begun.
-const isWeights = (name: string) =>
-  Object.values(MODEL_FILES).some((file) => name.endsWith(`/${file}`));
+const isWeights = (name: string) => name.endsWith(`/${MODEL_FILE}`);
 
 // transformers.js only writes a file to the cache once it is complete, so a refresh
 // partway through throws the download away. Its cache hook runs before the fetch,
@@ -133,7 +130,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   const load = async (device: ModelDevice) => {
-    const bytes = await fetchModelBytes(modelUrl(device), { cache, onProgress: onDownload });
+    const bytes = await fetchModelBytes(MODEL_URL, { cache, onProgress: onDownload });
 
     return createModelRunner(bytes, device);
   };
@@ -165,7 +162,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   if (cache !== undefined) {
     await purgeStaleModels({
-      keepFiles: Object.values(MODEL_FILES),
+      keepFiles: [MODEL_FILE],
       revision: MODEL_REVISION,
     }).catch((error: unknown) => {
       // oxlint-disable-next-line eslint/no-console
@@ -203,7 +200,10 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     }));
   };
 
-  return async (text) => {
+  // Serialised here rather than left to each caller: this function owns the session,
+  // and two callers running through it at once is how a mid-range GPU runs out of
+  // memory. A pool that had to remember to wrap it would eventually forget.
+  return serialiseDetect(async (text) => {
     const chunks = chunkWords(splitWords(text), maxWords, overlapWords);
 
     // One inference at a time: a long file can produce hundreds of chunks, and
@@ -232,7 +232,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
     // A check digit is a fact the model can only guess at.
     return [...mergeChunkSpans(parts), ...patternSpans(text)];
-  };
+  });
 };
 
 export { createDetector, MAX_WIDTH, MIN_SCORE, MODEL_ID };

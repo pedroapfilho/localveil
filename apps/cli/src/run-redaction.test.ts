@@ -6,14 +6,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runRedaction } from "./run-redaction";
 
-const { createNodeRedactor, redactFile } = vi.hoisted(() => ({
-  createNodeRedactor: vi.fn(),
+const { createNodeDetector, redactFile } = vi.hoisted(() => ({
+  createNodeDetector: vi.fn(),
   redactFile: vi.fn(),
 }));
 
 vi.mock("@repo/redact-node", () => ({
-  createNodeRedactor,
+  createNodeDetector,
   SUPPORTED_EXTENSIONS: [".txt", ".md"],
+}));
+
+// The pool is stood in for rather than started: worker_threads would need the real
+// model behind them, and what these tests are about is how the run gathers results.
+// The RPC that carries detection between the two has its own tests in redact-core.
+vi.mock("workerpool", () => ({
+  default: {
+    pool: () => ({
+      exec: (
+        _method: string,
+        [path, language]: [string, string | undefined],
+        options: { on: (payload: unknown) => void },
+      ) =>
+        redactFile(
+          path,
+          (fraction: number, stage: string) => {
+            options.on({ fraction, stage });
+          },
+          language,
+        ),
+      terminate: () => Promise.resolve(),
+    }),
+  },
 }));
 
 const REDACTED = new TextEncoder().encode("[redacted]");
@@ -38,9 +61,9 @@ const runOptions = (directory: string, files: Array<string>, signal: AbortSignal
 });
 
 beforeEach(() => {
-  createNodeRedactor.mockReset();
+  createNodeDetector.mockReset();
   redactFile.mockReset();
-  createNodeRedactor.mockResolvedValue({ redactFile });
+  createNodeDetector.mockResolvedValue(() => Promise.resolve([]));
   redactFile.mockResolvedValue({ bytes: REDACTED, redactionCount: 2, warnings: [] });
 });
 
@@ -72,11 +95,11 @@ describe("runRedaction", () => {
     const { directory, first } = await makeWorkspace();
     const options = runOptions(directory, [first], new AbortController().signal);
 
-    createNodeRedactor.mockImplementation(
+    createNodeDetector.mockImplementation(
       ({ onModelProgress }: { onModelProgress: (fraction: number) => void }) => {
         onModelProgress(0.25);
 
-        return Promise.resolve({ redactFile });
+        return Promise.resolve(() => []);
       },
     );
 
