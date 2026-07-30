@@ -83,38 +83,26 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 
 ```mermaid
 flowchart LR
-  web["<b>web</b><br/>React app · dropzone · job list"]
-  cli["<b>cli</b><br/>Ink terminal app"]
-  worker["<b>redact-worker</b><br/>one file at a time"]
-  node["<b>@repo/redact-node</b><br/>canvas and file shims for Node"]
-  core["<b>@repo/redact-core</b><br/>types · patterns · spans · rects · zip"]
-  detect["<b>@repo/pii-detect</b><br/>GLiNER spans · resumable model cache"]
-  ocr["<b>@repo/ocr</b><br/>Tesseract · language detection"]
-  text["<b>@repo/redact-text</b>"]
-  pdf["<b>@repo/redact-pdf</b>"]
-  image["<b>@repo/redact-image</b>"]
-  i18n["<b>@repo/i18n</b>"]
-  ui["<b>@repo/ui</b>"]
+  web["<b>web</b><br/>dropzone · job list"] --> worker["<b>redact-worker</b><br/>one file at a time"]
+  cli["<b>cli</b><br/>Ink terminal app"] --> node["<b>@repo/redact-node</b><br/>canvas shims for Node"]
 
-  web --> worker
-  web --> i18n
-  web --> ui
-  cli --> node
-  worker --> core
-  worker --> detect
-  worker --> text
-  worker --> pdf
-  worker --> image
+  worker --> redactors
+  node --> redactors
+
+  subgraph redactors["one redactor per format"]
+    text["<b>@repo/redact-text</b>"]
+    pdf["<b>@repo/redact-pdf</b>"]
+    image["<b>@repo/redact-image</b>"]
+  end
+
+  worker --> detect["<b>@repo/pii-detect</b><br/>GLiNER spans · model cache"]
   node --> detect
-  node --> text
-  node --> pdf
-  node --> image
-  detect --> core
-  text --> core
-  pdf --> core
-  pdf --> ocr
-  image --> core
+
+  pdf --> ocr["<b>@repo/ocr</b><br/>Tesseract · language detection"]
   image --> ocr
+
+  redactors --> core["<b>@repo/redact-core</b><br/>types · patterns · spans · rects · zip"]
+  detect --> core
   ocr --> core
 ```
 
