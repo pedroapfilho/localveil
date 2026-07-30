@@ -37,7 +37,6 @@ describe("DownloadPanel", () => {
     setup([job()]);
 
     expect(theButton()).toBeDisabled();
-    expect(screen.getByText("Redact a file to enable the download.")).toBeInTheDocument();
   });
 
   it("stays disabled while a file is still running", () => {

@@ -6,14 +6,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
+import { usesLanguage } from "./uses-language";
 import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
 
 const ZIP_NAME = "localveil.zip";
 
-type ModelState = { fraction: number; slowDevice: boolean; stage?: ModelStageKey };
+type ModelState = { fraction: number; stage?: ModelStageKey };
 
-const INITIAL_MODEL: ModelState = { fraction: 0, slowDevice: false };
+const INITIAL_MODEL: ModelState = { fraction: 0 };
 
 const triggerDownload = (blob: Blob) => {
   const url = URL.createObjectURL(blob);
@@ -35,6 +36,10 @@ const useRedaction = () => {
   const [model, setModel] = useState<ModelState>(INITIAL_MODEL);
   const poolRef = useRef<RedactionPool | null>(null);
   const translateRef = useRef(t);
+
+  // The detector raises this twice on the fallback path, and it is the same news both
+  // times.
+  const saidSlowRef = useRef(false);
 
   useEffect(() => {
     translateRef.current = t;
@@ -75,12 +80,22 @@ const useRedaction = () => {
             : translateRef.current("toast.failed", { name }),
         );
       },
+      // A slow device is a notice about the machine, not a measurement of the download,
+      // and it is reported with a fraction of zero. Taking it as progress sent the bar
+      // back to empty on the wasm fallback, which is raised after a whole download
+      // attempt has already finished. It is said once, in a toast, because the bar it
+      // would otherwise sit beside has no words to spare.
       onModelProgress: (fraction, stage) => {
-        setModel((current) => ({
-          fraction,
-          slowDevice: current.slowDevice || stage === "model.slowDevice",
-          stage,
-        }));
+        if (stage === "model.slowDevice") {
+          if (!saidSlowRef.current) {
+            saidSlowRef.current = true;
+            toast.warning(translateRef.current("model.slowDevice"));
+          }
+
+          return;
+        }
+
+        setModel({ fraction, stage });
       },
       onProgress: (id, fraction, stage) => {
         useJobStore.getState().updateJob(id, { progress: fraction, stage, status: "running" });
@@ -121,6 +136,63 @@ const useRedaction = () => {
     useJobStore.getState().removeJob(id);
   }, []);
 
+  const removeMany = useCallback((ids: ReadonlyArray<string>) => {
+    const pool = poolRef.current;
+
+    if (pool !== null) {
+      for (const id of ids) {
+        pool.cancel(id);
+      }
+    }
+
+    useJobStore.getState().removeJobs(ids);
+  }, []);
+
+  // Cancel before re-submitting, never after: the pool keys a running job by its id,
+  // and a cancel arriving behind the replacement would take the replacement down with
+  // it. The attempt being replaced can still be several stages deep, and the pool tells
+  // its answers apart from the new one's by the channel it was given.
+  const setLanguage = useCallback(
+    (ids: ReadonlyArray<string>, language?: DocumentLanguage) => {
+      const { jobs, requeue, updateJob } = useJobStore.getState();
+      const byId = new Map(jobs.map((job) => [job.id, job]));
+
+      // A text file's output cannot change with the language, so the choice is recorded
+      // and no work is redone.
+      const rerunning = ids.filter((id) => {
+        const job = byId.get(id);
+
+        if (job === undefined) {
+          return false;
+        }
+
+        if (usesLanguage(job.file)) {
+          return true;
+        }
+
+        updateJob(id, { language });
+
+        return false;
+      });
+
+      if (rerunning.length === 0) {
+        return;
+      }
+
+      const pool = ensurePool();
+
+      for (const id of rerunning) {
+        pool.cancel(id);
+      }
+
+      for (const job of requeue(rerunning, language)) {
+        updateJob(job.id, { stage: "stage.loadingModel" });
+        pool.submit({ file: job.file, id: job.id, language: job.language });
+      }
+    },
+    [ensurePool],
+  );
+
   const clear = useCallback(() => {
     const pool = poolRef.current;
     const { jobs, reset } = useJobStore.getState();
@@ -144,7 +216,7 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { clear, downloadZip, model, remove, submit };
+  return { clear, downloadZip, model, remove, removeMany, setLanguage, submit };
 };
 
 export { useRedaction };

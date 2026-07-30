@@ -48,13 +48,22 @@ type DetectorOptions = {
 
 const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILE}`;
 
+// The weights are the download. The tokenizer and the config beside them are a few
+// megabytes against nearly a gigabyte, and counting them meant every one of them ran
+// the bar to full and back before the file anybody was waiting for had begun.
+const isWeights = (name: string) => name.endsWith(`/${MODEL_FILE}`);
+
 // transformers.js only writes a file to the cache once it is complete, so a refresh
 // partway through throws the download away. Its cache hook runs before the fetch,
 // so `match` is where the resumable download goes.
 const installResumableCache = (report: ModelProgress): ResumableCache => {
   const cache = createResumableCache({
-    onProgress: (fraction) => {
-      report(fraction, "model.downloading");
+    onProgress: ({ loaded, name, total }) => {
+      if (!isWeights(name) || total === 0) {
+        return;
+      }
+
+      report(Math.min(loaded / total, 1), "model.downloading");
     },
   });
 

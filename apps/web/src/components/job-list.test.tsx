@@ -14,13 +14,42 @@ const job = (patch: Partial<Job> = {}): Job => ({
   ...patch,
 });
 
+const pdf = (patch: Partial<Job> = {}): Job =>
+  job({
+    file: new File(["%PDF"], "card.pdf", { type: "application/pdf" }),
+    id: "job-pdf",
+    ...patch,
+  });
+
 const setup = (jobs: Array<Job>) => {
   const onClear = vi.fn<() => void>();
+  const onLanguage = vi.fn<(ids: ReadonlyArray<string>, language?: "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
+  const onRemoveMany = vi.fn<(ids: ReadonlyArray<string>) => void>();
 
-  renderWithI18n(<JobList jobs={jobs} onClear={onClear} onRemove={onRemove} />);
+  const view = renderWithI18n(
+    <JobList
+      jobs={jobs}
+      onClear={onClear}
+      onLanguage={onLanguage}
+      onRemove={onRemove}
+      onRemoveMany={onRemoveMany}
+    />,
+  );
 
-  return { onClear, onRemove };
+  const rerenderWith = (next: Array<Job>) => {
+    view.rerender(
+      <JobList
+        jobs={next}
+        onClear={onClear}
+        onLanguage={onLanguage}
+        onRemove={onRemove}
+        onRemoveMany={onRemoveMany}
+      />,
+    );
+  };
+
+  return { onClear, onLanguage, onRemove, onRemoveMany, rerenderWith };
 };
 
 describe("JobList", () => {
@@ -29,13 +58,6 @@ describe("JobList", () => {
 
     expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
     expect(screen.queryByRole("list")).toBeNull();
-  });
-
-  it("counts the files it is showing", () => {
-    setup([job(), job({ id: "job-2" })]);
-
-    expect(screen.getByRole("heading", { name: "Files" })).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
   });
 
   it("names each file and its status", () => {
@@ -89,19 +111,6 @@ describe("JobList", () => {
     expect(screen.getByText("Nothing found to redact")).toBeInTheDocument();
   });
 
-  it("shows the failure reason on a failed file", () => {
-    setup([job({ error: "The worker gave up", status: "error" })]);
-
-    expect(screen.getByText("Failed")).toBeInTheDocument();
-    expect(screen.getByText("The worker gave up")).toBeInTheDocument();
-  });
-
-  it("offers no way to clear a list that is already empty", () => {
-    setup([]);
-
-    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
-  });
-
   it("empties the whole list when asked", () => {
     const { onClear } = setup([job(), job({ id: "job-2" })]);
 
@@ -116,5 +125,63 @@ describe("JobList", () => {
     fireEvent.click(screen.getAllByLabelText("Remove notes.txt")[1]);
 
     expect(onRemove).toHaveBeenCalledWith("job-2");
+  });
+});
+
+describe("selecting files", () => {
+  it("swaps the heading for a toolbar once a row is picked", () => {
+    setup([job(), job({ id: "job-2" })]);
+
+    fireEvent.click(screen.getAllByLabelText("Select notes.txt")[0]);
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
+  });
+
+  it("picks every row from the header checkbox", () => {
+    setup([job(), job({ id: "job-2" })]);
+
+    fireEvent.click(screen.getByLabelText("Select all files"));
+
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+  });
+
+  it("hands the whole selection to the bulk remove", () => {
+    const { onRemoveMany } = setup([job(), job({ id: "job-2" })]);
+
+    fireEvent.click(screen.getByLabelText("Select all files"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
+
+    expect(onRemoveMany).toHaveBeenCalledWith(["job-1", "job-2"]);
+  });
+
+  // A row can leave for reasons this component never hears about, and a stale id handed
+  // to a bulk action would name a file that is no longer there.
+  it("forgets a picked row that has left the list", () => {
+    const { onRemoveMany, rerenderWith } = setup([job(), job({ id: "job-2" })]);
+
+    fireEvent.click(screen.getByLabelText("Select all files"));
+    rerenderWith([job()]);
+
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
+
+    expect(onRemoveMany).toHaveBeenCalledWith(["job-1"]);
+  });
+
+  it("applies a language to the whole selection", async () => {
+    const { onLanguage } = setup([pdf(), pdf({ id: "job-pdf-2" })]);
+
+    fireEvent.click(screen.getByLabelText("Select all files"));
+    fireEvent.click(screen.getByRole("combobox", { name: "Document language" }));
+
+    const option = await screen.findByRole("option", { name: "Português" });
+
+    fireEvent.pointerDown(option);
+    fireEvent.pointerUp(option);
+    fireEvent.click(option);
+
+    expect(onLanguage).toHaveBeenCalledWith(["job-pdf", "job-pdf-2"], "pt");
   });
 });

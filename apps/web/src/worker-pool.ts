@@ -197,11 +197,22 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
     host.connect(channel, wire.port1);
 
+    // The same file can be sent back under the same id, which is what changing a
+    // document's language does. Looking the id up is then not enough to know a message
+    // belongs to this attempt rather than to the one it replaced: the cancelled attempt
+    // can still be several stages deep and answers on an id the map has since filled
+    // again. The channel is minted per submission, so it says which attempt is talking.
+    const mine = () => {
+      const live = jobs.get(job.id);
+
+      return live?.channel === channel ? live : undefined;
+    };
+
     try {
       const task = asPooledTask(
         pool.exec<RedactTask>("redact", [job.file, job.language, wire.port2], {
           on: (payload: unknown) => {
-            const live = jobs.get(job.id);
+            const live = mine();
 
             if (live === undefined || !isProgressEvent(payload)) {
               return;
@@ -221,12 +232,12 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
       task.settle(
         (result) => {
-          if (release(job.id) !== undefined) {
+          if (mine() !== undefined && release(job.id) !== undefined) {
             onDone(job.id, result);
           }
         },
         (error) => {
-          if (release(job.id) !== undefined) {
+          if (mine() !== undefined && release(job.id) !== undefined) {
             onError(job.id, describeError(error), isUnsupportedFile(error));
           }
         },

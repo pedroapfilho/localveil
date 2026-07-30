@@ -7,11 +7,18 @@ type ResumableCache = {
   put: (name: string, response: Response) => Promise<void>;
 };
 
+// Bytes for one file at a time rather than a fraction across all of them. The cache is
+// handed one URL at a time and never learns how many more are coming, so any total it
+// added up would be the total so far: every small file that finished would read as the
+// whole job being done, and the next one to register would undo it. What counts as the
+// download is a question for whoever knows which files matter.
+type CacheProgress = { loaded: number; name: string; total: number };
+
 type ResumableCacheOptions = {
   cacheKey?: string;
   chunkSize?: number;
   fetchRange?: typeof fetch;
-  onProgress?: (fraction: number) => void;
+  onProgress?: (progress: CacheProgress) => void;
   store?: ChunkStore;
 };
 
@@ -47,20 +54,6 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
     store = createIndexedDbChunkStore(),
   } = options;
 
-  const seen = new Map<string, { loaded: number; total: number }>();
-
-  const report = () => {
-    let loaded = 0;
-    let total = 0;
-
-    for (const entry of seen.values()) {
-      loaded += entry.loaded;
-      total += entry.total;
-    }
-
-    onProgress?.(total === 0 ? 0 : loaded / total);
-  };
-
   return {
     match: async (name) => {
       if (!isHttpUrl(name)) {
@@ -87,8 +80,7 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
           chunkSize,
           fetchRange,
           onProgress: (loaded, total) => {
-            seen.set(name, { loaded, total });
-            report();
+            onProgress?.({ loaded, name, total });
           },
           store,
         });
@@ -119,4 +111,4 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
 };
 
 export { CACHE_KEY, createResumableCache };
-export type { ResumableCache, ResumableCacheOptions };
+export type { CacheProgress, ResumableCache, ResumableCacheOptions };

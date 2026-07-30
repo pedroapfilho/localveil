@@ -24,9 +24,21 @@ type JobStore = {
   addFiles: (files: Array<File>, language?: DocumentLanguage) => Array<Job>;
   jobs: Array<Job>;
   removeJob: (id: string) => void;
+  removeJobs: (ids: ReadonlyArray<string>) => void;
+  requeue: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => Array<Job>;
   reset: () => void;
   updateJob: (id: string, patch: JobPatch) => void;
 };
+
+// Everything a previous run left behind. A row sent back to the queue carrying its old
+// result would offer a download of the file it is in the middle of replacing.
+const REQUEUED = {
+  error: undefined,
+  progress: 0,
+  result: undefined,
+  stage: undefined,
+  status: "queued",
+} as const satisfies JobPatch;
 
 const useJobStore = create<JobStore>((set) => ({
   addFiles: (files, language) => {
@@ -46,6 +58,34 @@ const useJobStore = create<JobStore>((set) => ({
   removeJob: (id) => {
     set((state) => ({ jobs: state.jobs.filter((job) => job.id !== id) }));
   },
+  removeJobs: (ids) => {
+    const dropping = new Set(ids);
+
+    set((state) => ({ jobs: state.jobs.filter((job) => !dropping.has(job.id)) }));
+  },
+  // Returns the jobs it reset so the caller can post them: it is the only place that
+  // knows which rows actually changed, and re-reading the store afterwards would
+  // include rows that were already queued for another reason.
+  requeue: (ids, language) => {
+    const requeueing = new Set(ids);
+    const queued: Array<Job> = [];
+
+    set((state) => ({
+      jobs: state.jobs.map((job) => {
+        if (!requeueing.has(job.id)) {
+          return job;
+        }
+
+        const next = { ...job, ...REQUEUED, language };
+
+        queued.push(next);
+
+        return next;
+      }),
+    }));
+
+    return queued;
+  },
   reset: () => {
     set({ jobs: [] });
   },
@@ -58,6 +98,8 @@ const useJobStore = create<JobStore>((set) => ({
 
 type CompletedJob = Job & { result: JobResult };
 
+// Settled, whether or not it produced anything. A file that failed has finished: it is
+// not going to move again.
 const isFinished = (job: Job) => job.status === "done" || job.status === "error";
 
 const completedJobs = (jobs: Array<Job>): Array<CompletedJob> =>
@@ -70,5 +112,5 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
-export { completedJobs, failedJobs, hasCompletedJobs, useJobStore };
+export { completedJobs, failedJobs, hasCompletedJobs, isFinished, useJobStore };
 export type { CompletedJob, Job, JobResult, JobStatus };

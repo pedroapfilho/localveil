@@ -1,46 +1,20 @@
-import type { MessageKey } from "@repo/i18n";
+// Safari drops list semantics from a `ul` whose bullets are removed, and these have
+// none, so `role="list"` restores what the styling took away.
+/* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
-import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentMedia,
-  AttachmentTitle,
-} from "@repo/ui/components/attachment";
+import type { DocumentLanguage } from "@repo/redact-core";
 import { Button } from "@repo/ui/components/button";
-import { Progress } from "@repo/ui/components/progress";
+import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
-import { FileTextIcon, XIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
+import { useState } from "react";
 
-import type { Job, JobStatus } from "../store";
+import type { Job } from "../store";
 
-const STATUS_KEYS: Record<JobStatus, MessageKey> = {
-  done: "status.done",
-  error: "status.error",
-  queued: "status.queued",
-  running: "status.running",
-};
-
-const ATTACHMENT_STATES = {
-  done: "done",
-  error: "error",
-  queued: "idle",
-  running: "processing",
-} as const;
-
-// The dot repeats the word beside it, so colour is never the only cue.
-const STATUS_TONES: Record<JobStatus, string> = {
-  done: "text-success",
-  error: "text-destructive",
-  queued: "text-muted-foreground",
-  running: "text-foreground",
-};
-
-// A strong ease-out: the built-in curves are too weak to read at this duration.
-const ENTER = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+import type { DocumentLanguageChoice } from "./document-language-picker";
+import { asLanguage } from "./document-language-picker";
+import { JobRow } from "./job-row";
+import { JobSelectionToolbar } from "./job-selection-toolbar";
 
 const VISIBLE_ROWS = 4;
 const ROW_HEIGHT = 88;
@@ -49,121 +23,98 @@ const ROW_HEIGHT = 88;
 // scroll area slices them off at the top and bottom.
 const BLEED = 4;
 
-type JobRowProps = {
-  job: Job;
-  onRemove: (id: string) => void;
-};
-
-const JobRow = ({ job, onRemove }: JobRowProps) => {
-  const { t } = useTranslations();
-  const { error, file, progress, result, stage, status } = job;
-  const inFlight = status === "queued" || status === "running";
-
-  const handleRemove = () => {
-    onRemove(job.id);
-  };
-
-  const describeResult = () => {
-    if (result === undefined) {
-      return undefined;
-    }
-
-    return result.redactionCount === 0
-      ? t("files.noRedactions")
-      : t("files.redactions", { count: result.redactionCount });
-  };
-
-  const summary = describeResult();
-
-  return (
-    <motion.li
-      animate={{ opacity: 1, transform: "translateY(0px)" }}
-      exit={{ opacity: 0, transform: "translateY(-4px)" }}
-      initial={{ opacity: 0, transform: "translateY(-6px)" }}
-      layout="position"
-      transition={ENTER}
-    >
-      <Attachment state={ATTACHMENT_STATES[status]}>
-        <AttachmentMedia>
-          <FileTextIcon aria-hidden className="size-4 shrink-0" />
-        </AttachmentMedia>
-
-        <AttachmentContent>
-          <AttachmentTitle title={file.name}>{file.name}</AttachmentTitle>
-
-          <AttachmentDescription className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}>
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
-
-            {t(STATUS_KEYS[status])}
-
-            {inFlight && stage !== undefined ? (
-              <>
-                <span aria-hidden>·</span>
-
-                <span className="text-muted-foreground truncate">{t(stage)}</span>
-              </>
-            ) : null}
-          </AttachmentDescription>
-
-          {inFlight ? <Progress className="mt-1.5" label={file.name} value={progress} /> : null}
-
-          {summary === undefined ? null : (
-            <AttachmentDescription className="tabular-nums">{summary}</AttachmentDescription>
-          )}
-
-          {status === "error" && error !== undefined ? (
-            <AttachmentDescription className="text-destructive text-pretty">
-              {error}
-            </AttachmentDescription>
-          ) : null}
-
-          {result?.warnings.map((warning) => (
-            <AttachmentDescription className="text-warning-foreground text-pretty" key={warning}>
-              {t(warning)}
-            </AttachmentDescription>
-          ))}
-        </AttachmentContent>
-
-        <AttachmentActions>
-          <AttachmentAction
-            aria-label={t("files.remove", { name: file.name })}
-            onClick={handleRemove}
-          >
-            <XIcon aria-hidden />
-          </AttachmentAction>
-        </AttachmentActions>
-      </Attachment>
-    </motion.li>
-  );
-};
-
 type JobListProps = {
   jobs: Array<Job>;
   onClear: () => void;
+  onLanguage: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => void;
   onRemove: (id: string) => void;
+  onRemoveMany: (ids: ReadonlyArray<string>) => void;
 };
 
-const JobList = ({ jobs, onClear, onRemove }: JobListProps) => {
+const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListProps) => {
   const { t } = useTranslations();
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+
+  // Derived rather than pruned on removal: a row can leave for reasons this component
+  // never hears about, and an id left behind in the set would be handed to a bulk
+  // action as though the file were still there.
+  const selected = jobs.flatMap((job) => (picked.has(job.id) ? [job.id] : []));
+
+  const handleSelect = (id: string, next: boolean) => {
+    setPicked((current) => {
+      const updated = new Set(current);
+
+      if (next) {
+        updated.add(id);
+      } else {
+        updated.delete(id);
+      }
+
+      return updated;
+    });
+  };
+
+  const handleToggleAll = (next: boolean) => {
+    setPicked(next ? new Set(jobs.map((job) => job.id)) : new Set());
+  };
+
+  const handleSelectAll = () => {
+    handleToggleAll(true);
+  };
+
+  const handleRowLanguage = (id: string, choice: DocumentLanguageChoice) => {
+    onLanguage([id], asLanguage(choice));
+  };
+
+  const handleSelectionLanguage = (choice: DocumentLanguageChoice) => {
+    onLanguage(selected, asLanguage(choice));
+  };
+
+  const handleRemoveSelected = () => {
+    onRemoveMany(selected);
+    setPicked(new Set());
+  };
 
   if (jobs.length === 0) {
     return null;
   }
 
   const scrolls = jobs.length > VISIBLE_ROWS;
+  const chosen = new Set(selected);
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
+      {/* One height for both, taken from the taller of the two. Picking a row swaps the
+          heading out for the toolbar, and without this the list below would step down
+          by the difference between a select and a ghost button. */}
+      <div className="flex min-h-9 items-center sm:min-h-8">
+        {selected.length > 0 ? (
+          <JobSelectionToolbar
+            all={selected.length === jobs.length}
+            count={selected.length}
+            onLanguageChange={handleSelectionLanguage}
+            onRemove={handleRemoveSelected}
+            onToggleAll={handleToggleAll}
+          />
+        ) : (
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-lh items-center text-base sm:text-sm">
+                <Checkbox
+                  aria-label={t("files.selectAll")}
+                  checked={false}
+                  onChange={handleSelectAll}
+                />
+              </span>
 
-        <div className="flex items-center gap-2">
-          <p className="text-muted-foreground text-base tabular-nums sm:text-sm">{jobs.length}</p>
+              <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
+            </div>
 
-          <Button onClick={onClear} size="sm" variant="ghost">
-            {t("files.clear")}
-          </Button>
-        </div>
+            <Button onClick={onClear} size="sm" variant="ghost">
+              {t("files.clear")}
+            </Button>
+          </div>
+        )}
       </div>
 
       <ScrollArea
@@ -171,10 +122,18 @@ const JobList = ({ jobs, onClear, onRemove }: JobListProps) => {
         style={scrolls ? { maxHeight: VISIBLE_ROWS * ROW_HEIGHT + BLEED * 2 } : undefined}
         viewportClassName={scrolls ? "scroll-fade no-scrollbar p-1" : "p-1"}
       >
-        <ul aria-live="polite" className="flex flex-col gap-2">
+        <ul aria-live="polite" className="flex flex-col gap-2" role="list">
           <AnimatePresence initial={false}>
-            {jobs.map((job) => (
-              <JobRow job={job} key={job.id} onRemove={onRemove} />
+            {jobs.map((job, index) => (
+              <JobRow
+                index={index}
+                job={job}
+                key={job.id}
+                onLanguageChange={handleRowLanguage}
+                onRemove={onRemove}
+                onSelect={handleSelect}
+                selected={chosen.has(job.id)}
+              />
             ))}
           </AnimatePresence>
         </ul>

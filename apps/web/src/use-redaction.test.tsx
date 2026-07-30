@@ -43,8 +43,10 @@ const pool = () => {
   return options;
 };
 
+const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
+
 const Harness = () => {
-  const { clear, model, remove, submit } = useRedaction();
+  const { clear, model, remove, removeMany, setLanguage, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -53,8 +55,27 @@ const Harness = () => {
     ]);
   };
 
+  const handleClickScans = () => {
+    submit([
+      new File(["%PDF"], "card.pdf", { type: "application/pdf" }),
+      new File(["png"], "scan.png", { type: "image/png" }),
+    ]);
+  };
+
   const handleClickForced = () => {
     submit([new File(["um"], "um.txt", { type: "text/plain" })], "pt");
+  };
+
+  const handleSetPortuguese = () => {
+    setLanguage(idsNow(), "pt");
+  };
+
+  const handleSetAuto = () => {
+    setLanguage(idsNow());
+  };
+
+  const handleRemoveAll = () => {
+    removeMany(idsNow());
   };
 
   const handleRemoveFirst = () => {
@@ -75,15 +96,31 @@ const Harness = () => {
         submit-forced
       </button>
 
+      <button onClick={handleClickScans} type="button">
+        submit-scans
+      </button>
+
+      <button onClick={handleSetPortuguese} type="button">
+        set-pt
+      </button>
+
+      <button onClick={handleSetAuto} type="button">
+        set-auto
+      </button>
+
       <button onClick={handleRemoveFirst} type="button">
         remove
+      </button>
+
+      <button onClick={handleRemoveAll} type="button">
+        remove-all
       </button>
 
       <button onClick={clear} type="button">
         clear
       </button>
 
-      <output>{model.slowDevice ? "slow" : "fine"}</output>
+      <output>{model.fraction}</output>
     </>
   );
 };
@@ -95,6 +132,15 @@ const submitTwo = () => {
   fireEvent.click(screen.getByRole("button", { name: "submit" }));
 };
 
+const submitScans = () => {
+  renderWithI18n(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "submit-scans" }));
+};
+
+const setPortuguese = () => {
+  fireEvent.click(screen.getByRole("button", { name: "set-pt" }));
+};
+
 beforeEach(() => {
   cancelled.length = 0;
   submitted.length = 0;
@@ -103,6 +149,7 @@ beforeEach(() => {
   options = undefined;
   useJobStore.getState().reset();
   vi.spyOn(toast, "error").mockImplementation(() => "");
+  vi.spyOn(toast, "warning").mockImplementation(() => "");
 });
 
 afterEach(() => {
@@ -207,20 +254,42 @@ describe("what the pool reports", () => {
     expect(unsupported).not.toEqual(failed);
   });
 
-  // The warning outlives the stage it arrived on: a device that fell back to wasm is
-  // still slow once the model is ready.
-  it("keeps the slow device warning after the model is ready", () => {
+  // The bar this used to sit beside has no words to spare, so it is said in a toast.
+  it("warns once about a device without GPU acceleration", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.2, "model.slowDevice");
+      pool().onModelProgress(0, "model.slowDevice");
     });
+
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+      "Running without GPU acceleration, this will be slow.",
+    );
+  });
+
+  // The detector raises it again when WebGPU fails and the load falls back to wasm.
+  it("does not warn twice", () => {
+    renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(1, "model.ready");
+      pool().onModelProgress(0, "model.slowDevice");
+      pool().onModelProgress(0, "model.slowDevice");
     });
 
-    expect(screen.getByText("slow")).toBeInTheDocument();
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
+  });
+
+  // It carries a fraction of zero, and the fallback raises it after a whole download
+  // attempt has already finished.
+  it("does not let that warning send the bar back to empty", () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(0.8, "model.downloading");
+      pool().onModelProgress(0, "model.slowDevice");
+    });
+
+    expect(screen.getByRole("status").textContent).toBe("0.8");
   });
 });
 
@@ -251,6 +320,87 @@ describe("removing a file", () => {
 
     expect(cancelled).toEqual([id]);
     expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
+  });
+});
+
+describe("changing a document's language", () => {
+  it("sends the file back to the pool in the new language", () => {
+    submitScans();
+    setPortuguese();
+
+    expect(submitted.map((job) => [job.file.name, job.language])).toEqual([
+      ["card.pdf", undefined],
+      ["scan.png", undefined],
+      ["card.pdf", "pt"],
+      ["scan.png", "pt"],
+    ]);
+  });
+
+  // The pool keys a running job by its id, so a cancel arriving behind the replacement
+  // would take the replacement down with it.
+  it("cancels before it re-submits, never after", () => {
+    submitScans();
+
+    const ids = idsNow();
+
+    setPortuguese();
+
+    expect(cancelled).toEqual(ids);
+    expect(submitted.slice(2).map((job) => job.id)).toEqual(ids);
+  });
+
+  it("sends the row back to the queue with the last run wiped off it", () => {
+    submitScans();
+
+    act(() => {
+      pool().onDone(idsNow()[0], {
+        blob: new Blob(["hi"]),
+        redactionCount: 2,
+        warnings: [],
+      });
+    });
+
+    setPortuguese();
+
+    expect(jobsNow()[0]).toMatchObject({
+      language: "pt",
+      progress: 0,
+      result: undefined,
+      stage: "stage.loadingModel",
+      status: "queued",
+    });
+  });
+
+  // A text file's output cannot change with the language, so the choice is recorded and
+  // nothing is redone.
+  it("records the choice on a text file without redoing the work", () => {
+    submitTwo();
+    setPortuguese();
+
+    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
+    expect(jobsNow().map((job) => job.language)).toEqual(["pt", "pt"]);
+  });
+
+  it("takes a file back to auto-detect", () => {
+    submitScans();
+    setPortuguese();
+    fireEvent.click(screen.getByRole("button", { name: "set-auto" }));
+
+    expect(submitted.at(-1)?.language).toBeUndefined();
+    expect(jobsNow()[0].language).toBeUndefined();
+  });
+});
+
+describe("removing several files at once", () => {
+  it("stops each one and drops them all", () => {
+    submitTwo();
+
+    const ids = idsNow();
+
+    fireEvent.click(screen.getByRole("button", { name: "remove-all" }));
+
+    expect(cancelled).toEqual(ids);
+    expect(jobsNow()).toEqual([]);
   });
 });
 

@@ -196,13 +196,16 @@
   }
 }
 
+/* Asking for less motion is not asking for none. Keyframes here are all movement, so
+   they go, and so does smooth scrolling. Transitions are left alone: most of them
+   carry only colour or opacity, which explain a change without travelling, and the
+   ones that do travel opt out for themselves with `motion-reduce:transition-none`. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }

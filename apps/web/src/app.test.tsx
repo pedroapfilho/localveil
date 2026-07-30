@@ -1,32 +1,42 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./app";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
+import type { RedactionPoolOptions } from "./worker-pool";
 
-// jsdom ships no Worker, and the redaction worker is the one part of the page that
-// cannot run here. The stub keeps the shell mountable without pretending to redact.
-// It has to be a class: `new` on a plain arrow throws.
-class WorkerStub {
-  addEventListener = vi.fn();
-  postMessage = vi.fn();
-  removeEventListener = vi.fn();
-  terminate = vi.fn();
-}
+let options: RedactionPoolOptions | undefined;
+
+// The pool has its own tests, and workers cannot run here. This keeps the shell
+// mountable and hands back the callbacks, so a test can answer the way the pool would.
+vi.mock("./worker-pool", () => ({
+  createRedactionPool: (given: RedactionPoolOptions) => {
+    options = given;
+
+    return { cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() };
+  },
+}));
+
+const pool = () => {
+  if (options === undefined) {
+    throw new Error("The page never built a pool");
+  }
+
+  return options;
+};
 
 describe("App", () => {
   beforeEach(() => {
+    options = undefined;
     useJobStore.getState().reset();
     // The picker remembers the choice, so a test that switches language would
     // otherwise decide the language of every test that follows it.
     localStorage.clear();
-    vi.stubGlobal("Worker", WorkerStub);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
   });
 
   it("renders the shell with nothing queued", () => {
@@ -72,7 +82,47 @@ describe("App", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(screen.getByText("notes.txt")).toBeInTheDocument();
-    expect(screen.getByText("Queued")).toBeInTheDocument();
+    // Scoped to the file list: the status panel reports the same state at the same
+    // time, which is the point of having it.
+    const files = within(screen.getByRole("main")).getByRole("list");
+
+    expect(within(files).getByText("Queued")).toBeInTheDocument();
+  });
+
+  // Last in the column, under the files it reports on. Above the dropzone it was the
+  // one thing on the page that changed height by itself, so everything the reader was
+  // aiming at moved with it.
+  it("puts the status panel below the files", () => {
+    renderWithI18n(<App />);
+
+    const main = screen.getByRole("main");
+    const panel = main.querySelector('[data-slot="progress"]')?.closest("main > *");
+
+    expect(panel).toBe(main.lastElementChild);
+  });
+
+  it("shows no progress bar before anything has happened", () => {
+    renderWithI18n(<App />);
+
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("reports the model download in the panel it already has", () => {
+    renderWithI18n(<App />);
+
+    fireEvent.change(screen.getByLabelText(/choose files/iv), {
+      target: { files: [new File(["hello"], "notes.txt", { type: "text/plain" })] },
+    });
+
+    act(() => {
+      pool().onModelProgress(0.5, "model.downloading");
+    });
+
+    // The download shares one bar with the file waiting behind it, so a half-finished
+    // download is a quarter of the whole job rather than half of a bar that restarts.
+    const bar = screen.getByRole("progressbar", { name: "Redaction progress" });
+
+    expect(bar.getAttribute("aria-valuenow")).toBe("25");
   });
 
   it("drops a file from the list when it is removed", async () => {
