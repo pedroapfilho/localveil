@@ -8,9 +8,10 @@ import type { RedactRequest } from "./worker-protocol";
 // expects none.
 const noReport = () => vi.fn<JobQueueOptions["onError"]>();
 
-const job = (id: string): RedactRequest => ({
+const job = (id: string, run = 0): RedactRequest => ({
   file: new File(["hello"], `${id}.txt`, { type: "text/plain" }),
   id,
+  run,
   type: "redact",
 });
 

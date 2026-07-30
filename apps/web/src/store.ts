@@ -14,6 +14,10 @@ type Job = {
   language?: DocumentLanguage;
   progress: number;
   result?: JobResult;
+  // Which attempt at this file the page is currently listening to. A cancelled run can
+  // still be several stages deep when it is told to stop, and it answers on the same id
+  // as its replacement, so the id alone cannot say which run a reply belongs to.
+  run: number;
   stage?: FileStageKey;
   status: JobStatus;
 };
@@ -24,9 +28,21 @@ type JobStore = {
   addFiles: (files: Array<File>, language?: DocumentLanguage) => Array<Job>;
   jobs: Array<Job>;
   removeJob: (id: string) => void;
+  removeJobs: (ids: ReadonlyArray<string>) => void;
+  requeue: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => Array<Job>;
   reset: () => void;
   updateJob: (id: string, patch: JobPatch) => void;
 };
+
+// Everything a previous run left behind. A row sent back to the queue carrying its old
+// result would offer a download of the file it is in the middle of replacing.
+const REQUEUED = {
+  error: undefined,
+  progress: 0,
+  result: undefined,
+  stage: undefined,
+  status: "queued",
+} as const satisfies JobPatch;
 
 const useJobStore = create<JobStore>((set) => ({
   addFiles: (files, language) => {
@@ -35,6 +51,7 @@ const useJobStore = create<JobStore>((set) => ({
       id: crypto.randomUUID(),
       language,
       progress: 0,
+      run: 0,
       status: "queued" as const,
     }));
 
@@ -45,6 +62,36 @@ const useJobStore = create<JobStore>((set) => ({
   jobs: [],
   removeJob: (id) => {
     set((state) => ({ jobs: state.jobs.filter((job) => job.id !== id) }));
+  },
+  removeJobs: (ids) => {
+    const dropping = new Set(ids);
+
+    set((state) => ({ jobs: state.jobs.filter((job) => !dropping.has(job.id)) }));
+  },
+  // Returns the jobs it reset so the caller can post them: it is the only place that
+  // knows which rows actually changed, and re-reading the store afterwards would
+  // include rows that were already queued for another reason.
+  requeue: (ids, language) => {
+    const requeueing = new Set(ids);
+    const queued: Array<Job> = [];
+
+    set((state) => ({
+      jobs: state.jobs.map((job) => {
+        if (!requeueing.has(job.id)) {
+          return job;
+        }
+
+        // The run number is what makes the old attempt's replies identifiable as
+        // stale once this one is on the queue behind it.
+        const next = { ...job, ...REQUEUED, language, run: job.run + 1 };
+
+        queued.push(next);
+
+        return next;
+      }),
+    }));
+
+    return queued;
   },
   reset: () => {
     set({ jobs: [] });

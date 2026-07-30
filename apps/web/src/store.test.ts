@@ -66,6 +66,87 @@ describe("useJobStore", () => {
 
     expect(jobsOf()).toEqual([]);
   });
+
+  it("removes several jobs at once and leaves the rest", () => {
+    const [first, second, third] = useJobStore
+      .getState()
+      .addFiles([textFile("a.txt"), textFile("b.txt"), textFile("c.txt")]);
+
+    useJobStore.getState().removeJobs([first.id, third.id]);
+
+    expect(jobsOf().map((job) => job.id)).toEqual([second.id]);
+  });
+
+  it("ignores ids it does not know when removing in bulk", () => {
+    useJobStore.getState().addFiles([textFile("a.txt")]);
+
+    useJobStore.getState().removeJobs(["missing"]);
+
+    expect(jobsOf().length).toBe(1);
+  });
+});
+
+describe("requeueing", () => {
+  beforeEach(() => {
+    useJobStore.getState().reset();
+  });
+
+  const finished = (id: string) => {
+    useJobStore.getState().updateJob(id, {
+      error: "old failure",
+      progress: 1,
+      result: doneResult,
+      stage: "stage.finished",
+      status: "done",
+    });
+  };
+
+  // A row sent back to the queue carrying its old result would offer a download of the
+  // file it is in the middle of replacing.
+  it("wipes everything the last run left behind", () => {
+    const [job] = useJobStore.getState().addFiles([textFile("a.txt")]);
+
+    finished(job.id);
+    useJobStore.getState().requeue([job.id], "pt");
+
+    expect(jobsOf()[0]).toMatchObject({
+      error: undefined,
+      language: "pt",
+      progress: 0,
+      result: undefined,
+      stage: undefined,
+      status: "queued",
+    });
+  });
+
+  it("returns only the jobs it reset", () => {
+    const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
+
+    finished(first.id);
+    finished(second.id);
+
+    const queued = useJobStore.getState().requeue([second.id], "es");
+
+    expect(queued.map((job) => job.id)).toEqual([second.id]);
+    expect(jobsOf().find((job) => job.id === first.id)?.status).toBe("done");
+  });
+
+  it("clears a language back to auto-detect when given none", () => {
+    const [job] = useJobStore.getState().addFiles([textFile("a.txt")], "pt");
+
+    useJobStore.getState().requeue([job.id]);
+
+    expect(jobsOf()[0].language).toBeUndefined();
+  });
+
+  it("keeps the file and the id so the worker can be sent the same job", () => {
+    const [job] = useJobStore.getState().addFiles([textFile("a.txt")]);
+
+    const [queued] = useJobStore.getState().requeue([job.id], "en");
+
+    expect(queued.id).toBe(job.id);
+    expect(queued.file).toBe(job.file);
+  });
 });
 
 describe("job selectors", () => {
@@ -73,6 +154,7 @@ describe("job selectors", () => {
     file: textFile("a.txt"),
     id: "id",
     progress: 0,
+    run: 0,
     status: "queued",
     ...patch,
   });

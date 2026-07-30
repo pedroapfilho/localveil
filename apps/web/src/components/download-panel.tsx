@@ -33,12 +33,6 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
         {t("download.button", { count: completedJobs(jobs).length })}
       </Button>
 
-      {ready ? null : (
-        <p className="text-muted-foreground text-base text-pretty sm:text-sm">
-          {t("download.waiting")}
-        </p>
-      )}
-
       {excluded === 0 ? null : (
         <p className="text-muted-foreground text-base text-pretty tabular-nums sm:text-sm">
           {t("download.excluded", { count: excluded })}

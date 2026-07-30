@@ -1,22 +1,38 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./app";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
+import type { WorkerResponse } from "./worker-protocol";
+
+type Reply = (event: { data: WorkerResponse }) => void;
+
+const workers: Array<WorkerStub> = [];
 
 // jsdom ships no Worker, and the redaction worker is the one part of the page that
-// cannot run here. The stub keeps the shell mountable without pretending to redact.
+// cannot run here. The stub keeps the shell mountable without pretending to redact,
+// and holds the page's listeners so a test can answer the way the worker would.
 // It has to be a class: `new` on a plain arrow throws.
 class WorkerStub {
-  addEventListener = vi.fn();
+  handlers = new Map<string, Reply>();
+
+  addEventListener = vi.fn((name: string, handler: Reply) => {
+    this.handlers.set(name, handler);
+  });
+
   postMessage = vi.fn();
   removeEventListener = vi.fn();
   terminate = vi.fn();
+
+  constructor() {
+    workers.push(this);
+  }
 }
 
 describe("App", () => {
   beforeEach(() => {
+    workers.length = 0;
     useJobStore.getState().reset();
     // The picker remembers the choice, so a test that switches language would
     // otherwise decide the language of every test that follows it.
@@ -72,7 +88,37 @@ describe("App", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(screen.getByText("notes.txt")).toBeInTheDocument();
-    expect(screen.getByText("Queued")).toBeInTheDocument();
+    // Scoped to the file list: the status panel reports the same state at the same
+    // time, which is the point of having it.
+    const files = within(screen.getByRole("main")).getByRole("list");
+
+    expect(within(files).getByText("Queued")).toBeInTheDocument();
+  });
+
+  // The panel is reserved from first paint so that nothing below it moves as the state
+  // changes, which is the reason it reports at rest rather than appearing on demand.
+  it("holds the status panel open before anything has happened", () => {
+    renderWithI18n(<App />);
+
+    expect(screen.getByText("Nothing running")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+  });
+
+  it("reports the model download in the panel it already has", () => {
+    renderWithI18n(<App />);
+
+    fireEvent.change(screen.getByLabelText(/choose files/iv), {
+      target: { files: [new File(["hello"], "notes.txt", { type: "text/plain" })] },
+    });
+
+    act(() => {
+      workers[0].handlers.get("message")?.({
+        data: { fraction: 0.5, stage: "model.downloading", type: "model-progress" },
+      });
+    });
+
+    expect(screen.getByText("Downloading the detection model")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
   });
 
   it("drops a file from the list when it is removed", async () => {

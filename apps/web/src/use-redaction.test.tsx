@@ -1,12 +1,14 @@
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useJobStore } from "./store";
+import { hasCompletedJobs, useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
 import type { WorkerRequest } from "./worker-protocol";
 
 type Handler = (event: unknown) => void;
+
+const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
 
 // jsdom has no Worker. This one records what it was sent and lets a test kill it,
 // which is the whole point: the recovery path cannot be exercised any other way.
@@ -57,13 +59,32 @@ class FakeWorker {
 }
 
 const Harness = () => {
-  const { clear, remove, submit } = useRedaction();
+  const { clear, remove, removeMany, setLanguage, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
       new File(["one"], "one.txt", { type: "text/plain" }),
       new File(["two"], "two.txt", { type: "text/plain" }),
     ]);
+  };
+
+  const handleClickScans = () => {
+    submit([
+      new File(["%PDF"], "card.pdf", { type: "application/pdf" }),
+      new File(["png"], "scan.png", { type: "image/png" }),
+    ]);
+  };
+
+  const handleSetPortuguese = () => {
+    setLanguage(idsNow(), "pt");
+  };
+
+  const handleSetAuto = () => {
+    setLanguage(idsNow());
+  };
+
+  const handleRemoveAll = () => {
+    removeMany(idsNow());
   };
 
   const handleClickForced = () => {
@@ -94,8 +115,24 @@ const Harness = () => {
         submit-forced
       </button>
 
+      <button onClick={handleClickScans} type="button">
+        submit-scans
+      </button>
+
+      <button onClick={handleSetPortuguese} type="button">
+        set-pt
+      </button>
+
+      <button onClick={handleSetAuto} type="button">
+        set-auto
+      </button>
+
       <button onClick={handleRemoveFirst} type="button">
         remove
+      </button>
+
+      <button onClick={handleRemoveAll} type="button">
+        remove-all
       </button>
 
       <button onClick={clear} type="button">
@@ -135,11 +172,31 @@ const submitTwo = () => {
   fireEvent.click(screen.getByRole("button", { name: "submit" }));
 };
 
+const submitScans = () => {
+  renderWithI18n(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "submit-scans" }));
+};
+
+const setPortuguese = () => {
+  fireEvent.click(screen.getByRole("button", { name: "set-pt" }));
+};
+
+const requestsTo = (index: number) =>
+  workerAt(index).posted.filter((request) => request.type === "redact");
+
 // The worker takes one file at a time, so a running job is the one it was busy with.
 const startFirstJob = () => {
+  const first = jobsNow()[0];
+
   act(() => {
     workerAt(0).emit("message", {
-      data: { fraction: 0.5, id: jobsNow()[0].id, stage: "stage.detecting", type: "progress" },
+      data: {
+        fraction: 0.5,
+        id: first.id,
+        run: first.run,
+        stage: "stage.detecting",
+        type: "progress",
+      },
     });
   });
 };
@@ -316,6 +373,7 @@ describe("when the worker goes quiet", () => {
             blob: new Blob(["x"]),
             id: job.id,
             redactionCount: 0,
+            run: job.run,
             type: "done",
             warnings: [],
           },
@@ -415,6 +473,185 @@ describe("a forced document language", () => {
     const requests = workerAt(0).posted.filter((request) => request.type === "redact");
 
     expect(requests.map((request) => request.language)).toEqual([undefined, undefined]);
+  });
+});
+
+describe("changing a document's language", () => {
+  it("sends the file back to the worker in the new language", () => {
+    submitScans();
+    setPortuguese();
+
+    expect(requestsTo(0).map((request) => [request.file.name, request.language])).toEqual([
+      ["card.pdf", undefined],
+      ["scan.png", undefined],
+      ["card.pdf", "pt"],
+      ["scan.png", "pt"],
+    ]);
+  });
+
+  // The queue tracks one abandoned flag for whichever job is running and clears it as it
+  // picks up the next one, so a cancel arriving behind the replacement would kill the
+  // replacement instead.
+  it("cancels before it re-posts, never after", () => {
+    submitScans();
+    setPortuguese();
+
+    const kinds = workerAt(0).posted.map((request) => request.type);
+
+    expect(kinds).toEqual(["redact", "redact", "cancel", "cancel", "redact", "redact"]);
+  });
+
+  it("sends the row back to the queue with the last run wiped off it", () => {
+    submitScans();
+
+    act(() => {
+      const first = jobsNow()[0];
+
+      workerAt(0).emit("message", {
+        data: {
+          blob: new Blob(["hi"]),
+          id: first.id,
+          redactionCount: 2,
+          run: first.run,
+          type: "done",
+          warnings: [],
+        },
+      });
+    });
+
+    setPortuguese();
+
+    expect(jobsNow()[0]).toMatchObject({
+      language: "pt",
+      progress: 0,
+      result: undefined,
+      status: "queued",
+    });
+  });
+
+  it("keeps the row's own id so the worker replaces the same file", () => {
+    submitScans();
+
+    const before = jobsNow().map((job) => job.id);
+
+    setPortuguese();
+
+    expect(jobsNow().map((job) => job.id)).toEqual(before);
+  });
+
+  // A text file's output cannot change with the language, so the choice is recorded and
+  // nothing is redone.
+  it("records the choice on a text file without redoing the work", () => {
+    submitTwo();
+    setPortuguese();
+
+    expect(requestsTo(0).map((request) => request.file.name)).toEqual(["one.txt", "two.txt"]);
+    expect(jobsNow().map((job) => job.language)).toEqual(["pt", "pt"]);
+  });
+
+  it("takes a file back to auto-detect", () => {
+    submitScans();
+    setPortuguese();
+    fireEvent.click(screen.getByRole("button", { name: "set-auto" }));
+
+    expect(requestsTo(0).at(-1)?.language).toBeUndefined();
+    expect(jobsNow()[0].language).toBeUndefined();
+  });
+
+  it("counts a new run for every attempt at the same file", () => {
+    submitScans();
+    setPortuguese();
+
+    expect(requestsTo(0).map((request) => [request.file.name, request.run])).toEqual([
+      ["card.pdf", 0],
+      ["scan.png", 0],
+      ["card.pdf", 1],
+      ["scan.png", 1],
+    ]);
+  });
+});
+
+// A run told to stop can be several stages deep and still answer, on the same id as the
+// run that replaced it.
+describe("a superseded run answering late", () => {
+  const emitFor = (job: { id: string; run: number }, data: Record<string, unknown>) => {
+    act(() => {
+      workerAt(0).emit("message", { data: { id: job.id, run: job.run, ...data } });
+    });
+  };
+
+  const finishing = { blob: new Blob(["stale"]), redactionCount: 7, warnings: [] };
+
+  it("ignores its result rather than settling the row with it", () => {
+    submitScans();
+
+    const before = jobsNow()[0];
+
+    setPortuguese();
+    emitFor(before, { ...finishing, type: "done" });
+
+    expect(jobsNow()[0]).toMatchObject({ progress: 0, result: undefined, status: "queued" });
+  });
+
+  // The stale result would settle the queue, and a settled queue with one result in it
+  // is exactly the condition that offers the ZIP.
+  it("leaves the download unoffered", () => {
+    submitScans();
+
+    const [first, second] = jobsNow();
+
+    setPortuguese();
+    emitFor(first, { ...finishing, type: "done" });
+    emitFor(second, { ...finishing, type: "done" });
+
+    expect(hasCompletedJobs(jobsNow())).toBe(false);
+  });
+
+  it("ignores its progress rather than moving the bar backwards", () => {
+    submitScans();
+
+    const before = jobsNow()[0];
+
+    setPortuguese();
+    emitFor(before, { fraction: 0.9, stage: "stage.redacting", type: "progress" });
+
+    expect(jobsNow()[0]).toMatchObject({ progress: 0, status: "queued" });
+  });
+
+  it("ignores its failure rather than failing the run that replaced it", () => {
+    submitScans();
+
+    const before = jobsNow()[0];
+
+    setPortuguese();
+    emitFor(before, { message: "cancelled midway", type: "error", unsupported: false });
+
+    expect(jobsNow()[0]).toMatchObject({ error: undefined, status: "queued" });
+  });
+
+  it("still takes the replacement's own result", () => {
+    submitScans();
+    setPortuguese();
+
+    const after = jobsNow()[0];
+
+    emitFor(after, { ...finishing, type: "done" });
+
+    expect(jobsNow()[0]).toMatchObject({ status: "done" });
+  });
+});
+
+describe("removing several files at once", () => {
+  it("cancels each one and drops them all", () => {
+    submitTwo();
+    fireEvent.click(screen.getByRole("button", { name: "remove-all" }));
+
+    const cancelled = workerAt(0)
+      .posted.filter((request) => request.type === "cancel")
+      .map((request) => request.id);
+
+    expect(cancelled.length).toBe(2);
+    expect(jobsNow()).toEqual([]);
   });
 });
 

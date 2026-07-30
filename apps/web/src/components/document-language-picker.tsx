@@ -15,6 +15,7 @@ import {
 type DocumentLanguageChoice = "auto" | DocumentLanguage;
 
 type Props = {
+  className?: string;
   onChange: (value: DocumentLanguageChoice) => void;
   value: DocumentLanguageChoice;
 };
@@ -24,7 +25,14 @@ const CHOICES: ReadonlyArray<DocumentLanguageChoice> = ["auto", "en", "pt", "es"
 const isChoice = (value: unknown): value is DocumentLanguageChoice =>
   typeof value === "string" && CHOICES.some((choice) => choice === value);
 
-const DocumentLanguagePicker = ({ onChange, value }: Props) => {
+const asChoice = (language?: DocumentLanguage): DocumentLanguageChoice => language ?? "auto";
+
+const asLanguage = (choice: DocumentLanguageChoice) => (choice === "auto" ? undefined : choice);
+
+// Labelled rather than captioned: this now sits in a file row and in a selection
+// toolbar, where a visible "Document language" beside every one of them would say the
+// same thing as many times as there are files.
+const DocumentLanguagePicker = ({ className, onChange, value }: Props) => {
   const { t } = useTranslations();
 
   const nameOf = (choice: unknown) => {
@@ -42,27 +50,23 @@ const DocumentLanguagePicker = ({ onChange, value }: Props) => {
   };
 
   return (
-    <div className="flex items-center justify-center gap-2">
-      <span className="text-muted-foreground text-base sm:text-sm">{t("dropzone.language")}</span>
+    <Select onValueChange={handleChange} value={value}>
+      <SelectTrigger aria-label={t("dropzone.language")} className={className}>
+        <SelectValue>{(current: unknown) => nameOf(current)}</SelectValue>
+      </SelectTrigger>
 
-      <Select onValueChange={handleChange} value={value}>
-        <SelectTrigger aria-label={t("dropzone.language")} className="border-transparent">
-          <SelectValue>{(current: unknown) => nameOf(current)}</SelectValue>
-        </SelectTrigger>
-
-        <SelectContent>
-          <SelectGroup>
-            {CHOICES.map((choice) => (
-              <SelectItem key={choice} value={choice}>
-                {nameOf(choice)}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+      <SelectContent>
+        <SelectGroup>
+          {CHOICES.map((choice) => (
+            <SelectItem key={choice} value={choice}>
+              {nameOf(choice)}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 };
 
-export { DocumentLanguagePicker };
+export { asChoice, asLanguage, DocumentLanguagePicker };
 export type { DocumentLanguageChoice };

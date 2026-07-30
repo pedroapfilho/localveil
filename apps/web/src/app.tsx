@@ -2,30 +2,18 @@ import { useTranslations } from "@repo/i18n";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
 
-import type { DocumentLanguageChoice } from "./components/document-language-picker";
-import { DocumentLanguagePicker } from "./components/document-language-picker";
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
 import { LanguagePicker } from "./components/language-picker";
-import { ModelStatus } from "./components/model-status";
 import { SiteFooter } from "./components/site-footer";
+import { StatusPanel } from "./components/status-panel";
+import { APPEAR, SLIDE } from "./motion";
 import { useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
 import { useRedaction } from "./use-redaction";
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
-
-// The strong ease-out from the house animation standards, and short enough that the
-// page reads as arranging itself rather than performing.
-const APPEAR = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
-
-const SLIDE = {
-  animate: { opacity: 1, transform: "translateY(0px)" },
-  exit: { opacity: 0, transform: "translateY(-6px)" },
-  initial: { opacity: 0, transform: "translateY(-6px)" },
-};
 
 // The same shapes as favicon.svg, inline rather than fetched: it is three rectangles,
 // and an image request for them would cost a round trip and a frame of empty box. The
@@ -51,8 +39,7 @@ const BrandMark = () => (
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const { clear, downloadZip, model, remove, submit } = useRedaction();
-  const [documentLanguage, setDocumentLanguage] = useState<DocumentLanguageChoice>("auto");
+  const { clear, downloadZip, model, remove, removeMany, setLanguage, submit } = useRedaction();
 
   useDocumentLocale();
 
@@ -70,7 +57,7 @@ const App = () => {
   };
 
   const handleFilesSelected = (files: Array<File>) => {
-    submit(files, documentLanguage === "auto" ? undefined : documentLanguage);
+    submit(files);
   };
 
   const queued = jobs.length > 0;
@@ -84,7 +71,10 @@ const App = () => {
         {t("app.skipToContent")}
       </a>
 
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
+      {/* min-w-0 because a grid item sizes to its own min-content by default, and the
+          status panel's progress bar would otherwise widen the page past the viewport
+          on a narrow screen. */}
+      <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
         <div className="flex justify-end">
           <LanguagePicker />
         </div>
@@ -104,7 +94,7 @@ const App = () => {
         </header>
 
         <main className="flex flex-col gap-8" id="main">
-          <ModelStatus model={model} />
+          <StatusPanel jobs={jobs} model={model} />
 
           <FileDropzone
             accept={ACCEPTED_FILES}
@@ -113,8 +103,6 @@ const App = () => {
             label={t("dropzone.label")}
             onFilesSelected={handleFilesSelected}
           />
-
-          <DocumentLanguagePicker onChange={setDocumentLanguage} value={documentLanguage} />
 
           {/* Both arrive with the first file and leave with the last, so they slide in
               rather than appearing under the reader's cursor. */}
@@ -126,7 +114,13 @@ const App = () => {
                 transition={APPEAR}
                 {...SLIDE}
               >
-                <JobList jobs={jobs} onClear={clear} onRemove={remove} />
+                <JobList
+                  jobs={jobs}
+                  onClear={clear}
+                  onLanguage={setLanguage}
+                  onRemove={remove}
+                  onRemoveMany={removeMany}
+                />
 
                 <DownloadPanel jobs={jobs} onDownload={handleDownload} />
               </motion.div>

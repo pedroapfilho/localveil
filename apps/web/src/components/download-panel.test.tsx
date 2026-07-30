@@ -12,6 +12,7 @@ const job = (patch: Partial<Job> = {}): Job => ({
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
   progress: 0,
+  run: 0,
   status: "queued",
   ...patch,
 });
@@ -37,7 +38,6 @@ describe("DownloadPanel", () => {
     setup([job()]);
 
     expect(theButton()).toBeDisabled();
-    expect(screen.getByText("Redact a file to enable the download.")).toBeInTheDocument();
   });
 
   it("stays disabled while a file is still running", () => {

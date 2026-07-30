@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Job } from "./store";
 import { completedJobs, useJobStore } from "./store";
+import { usesLanguage } from "./uses-language";
 import type { CancelRequest, RedactRequest, WorkerResponse } from "./worker-protocol";
 
 const ZIP_NAME = "localveil.zip";
@@ -39,6 +40,7 @@ const sendJob = (worker: Worker, job: Job) => {
     file: job.file,
     id: job.id,
     language: job.language,
+    run: job.run,
     type: "redact",
   };
 
@@ -147,7 +149,7 @@ const useRedaction = () => {
       };
 
       const applyMessage = (message: WorkerResponse) => {
-        const { updateJob } = useJobStore.getState();
+        const { jobs, updateJob } = useJobStore.getState();
 
         if (message.type === "model-progress") {
           setModel((current) => ({
@@ -156,6 +158,16 @@ const useRedaction = () => {
             stage: message.stage,
           }));
 
+          return;
+        }
+
+        // A run told to stop can still be inside a page of OCR, and it answers on the
+        // same id as the run replacing it. Taking its "done" would hand the row a
+        // result redacted in the language the reader just changed away from, and would
+        // settle the queue enough to offer that result as a download.
+        const current = jobs.find((job) => job.id === message.id);
+
+        if (current !== undefined && message.run !== current.run) {
           return;
         }
 
@@ -270,6 +282,55 @@ const useRedaction = () => {
     armWatchdogRef.current?.();
   }, []);
 
+  // Cancel before re-posting, never after: the queue tracks one abandoned flag for
+  // whichever job is running, and it clears that flag as it picks the next one up, so a
+  // cancel arriving behind the replacement would kill the replacement instead.
+  //
+  // A job cancelled after its last checkpoint still posts its "done", which lands on a
+  // row already set back to queued and briefly shows it as finished. The re-run posts
+  // its own "done" afterwards, so the row settles correctly.
+  const setLanguage = useCallback(
+    (ids: ReadonlyArray<string>, language?: DocumentLanguage) => {
+      const { jobs, requeue, updateJob } = useJobStore.getState();
+      const byId = new Map(jobs.map((job) => [job.id, job]));
+
+      // A text file's output cannot change with the language, so the choice is
+      // recorded and no work is redone.
+      const rerunning = ids.filter((id) => {
+        const job = byId.get(id);
+
+        if (job === undefined) {
+          return false;
+        }
+
+        if (usesLanguage(job.file)) {
+          return true;
+        }
+
+        updateJob(id, { language });
+
+        return false;
+      });
+
+      if (rerunning.length === 0) {
+        return;
+      }
+
+      const worker = ensureWorker();
+
+      for (const id of rerunning) {
+        sendCancel(worker, id);
+      }
+
+      for (const job of requeue(rerunning, language)) {
+        sendJob(worker, job);
+      }
+
+      armWatchdogRef.current?.();
+    },
+    [ensureWorker],
+  );
+
   const clear = useCallback(() => {
     const worker = workerRef.current;
     const { jobs, reset } = useJobStore.getState();
@@ -294,7 +355,20 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { clear, downloadZip, model, remove, submit };
+  const removeMany = useCallback((ids: ReadonlyArray<string>) => {
+    const worker = workerRef.current;
+
+    if (worker !== null) {
+      for (const id of ids) {
+        sendCancel(worker, id);
+      }
+    }
+
+    useJobStore.getState().removeJobs(ids);
+    armWatchdogRef.current?.();
+  }, []);
+
+  return { clear, downloadZip, model, remove, removeMany, setLanguage, submit };
 };
 
 export { useRedaction };

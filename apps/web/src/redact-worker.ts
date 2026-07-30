@@ -46,14 +46,17 @@ const queue = createJobQueue({
     post({
       id: request.id,
       message: describeError(error),
+      run: request.run,
       type: "error",
       unsupported: error instanceof UnsupportedFileError,
     });
   },
-  run: async ({ file, id, language }, stopIfCancelled) => {
+  // Every reply quotes back the run it was asked for, so the page can tell this
+  // attempt's answers from those of the one it replaced.
+  run: async ({ file, id, language, run }, stopIfCancelled) => {
     const redactor = registry.resolve(file);
 
-    post({ fraction: 0, id, stage: "stage.loadingModel", type: "progress" });
+    post({ fraction: 0, id, run, stage: "stage.loadingModel", type: "progress" });
 
     const detect = await loadDetector();
 
@@ -64,7 +67,7 @@ const queue = createJobQueue({
       detect,
       (fraction, stage) => {
         stopIfCancelled();
-        post({ fraction, id, stage, type: "progress" });
+        post({ fraction, id, run, stage, type: "progress" });
       },
       { language },
     );
@@ -73,6 +76,7 @@ const queue = createJobQueue({
       blob: result.blob,
       id,
       redactionCount: result.redactionCount,
+      run,
       type: "done",
       warnings: result.warnings,
     });
