@@ -139,6 +139,10 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
       throw firstError;
     }
 
+    // Swallowed, this made "why is my GPU not used" undiagnosable: the page only
+    // said it was slow, never why.
+    // oxlint-disable-next-line eslint/no-console
+    console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
     report(0, "model.slowDevice");
 
     return load("wasm").catch((wasmError: unknown) => {

@@ -45,6 +45,10 @@ const ENTER = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 const VISIBLE_ROWS = 4;
 const ROW_HEIGHT = 88;
 
+// Row borders and shadows reach past the viewport edge, so without this bleed the
+// scroll area slices them off at the top and bottom.
+const BLEED = 4;
+
 type JobRowProps = {
   job: Job;
   onRemove: (id: string) => void;
@@ -163,9 +167,9 @@ const JobList = ({ jobs, onClear, onRemove }: JobListProps) => {
       </div>
 
       <ScrollArea
-        className={scrolls ? "-mx-1" : "-mx-1 max-h-none"}
-        style={scrolls ? { maxHeight: VISIBLE_ROWS * ROW_HEIGHT } : undefined}
-        viewportClassName={scrolls ? "scroll-fade no-scrollbar px-1" : "px-1"}
+        className={scrolls ? "-m-1" : "-m-1 max-h-none"}
+        style={scrolls ? { maxHeight: VISIBLE_ROWS * ROW_HEIGHT + BLEED * 2 } : undefined}
+        viewportClassName={scrolls ? "scroll-fade no-scrollbar p-1" : "p-1"}
       >
         <ul aria-live="polite" className="flex flex-col gap-2">
           <AnimatePresence initial={false}>

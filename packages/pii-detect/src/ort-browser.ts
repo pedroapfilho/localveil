@@ -1,5 +1,3 @@
-import wasmFactoryUrl from "onnxruntime-web/ort-wasm-simd-threaded.jsep.mjs?url";
-import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.jsep.wasm?url";
 // The same subpath transformers.js imports, so both resolve to one module and one
 // shared ort environment rather than two copies of the runtime.
 import * as ort from "onnxruntime-web/webgpu";
@@ -60,10 +58,12 @@ const fetchModelBytes = async (url: string, options: FetchModelOptions): Promise
 };
 
 const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promise<RunModel> => {
-  // A bundled build serves its wasm from wherever the chunk landed, which after a
-  // production build is nowhere; these are the emitted copies.
-  ort.env.wasm.wasmPaths = { mjs: wasmFactoryUrl, wasm: wasmUrl };
-
+  // wasmPaths is deliberately untouched. Both override forms were measured to break
+  // WebGPU: with `mjs` set, initialisation imports a module without `webgpuInit` and
+  // every session silently demoted to wasm; with only `wasm` set, session creation
+  // hangs forever. The default resolves the binary beside this module in dev, and
+  // beside the worker chunk in production, where the web app's build emits it under
+  // its canonical name for exactly this lookup.
   const session = await ort.InferenceSession.create(bytes, { executionProviders: [device] });
   const output = session.outputNames[0];
 
