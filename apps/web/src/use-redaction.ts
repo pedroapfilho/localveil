@@ -151,10 +151,20 @@ const useRedaction = () => {
       const applyMessage = (message: WorkerResponse) => {
         const { jobs, updateJob } = useJobStore.getState();
 
+        // A slow device is a notice about the machine, not a measurement of the
+        // download, and it is reported with a fraction of zero. Letting it through as
+        // progress sent the bar back to empty on the wasm fallback, which is raised
+        // after a whole download attempt has already finished.
+        if (message.type === "model-progress" && message.stage === "model.slowDevice") {
+          setModel((current) => ({ ...current, slowDevice: true }));
+
+          return;
+        }
+
         if (message.type === "model-progress") {
           setModel((current) => ({
             fraction: message.fraction,
-            slowDevice: current.slowDevice || message.stage === "model.slowDevice",
+            slowDevice: current.slowDevice,
             stage: message.stage,
           }));
 

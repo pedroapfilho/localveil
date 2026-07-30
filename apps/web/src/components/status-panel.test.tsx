@@ -30,18 +30,27 @@ const setup = (jobs: Array<Job>, state: ModelState = model()) =>
 const SLOW = "Running without GPU acceleration, this will be slow.";
 
 describe("StatusPanel", () => {
-  it("rests with a line and an empty bar when nothing is happening", () => {
+  // A bar sitting at zero with nothing happening reads as a job that has stalled, so at
+  // rest the track fades out while the box keeps the height it reserved.
+  it("rests on a line, with the track faded out", () => {
     setup([]);
 
-    expect(screen.getByText("Nothing running")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+    expect(screen.getByText("Waiting for files")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar").className).toContain("opacity-0");
   });
 
-  it("reports the model download with its percentage", () => {
+  it("shows no number at rest", () => {
+    setup([]);
+
+    expect(screen.queryByText("0%")).toBeNull();
+  });
+
+  it("names the model download and counts it as part of the whole job", () => {
     setup([job()], model({ fraction: 0.42, stage: "model.downloading" }));
 
     expect(screen.getByText("Downloading the detection model")).toBeInTheDocument();
-    expect(screen.getByText("42%")).toBeInTheDocument();
+    // Half of one bar shared with one file, not 42% of a bar that will restart.
+    expect(screen.getByText("21%")).toBeInTheDocument();
   });
 
   // A cached model reports 100% and then spends seconds building a session, which is
@@ -53,7 +62,9 @@ describe("StatusPanel", () => {
     expect(screen.queryByText("Downloading the detection model")).toBeNull();
   });
 
-  it("shows the running file's stage and the tally once the model is out of the way", () => {
+  // The number beside the line is the same number the bar is drawing, so it keeps
+  // counting up rather than switching to a tally halfway through.
+  it("shows the running file's stage and how far along the whole job is", () => {
     setup(
       [
         job({ progress: 1, result, status: "done" }),
@@ -63,7 +74,7 @@ describe("StatusPanel", () => {
     );
 
     expect(screen.getByText("Redacting")).toBeInTheDocument();
-    expect(screen.getByText("1 of 2 redacted")).toBeInTheDocument();
+    expect(screen.getByText("75%")).toBeInTheDocument();
   });
 
   it("says it finished once every file has settled", () => {

@@ -9,89 +9,92 @@ import type { Job } from "../store";
 import { completedJobs } from "../store";
 import type { ModelState } from "../use-redaction";
 
+import { useOverallProgress } from "./use-overall-progress";
+
 type StatusPanelProps = {
   jobs: Array<Job>;
   model: ModelState;
 };
 
-type Reading = { fraction: number; key: MessageKey; percent: boolean; tally: boolean };
+type Trailing = "none" | "percent" | "tally";
 
-const meanProgress = (jobs: Array<Job>) =>
-  jobs.length === 0 ? 0 : jobs.reduce((sum, job) => sum + job.progress, 0) / jobs.length;
+type Reading = { key: MessageKey; resting: boolean; trailing: Trailing };
 
-// First match wins. Two rules earn their place here: a model whose bytes are all in
-// hand is building a session rather than downloading, and a queue still holding work
-// outranks the model line only once the model has stopped reporting.
+// What the panel is saying, which is separate from how far along it is: the bar is one
+// sweep over the whole job, and this is the name of whichever part of it is happening
+// now. First match wins, and a model whose bytes are all in hand is building a session
+// rather than downloading.
 const read = (jobs: Array<Job>, model: ModelState): Reading => {
   const downloading = model.stage === "model.downloading";
+  const working = jobs.find((job) => job.status === "running" || job.status === "queued");
 
-  if (downloading && model.fraction < 1) {
-    return { fraction: model.fraction, key: "model.downloading", percent: true, tally: false };
-  }
-
-  if (downloading) {
-    return { fraction: 1, key: "stage.loadingModel", percent: false, tally: false };
-  }
-
-  const running = jobs.find((job) => job.status === "running");
-  const waiting = running ?? jobs.find((job) => job.status === "queued");
-
-  if (waiting !== undefined) {
+  if (downloading && working !== undefined) {
     return {
-      fraction: meanProgress(jobs),
-      key: waiting.stage ?? "status.queued",
-      percent: false,
-      tally: true,
+      key: model.fraction < 1 ? "model.downloading" : "stage.loadingModel",
+      resting: false,
+      trailing: "percent",
     };
   }
 
-  if (jobs.length > 0) {
-    return { fraction: 1, key: "stage.finished", percent: false, tally: true };
+  if (working !== undefined) {
+    return { key: working.stage ?? "status.queued", resting: false, trailing: "percent" };
   }
 
-  return { fraction: 0, key: "panel.idle", percent: false, tally: false };
+  if (jobs.length > 0) {
+    return { key: "stage.finished", resting: false, trailing: "tally" };
+  }
+
+  return { key: "panel.idle", resting: true, trailing: "none" };
 };
 
 // Always mounted and always the same height, so nothing below it moves as the state
-// changes. The bar is rendered in every state, empty when resting, because a bar that
-// came and went would be the reflow this box exists to remove.
+// changes. At rest the track fades out rather than unmounting: a bar sitting at zero
+// with nothing happening reads as a job that has stalled, and removing it outright
+// would give back the height this box exists to hold.
 const StatusPanel = ({ jobs, model }: StatusPanelProps) => {
   const { locale, t } = useTranslations();
   const reduced = useReducedMotion() ?? false;
   const reading = read(jobs, model);
+  const fraction = useOverallProgress(jobs, model);
 
   const percentFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 0, style: "percent" }),
     [locale],
   );
 
-  const tally = t("panel.progress", {
-    done: completedJobs(jobs).length,
-    total: jobs.length,
-  });
+  const trailing = () => {
+    if (reading.trailing === "percent") {
+      return percentFormat.format(fraction);
+    }
 
-  const slowDevice = model.slowDevice && reading.key !== "panel.idle";
+    return t("panel.progress", { done: completedJobs(jobs).length, total: jobs.length });
+  };
+
+  const slowDevice = model.slowDevice && !reading.resting;
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
         {/* The region outlives the line inside it, which is what lets each change be
-            announced instead of passing silently. */}
-        {/* Not animated. This line steps through eight stages per file, and a fade on
-            something that changes every second or two is a flicker rather than a
-            transition. */}
+            announced instead of passing silently. Not animated: this line steps through
+            eight stages per file, and a fade on something that changes every second or
+            two is a flicker rather than a transition. */}
         <div aria-live="polite" className="min-w-0">
           <p className="text-muted-foreground text-base text-pretty sm:text-sm">{t(reading.key)}</p>
         </div>
 
-        {reading.percent || reading.tally ? (
+        {reading.trailing === "none" ? null : (
           <p className="text-muted-foreground shrink-0 text-base tabular-nums sm:text-sm">
-            {reading.percent ? percentFormat.format(reading.fraction) : tally}
+            {trailing()}
           </p>
-        ) : null}
+        )}
       </div>
 
-      <Progress label={t(reading.key)} value={reading.fraction} />
+      <Progress
+        className={`transition-opacity duration-200 ease-out ${reading.resting ? "opacity-0" : "opacity-100"}`}
+        label={t(reading.key)}
+        value={fraction}
+      />
 
       {/* Reduced motion drops the height, which is the part that travels, and keeps the
           fade, which is the part that explains where the line came from. Zeroing the

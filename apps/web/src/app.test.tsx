@@ -100,7 +100,7 @@ describe("App", () => {
   it("holds the status panel open before anything has happened", () => {
     renderWithI18n(<App />);
 
-    expect(screen.getByText("Nothing running")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for files")).toBeInTheDocument();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
   });
 
@@ -117,8 +117,10 @@ describe("App", () => {
       });
     });
 
+    // The download shares one bar with the file waiting behind it, so a half-finished
+    // download is a quarter of the whole job rather than half of a bar that restarts.
     expect(screen.getByText("Downloading the detection model")).toBeInTheDocument();
-    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("25%")).toBeInTheDocument();
   });
 
   it("drops a file from the list when it is removed", async () => {
