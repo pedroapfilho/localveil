@@ -141,7 +141,7 @@ describe("createResumableCache", () => {
   });
 
   // Reading one response must not consume the other. They used to be a response and
-  // its clone, which tees the body and buffers a second copy of an 809 MB file.
+  // its clone, which tees the body and buffers a second copy of the whole file.
   it("leaves the cached copy readable after the caller has read theirs", async () => {
     const { entries } = memoryCaches();
 

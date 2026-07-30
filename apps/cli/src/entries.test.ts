@@ -75,6 +75,27 @@ describe("parentEntry", () => {
 });
 
 describe("resolveArguments", () => {
+  it("takes a job count either way round", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--jobs", "3"], directory)).resolves.toMatchObject({ jobs: 3 });
+    await expect(resolveArguments(["--jobs=3"], directory)).resolves.toMatchObject({ jobs: 3 });
+  });
+
+  it("leaves the job count out when nobody asked for one", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments([], directory)).resolves.not.toHaveProperty("jobs");
+  });
+
+  it("refuses a job count that is not a whole number of one or more", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--jobs", "0"], directory)).rejects.toThrow(/--jobs/v);
+    await expect(resolveArguments(["--jobs", "two"], directory)).rejects.toThrow(/--jobs/v);
+    await expect(resolveArguments(["--jobs"], directory)).rejects.toThrow(/nothing/v);
+  });
+
   it("starts in the working directory when it is given nothing", async () => {
     const directory = await makeDirectory();
 

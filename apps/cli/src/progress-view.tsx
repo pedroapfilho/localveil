@@ -4,8 +4,6 @@ import { describeKey } from "./messages";
 import { ProgressBar } from "./progress-bar";
 import { truncateEnd } from "./text";
 
-const MODEL_SIZE = "349 MB";
-
 const BAR_MAX = 40;
 const BAR_MIN = 10;
 
@@ -38,7 +36,7 @@ const ProgressView = ({
         <Box flexDirection="column">
           <Text bold>{describeKey("model.downloading")}</Text>
 
-          <Text dimColor>{`${MODEL_SIZE}, downloaded once and then kept.`}</Text>
+          <Text dimColor>Downloaded once and then kept.</Text>
 
           <ProgressBar fraction={modelFraction} width={barWidth} />
         </Box>

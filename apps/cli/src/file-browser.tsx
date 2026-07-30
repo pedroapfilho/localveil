@@ -1,11 +1,11 @@
 import { dirname } from "node:path";
 
+import { describeError } from "@repo/redact-core";
 import { Box, Text, useInput, useWindowSize } from "ink";
 import { useEffect, useMemo, useState } from "react";
 
 import type { DirectoryEntry } from "./entries";
 import { parentEntry, readDirectory } from "./entries";
-import { reasonFrom } from "./errors";
 import { truncateEnd, truncateStart } from "./text";
 
 const VISIBLE_ROWS = 10;
@@ -81,7 +81,7 @@ const FileBrowser = ({
         }
       } catch (error) {
         if (!pending.signal.aborted) {
-          setListing({ directory, entries: [], failure: reasonFrom(error) });
+          setListing({ directory, entries: [], failure: describeError(error) });
         }
       }
     };

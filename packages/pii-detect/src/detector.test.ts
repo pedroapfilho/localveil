@@ -15,8 +15,6 @@ vi.mock("@huggingface/transformers", () => ({
 vi.mock("#ort", () => ({
   createModelRunner: vi.fn(),
   fetchModelBytes: vi.fn(),
-  // Distinct names per device so the tests can see which tier was fetched.
-  MODEL_FILES: { wasm: "model_int8.onnx", webgpu: "model_q4.onnx" },
   pickDevice: vi.fn(),
 }));
 
@@ -179,8 +177,10 @@ describe("createDetector", () => {
 
     const urls = vi.mocked(fetchModelBytes).mock.calls.map(([url]) => url);
 
+    // Both tiers read the same file, so falling back costs a cache lookup rather
+    // than a second download of the weights.
     expect(urls.at(0)).toContain("model_q4.onnx");
-    expect(urls.at(1)).toContain("model_int8.onnx");
+    expect(urls.at(1)).toBe(urls.at(0));
     expect(stages).toContain("model.slowDevice");
     expect(stages.at(-1)).toBe("model.ready");
   });

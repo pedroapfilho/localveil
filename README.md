@@ -27,7 +27,7 @@ pnpm dev --filter=web
 
 Open `http://localhost:5173` and drop a file on the page.
 
-The first run downloads the detection model, which is 894 MB in the browser and takes a while. It is fetched as six ranges at a time and each one is written to browser storage as it lands, so a refresh part way through picks up the ranges it is missing rather than starting again. Every run after that loads from cache in a few seconds.
+The first run downloads the detection model, which is large and takes a while. It is fetched as six ranges at a time and each one is written to browser storage as it lands, so a refresh part way through picks up the ranges it is missing rather than starting again. Every run after that loads from cache in a few seconds.
 
 For the terminal:
 
@@ -37,7 +37,7 @@ pnpm --filter cli start scan.pdf   # or name them up front
 pnpm --filter cli start --lang pt scan.pdf
 ```
 
-The CLI writes `localveil.zip` into the working directory and keeps its copy of the model (349 MB) under `~/.cache/localveil/models`.
+The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`.
 
 ## What gets covered
 
@@ -228,4 +228,4 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.
 - **Recognition sets the ceiling on scanned input.** A blurry photo or a PDF with broken fonts yields text nothing can redact, and the app says so rather than guessing.
 - **A redacted PDF is images.** The text layer is rebuilt from recognised words, so it is searchable but not identical to the original, and the file is larger.
-- **The first run is a large download.** 894 MB in the browser, 349 MB in the terminal, once, resumable, and fetched several ranges at a time. The browser carries the bigger 4-bit file because browser runtimes score the smaller 8-bit one wrongly; the CLI's native kernels do not have that problem.
+- **The first run is a large download.** Once, resumable, and fetched several ranges at a time. The browser and the terminal run the same 4-bit weights, so they redact a document the same way. The smaller 8-bit export is a third of the size but browser runtimes score it wrongly, which is why nothing here uses it.

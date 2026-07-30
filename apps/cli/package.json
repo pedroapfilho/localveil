@@ -23,7 +23,8 @@
     "@repo/redact-node": "workspace:*",
     "ink": "^7.1.1",
     "react": "^19.2.8",
-    "tsx": "^4.23.1"
+    "tsx": "^4.23.1",
+    "workerpool": "^10.0.3"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",

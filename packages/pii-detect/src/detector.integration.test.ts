@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDetector } from "./detector.ts";
 
-// Downloads ~349 MB of weights, so it stays out of the default run.
+// Downloads the weights, so it stays out of the default run.
 describe.skipIf(process.env.PII_MODEL_TEST === undefined)(
   "createDetector against the real model",
   () => {

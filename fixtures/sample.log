@@ -1,0 +1,10 @@
+2024-03-14T09:12:04Z INFO  auth       Sign-in accepted for John Smith (john.smith@example.com)
+2024-03-14T09:12:05Z DEBUG profile    Contact number on file: 555-0100
+2024-03-14T09:12:05Z DEBUG profile    Delivery address on file: 42 Oak Street, Springfield
+2024-03-14T09:31:47Z INFO  billing    Invoice 4471 raised against the account opened 14 March 2024
+2024-03-14T10:04:19Z WARN  mailer     Retrying receipt to john.smith@example.com after a soft bounce
+2024-03-14T10:05:02Z INFO  mailer     Receipt delivered
+2024-03-14T11:48:33Z INFO  auth       Sign-in accepted for Maria Garcia (maria.garcia@example.com)
+2024-03-14T11:49:10Z DEBUG profile    Contact number on file: 555-0181
+2024-03-14T11:52:26Z ERROR payments   Card declined, cardholder notified on 555-0181
+2024-03-14T11:53:01Z INFO  payments   Retry succeeded, confirmation sent to maria.garcia@example.com
