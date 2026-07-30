@@ -84,33 +84,38 @@ const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListP
 
   return (
     <section className="flex flex-col gap-3">
-      {selected.length > 0 ? (
-        <JobSelectionToolbar
-          all={selected.length === jobs.length}
-          count={selected.length}
-          onLanguageChange={handleSelectionLanguage}
-          onRemove={handleRemoveSelected}
-          onToggleAll={handleToggleAll}
-        />
-      ) : (
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-lh items-center text-base sm:text-sm">
-              <Checkbox
-                aria-label={t("files.selectAll")}
-                checked={false}
-                onChange={handleSelectAll}
-              />
-            </span>
+      {/* One height for both, taken from the taller of the two. Picking a row swaps the
+          heading out for the toolbar, and without this the list below would step down
+          by the difference between a select and a ghost button. */}
+      <div className="flex min-h-9 items-center sm:min-h-8">
+        {selected.length > 0 ? (
+          <JobSelectionToolbar
+            all={selected.length === jobs.length}
+            count={selected.length}
+            onLanguageChange={handleSelectionLanguage}
+            onRemove={handleRemoveSelected}
+            onToggleAll={handleToggleAll}
+          />
+        ) : (
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-lh items-center text-base sm:text-sm">
+                <Checkbox
+                  aria-label={t("files.selectAll")}
+                  checked={false}
+                  onChange={handleSelectAll}
+                />
+              </span>
 
-            <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
+              <h2 className="text-base font-medium sm:text-sm">{t("files.heading")}</h2>
+            </div>
+
+            <Button onClick={onClear} size="sm" variant="ghost">
+              {t("files.clear")}
+            </Button>
           </div>
-
-          <Button onClick={onClear} size="sm" variant="ghost">
-            {t("files.clear")}
-          </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <ScrollArea
         className={scrolls ? "-m-1" : "-m-1 max-h-none"}

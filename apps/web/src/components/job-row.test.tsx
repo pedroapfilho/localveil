@@ -51,13 +51,25 @@ const setup = (job: Job, selected = false) => {
     );
   };
 
-  return { onLanguageChange, onRemove, onSelect, rerenderWith };
+  return { container: view.container, onLanguageChange, onRemove, onSelect, rerenderWith };
 };
 
 const LOW_CONFIDENCE =
   "Some text was hard to read, so a little personal data may have been missed.";
 
 describe("JobRow", () => {
+  // jsdom lays out nothing, so this reads the rule rather than the pixels: the panel is
+  // a flex child whose height animates up from zero, and a gap on its parent would be
+  // reserved in full the moment it mounts, stepping the rows below down before the
+  // panel had opened at all.
+  it("reserves no gap around the panel that animates open", () => {
+    const { container } = setup(pdf());
+
+    const attachment = container.querySelector('[data-slot="attachment"]');
+
+    expect(attachment?.className).toContain("gap-0");
+  });
+
   it("keeps the warnings behind the disclosure until it is opened", () => {
     setup(
       pdf({

@@ -1,6 +1,7 @@
 import { useTranslations } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
+import { TrashIcon } from "lucide-react";
 
 import type { DocumentLanguageChoice } from "./document-language-picker";
 import { DocumentLanguagePicker } from "./document-language-picker";
@@ -30,7 +31,7 @@ const JobSelectionToolbar = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="flex w-full items-center gap-3">
       <span className="flex h-lh items-center text-base sm:text-sm">
         <Checkbox
           aria-label={t("files.selectAll")}
@@ -40,15 +41,31 @@ const JobSelectionToolbar = ({
         />
       </span>
 
-      <p className="text-base font-medium tabular-nums sm:text-sm">
+      <p className="truncate text-base font-medium tabular-nums sm:text-sm">
         {t("files.selected", { count })}
       </p>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         <DocumentLanguagePicker onChange={onLanguageChange} value="auto" />
 
-        <Button onClick={onRemove} size="sm" variant="destructive">
-          {t("files.removeSelected")}
+        {/* The label drops away on a narrow screen rather than wrapping the row onto a
+            second line, which would move the file list every time a row is picked. */}
+        <Button
+          aria-label={t("files.removeSelected")}
+          className="relative"
+          onClick={onRemove}
+          variant="destructive"
+        >
+          <TrashIcon aria-hidden data-icon="inline-start" />
+
+          <span className="max-sm:hidden">{t("files.removeSelected")}</span>
+
+          {/* Widens the tap area to the 48px minimum on touch without moving anything a
+              pointer user can see. */}
+          <span
+            aria-hidden
+            className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+          />
         </Button>
       </div>
     </div>

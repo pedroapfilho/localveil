@@ -111,8 +111,12 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
     >
       {/* A failure opens by itself: the reason it failed is the whole point of the row,
           and one click away is one click too many for it. */}
+      {/* gap-0 because the panel below is a flex child whose height animates from zero:
+          a gap would be reserved around it in full the moment it mounts, stepping the
+          rows below down before the panel has opened at all. The spacing rides inside
+          the panel instead. */}
       <Collapsible onOpenChange={setChosen} open={open}>
-        <Attachment className="flex-col" state={ATTACHMENT_STATES[status]}>
+        <Attachment className="flex-col gap-0" state={ATTACHMENT_STATES[status]}>
           <div className="flex w-full gap-3">
             <span className="flex h-lh items-center text-base sm:text-sm">
               <Checkbox
@@ -170,37 +174,41 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
             </AttachmentActions>
           </div>
 
+          {/* Padding on a wrapper rather than a margin on the panel's first child, for
+              the same reason: a margin there would also sit outside the animated box. */}
           <CollapsiblePanel className="w-full">
-            <div className="border-foreground/10 mt-3 flex flex-col gap-3 border-t pt-3 pl-8">
-              {languageMatters ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-base sm:text-sm">
-                    {t("dropzone.language")}
-                  </span>
+            <div className="pt-3">
+              <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
+                {languageMatters ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-base sm:text-sm">
+                      {t("dropzone.language")}
+                    </span>
 
-                  <DocumentLanguagePicker
-                    onChange={handleLanguageChange}
-                    value={asChoice(language)}
-                  />
-                </div>
-              ) : null}
+                    <DocumentLanguagePicker
+                      onChange={handleLanguageChange}
+                      value={asChoice(language)}
+                    />
+                  </div>
+                ) : null}
 
-              {failure ? (
-                <AttachmentDescription className="text-destructive text-pretty">
-                  {error}
-                </AttachmentDescription>
-              ) : null}
+                {failure ? (
+                  <AttachmentDescription className="text-destructive text-pretty">
+                    {error}
+                  </AttachmentDescription>
+                ) : null}
 
-              {warnings.map((warning) => (
-                <p
-                  className="text-warning flex items-start gap-1.5 text-base text-pretty sm:text-sm"
-                  key={warning}
-                >
-                  <TriangleAlertIcon aria-hidden className="size-4 h-lh shrink-0" />
+                {warnings.map((warning) => (
+                  <p
+                    className="text-warning flex items-start gap-1.5 text-base text-pretty sm:text-sm"
+                    key={warning}
+                  >
+                    <TriangleAlertIcon aria-hidden className="size-4 h-lh shrink-0" />
 
-                  {t(warning)}
-                </p>
-              ))}
+                    {t(warning)}
+                  </p>
+                ))}
+              </div>
             </div>
           </CollapsiblePanel>
         </Attachment>
