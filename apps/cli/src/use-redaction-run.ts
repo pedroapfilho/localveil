@@ -1,7 +1,7 @@
+import { describeError } from "@repo/redact-core";
 import type { DocumentLanguage } from "@repo/redact-node";
 import { useCallback, useRef, useState } from "react";
 
-import { reasonFrom } from "./errors";
 import type { RunResult } from "./run-redaction";
 import { runRedaction } from "./run-redaction";
 
@@ -13,6 +13,7 @@ type RunProgressState = {
 };
 
 type RedactionRunOptions = {
+  jobs?: number;
   language?: DocumentLanguage;
   onSettled: () => void;
   outputDirectory: string;
@@ -20,7 +21,7 @@ type RedactionRunOptions = {
 
 const INITIAL: RunProgressState = { fileIndex: 0, fraction: 0, modelFraction: null, stage: null };
 
-const useRedactionRun = ({ language, onSettled, outputDirectory }: RedactionRunOptions) => {
+const useRedactionRun = ({ jobs, language, onSettled, outputDirectory }: RedactionRunOptions) => {
   const [progress, setProgress] = useState(INITIAL);
   const [result, setResult] = useState<RunResult | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -42,6 +43,7 @@ const useRedactionRun = ({ language, onSettled, outputDirectory }: RedactionRunO
           setResult(
             await runRedaction({
               files,
+              jobs,
               language,
               // Dropping the model fraction here is what makes the download show once:
               // the first sign of real work retires the bar rather than leaving it
@@ -57,7 +59,7 @@ const useRedactionRun = ({ language, onSettled, outputDirectory }: RedactionRunO
             }),
           );
         } catch (error) {
-          setFailure(reasonFrom(error));
+          setFailure(describeError(error));
         } finally {
           onSettled();
         }
@@ -65,7 +67,7 @@ const useRedactionRun = ({ language, onSettled, outputDirectory }: RedactionRunO
 
       void execute();
     },
-    [language, onSettled, outputDirectory],
+    [jobs, language, onSettled, outputDirectory],
   );
 
   return { cancel, failure, progress, result, start };

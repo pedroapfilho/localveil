@@ -1,5 +1,8 @@
 export { chunkText } from "./chunk.ts";
+export { describeError } from "./describe-error.ts";
 export type { TextChunk } from "./chunk.ts";
+export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
+export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";
 export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
 export type { ChunkSpans, Range } from "./merge-spans.ts";
 export { RedactionError } from "./redaction-error.ts";
@@ -26,7 +29,7 @@ export type {
   StageKey,
   WarningKey,
 } from "./types.ts";
-export { UnsupportedFileError } from "./unsupported-file-error.ts";
+export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error.ts";
 export { spansToRects } from "./rects.ts";
 export { buildWordIndex } from "./word-index.ts";
 export type { WordIndex, WordInput } from "./word-index.ts";

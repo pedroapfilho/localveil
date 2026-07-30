@@ -27,7 +27,7 @@ const tagging =
   };
 
 // Renders and recognises for real, which downloads a tesseract language file into the
-// working directory the first time. Detection is still stubbed: the 809 MB of weights
+// working directory the first time. Detection is still stubbed: the weights
 // are the other suite's problem.
 describe.skipIf(process.env.OCR_PIPELINE_TEST === undefined)(
   "redactPath against a real canvas and recogniser",

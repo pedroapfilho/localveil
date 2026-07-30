@@ -12,11 +12,12 @@ import { useRedactionRun } from "./use-redaction-run";
 type Props = {
   initialDirectory: string;
   initialSelection?: ReadonlyArray<string>;
+  jobs?: number;
   language?: DocumentLanguage;
   outputDirectory: string;
 };
 
-const App = ({ initialDirectory, initialSelection, language, outputDirectory }: Props) => {
+const App = ({ initialDirectory, initialSelection, jobs, language, outputDirectory }: Props) => {
   const { exit } = useApp();
   const [files, setFiles] = useState<ReadonlyArray<string> | null>(null);
   const [stopping, setStopping] = useState(false);
@@ -25,6 +26,7 @@ const App = ({ initialDirectory, initialSelection, language, outputDirectory }: 
   // exit back itself once it settles or the summary would sit there with nothing
   // left to do. `exit` is stable, so this does not re-arm the callback every render.
   const { cancel, failure, progress, result, start } = useRedactionRun({
+    jobs,
     language,
     onSettled: exit,
     outputDirectory,

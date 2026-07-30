@@ -39,11 +39,11 @@ describe("ProgressView", () => {
     expect(lastFrame()).not.toContain("stage.detecting");
   });
 
-  it("shows the download and its size while the model is still arriving", () => {
+  it("shows the download while the model is still arriving", () => {
     const { lastFrame } = render(<ProgressView {...defaults} modelFraction={0.1} />);
 
     expect(lastFrame()).toContain("Downloading the detection model");
-    expect(lastFrame()).toContain("349 MB");
+    expect(lastFrame()).toContain("Downloaded once");
     expect(lastFrame()).toContain("10%");
   });
 

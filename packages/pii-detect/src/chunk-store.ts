@@ -82,8 +82,8 @@ const isChunkKey = (key: unknown): key is [string, number] =>
 const rangeFor = (url: string) =>
   IDBKeyRange.bound([url, Number.NEGATIVE_INFINITY], [url, Number.POSITIVE_INFINITY]);
 
-// Keyed by start offset rather than appended to one growing record: rewriting an
-// 800 MB value on every 8 MB that arrives would cost more than the download.
+// Keyed by start offset rather than appended to one growing record: rewriting the
+// whole value on every 8 MB that arrives would cost more than the download.
 const createIndexedDbChunkStore = (): ChunkStore => {
   let pending: Promise<IDBDatabase> | undefined;
 
@@ -119,7 +119,7 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 
       return isManifest(record) ? record : undefined;
     },
-    // A key cursor: `getAll` or a value cursor would read all 809 MB of bodies just to
+    // A key cursor: `getAll` or a value cursor would read every body just to
     // look at their offsets.
     readOffsets: async (url) => {
       const db = await database();
@@ -153,7 +153,7 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 
       return offsets;
     },
-    // A cursor rather than `getAll`, which would put all 809 MB on the heap at once.
+    // A cursor rather than `getAll`, which would put every chunk on the heap at once.
     // The key is `[url, start]`, so the cursor walks them in order already.
     readParts: async (url) => {
       const db = await database();

@@ -1,63 +1,50 @@
+import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
-import type { WorkerRequest } from "./worker-protocol";
+import type { RedactionPoolOptions } from "./worker-pool";
 
-type Handler = (event: unknown) => void;
+const cancelled: Array<string> = [];
+const submitted: Array<{ file: File; id: string; language?: string }> = [];
 
-// jsdom has no Worker. This one records what it was sent and lets a test kill it,
-// which is the whole point: the recovery path cannot be exercised any other way.
-class FakeWorker {
-  static instances: Array<FakeWorker> = [];
+let destroyed = 0;
+let pools = 0;
+let options: RedactionPoolOptions | undefined;
 
-  posted: Array<WorkerRequest> = [];
-  terminated = false;
+// The pool has its own tests. What matters here is that the hook feeds it the right
+// files and turns what it reports back into rows on the page.
+vi.mock("./worker-pool", () => ({
+  createRedactionPool: (given: RedactionPoolOptions) => {
+    options = given;
+    pools += 1;
 
-  private readonly handlers = new Map<string, Set<Handler>>();
+    return {
+      cancel: (id: string) => {
+        cancelled.push(id);
+      },
+      destroy: () => {
+        destroyed += 1;
+      },
+      submit: (job: { file: File; id: string; language?: string }) => {
+        submitted.push(job);
+      },
+    };
+  },
+}));
 
-  constructor() {
-    FakeWorker.instances.push(this);
+const pool = () => {
+  if (options === undefined) {
+    throw new Error("The hook never built a pool");
   }
 
-  addEventListener(type: string, handler: Handler, options?: { signal?: AbortSignal }) {
-    const forType = this.handlers.get(type) ?? new Set<Handler>();
-
-    forType.add(handler);
-    this.handlers.set(type, forType);
-
-    // The hook detaches through an AbortController, so a fake that ignored the
-    // signal would keep delivering events to a worker it had already retired.
-    options?.signal?.addEventListener("abort", () => {
-      forType.delete(handler);
-    });
-  }
-
-  removeEventListener(type: string, handler: Handler) {
-    this.handlers.get(type)?.delete(handler);
-  }
-
-  postMessage(request: WorkerRequest) {
-    this.posted.push(request);
-  }
-
-  terminate() {
-    this.terminated = true;
-  }
-
-  emit(type: string, event: unknown) {
-    // A handler that retires the worker deletes itself from this set mid-loop. A Set
-    // tolerates that: entries removed before they are reached are simply skipped.
-    for (const handler of this.handlers.get(type) ?? []) {
-      handler(event);
-    }
-  }
-}
+  return options;
+};
 
 const Harness = () => {
-  const { clear, remove, submit } = useRedaction();
+  const { clear, model, remove, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -67,13 +54,7 @@ const Harness = () => {
   };
 
   const handleClickForced = () => {
-    submit(
-      [
-        new File(["um"], "um.txt", { type: "text/plain" }),
-        new File(["dois"], "dois.txt", { type: "text/plain" }),
-      ],
-      "pt",
-    );
+    submit([new File(["um"], "um.txt", { type: "text/plain" })], "pt");
   };
 
   const handleRemoveFirst = () => {
@@ -101,288 +82,145 @@ const Harness = () => {
       <button onClick={clear} type="button">
         clear
       </button>
+
+      <output>{model.slowDevice ? "slow" : "fine"}</output>
     </>
   );
 };
 
 const jobsNow = () => useJobStore.getState().jobs;
 
-const workerAt = (index: number) => {
-  const worker = FakeWorker.instances[index];
-
-  if (worker === undefined) {
-    throw new Error(`No worker was created at index ${String(index)}`);
-  }
-
-  return worker;
-};
-
-const filesSentTo = (index: number) =>
-  workerAt(index)
-    .posted.filter((request) => request.type === "redact")
-    .map((request) => request.file.name);
-
-const removeFirst = () => {
-  fireEvent.click(screen.getByRole("button", { name: "remove" }));
-};
-
-const clearAll = () => {
-  fireEvent.click(screen.getByRole("button", { name: "clear" }));
-};
-
 const submitTwo = () => {
   renderWithI18n(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "submit" }));
 };
 
-// The worker takes one file at a time, so a running job is the one it was busy with.
-const startFirstJob = () => {
-  act(() => {
-    workerAt(0).emit("message", {
-      data: { fraction: 0.5, id: jobsNow()[0].id, stage: "stage.detecting", type: "progress" },
-    });
-  });
-};
-
-const waitOutTheSilence = () => {
-  act(() => {
-    vi.advanceTimersByTime(121_000);
-  });
-};
-
-const killFirstWorker = (message = "worker died") => {
-  act(() => {
-    workerAt(0).emit("error", { message });
-  });
-};
-
 beforeEach(() => {
-  FakeWorker.instances = [];
+  cancelled.length = 0;
+  submitted.length = 0;
+  destroyed = 0;
+  pools = 0;
+  options = undefined;
   useJobStore.getState().reset();
-  vi.stubGlobal("Worker", FakeWorker);
+  vi.spyOn(toast, "error").mockImplementation(() => "");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe("useRedaction", () => {
-  it("sends every dropped file to the worker", () => {
+  it("hands every dropped file to the pool", () => {
     submitTwo();
 
-    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
   });
 
-  it("builds one worker for the page, not one per file", () => {
+  it("builds one pool for the page, not one per file", () => {
     submitTwo();
-
-    expect(FakeWorker.instances.length).toBe(1);
-  });
-});
-
-describe("when the worker dies", () => {
-  it("terminates the one that died", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(workerAt(0).terminated).toBe(true);
-  });
-
-  it("fails the file it was working on", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker("out of memory");
-
-    expect(jobsNow()[0]).toMatchObject({ error: "out of memory", status: "error" });
-  });
-
-  it("does not hand that file back, which would only crash again", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(filesSentTo(1)).not.toContain("one.txt");
-  });
-
-  it("gives the files that never ran to a fresh worker", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(FakeWorker.instances.length).toBe(2);
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
-  });
-
-  it("leaves the requeued file queued rather than marking it failed", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
-    expect(jobsNow()[1]).toMatchObject({ status: "queued" });
-  });
-
-  it("takes new files after the crash instead of posting into a corpse", () => {
-    submitTwo();
-    startFirstJob();
-    killFirstWorker();
-
     fireEvent.click(screen.getByRole("button", { name: "submit" }));
 
-    expect(workerAt(1).posted.length).toBe(3);
+    expect(pools).toBe(1);
   });
 
-  it("does not spawn a replacement when nothing was waiting", () => {
-    renderWithI18n(<Harness />);
-    killFirstWorker();
-
-    expect(FakeWorker.instances.length).toBe(1);
-  });
-
-  it("recovers the same way from a reply it could not read", () => {
+  it("sizes the pool from what the device reports", () => {
     submitTwo();
-    startFirstJob();
 
-    act(() => {
-      workerAt(0).emit("messageerror", {});
-    });
-
-    expect(workerAt(0).terminated).toBe(true);
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
+    expect(pool().maxWorkers).toBeGreaterThanOrEqual(1);
   });
 
-  it("ignores a late error from a worker that was already replaced", () => {
+  // On a first visit the weights are still downloading, and a row that says nothing
+  // for a minute reads as a row that is stuck.
+  it("says the model is loading before the worker says anything", () => {
     submitTwo();
-    startFirstJob();
-    killFirstWorker();
 
-    const before = FakeWorker.instances.length;
+    expect(jobsNow()[0].stage).toBe("stage.loadingModel");
+  });
 
-    killFirstWorker();
+  it("tears the pool down when the page goes", () => {
+    const { unmount } = renderWithI18n(<Harness />);
 
-    expect(FakeWorker.instances.length).toBe(before);
+    unmount();
+
+    expect(destroyed).toBe(1);
   });
 });
 
-// A worker killed for running out of memory raises nothing at all: it just stops
-// answering. Only the length of the silence tells it apart from slow work.
-describe("when the worker goes quiet", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("gives up on a worker that says nothing for two minutes", () => {
-    submitTwo();
-    startFirstJob();
-    waitOutTheSilence();
-
-    expect(workerAt(0).terminated).toBe(true);
-  });
-
-  it("recovers exactly as it does from a crash", () => {
-    submitTwo();
-    startFirstJob();
-    waitOutTheSilence();
-
-    expect(jobsNow()[0].status).toBe("error");
-    expect(filesSentTo(1)).toEqual(["two.txt"]);
-  });
-
-  it("waits again each time the worker speaks", () => {
-    submitTwo();
-
-    for (let tick = 0; tick < 3; tick += 1) {
-      act(() => {
-        vi.advanceTimersByTime(90_000);
-      });
-      startFirstJob();
-    }
-
-    expect(workerAt(0).terminated).toBe(false);
-  });
-
-  it("stops watching once every file has settled", () => {
+describe("what the pool reports", () => {
+  it("puts progress on the row it belongs to", () => {
     submitTwo();
 
     act(() => {
-      for (const job of jobsNow()) {
-        workerAt(0).emit("message", {
-          data: {
-            blob: new Blob(["x"]),
-            id: job.id,
-            redactionCount: 0,
-            type: "done",
-            warnings: [],
-          },
-        });
-      }
+      pool().onProgress(jobsNow()[0].id, 0.5, "stage.detecting");
     });
 
-    waitOutTheSilence();
-
-    expect(workerAt(0).terminated).toBe(false);
-    expect(FakeWorker.instances.length).toBe(1);
+    expect(jobsNow()[0]).toMatchObject({
+      progress: 0.5,
+      stage: "stage.detecting",
+      status: "running",
+    });
   });
 
-  it("does not watch a page where nothing was ever dropped", () => {
+  it("finishes a row with the file it got back", () => {
+    submitTwo();
+
+    const blob = new Blob(["x"]);
+
+    act(() => {
+      pool().onDone(jobsNow()[0].id, { blob, redactionCount: 3, warnings: ["warning.noText"] });
+    });
+
+    expect(jobsNow()[0]).toMatchObject({
+      progress: 1,
+      result: { blob, redactionCount: 3, warnings: ["warning.noText"] },
+      stage: "stage.finished",
+      status: "done",
+    });
+  });
+
+  it("fails a row and says so", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onError(jobsNow()[0].id, "out of memory", false);
+    });
+
+    expect(jobsNow()[0]).toMatchObject({ error: "out of memory", status: "error" });
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("one.txt"));
+  });
+
+  it("tells an unsupported file apart from a broken one", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onError(jobsNow()[0].id, "nope", true);
+    });
+
+    const [unsupported] = vi.mocked(toast.error).mock.calls[0];
+
+    act(() => {
+      pool().onError(jobsNow()[1].id, "nope", false);
+    });
+
+    const [failed] = vi.mocked(toast.error).mock.calls[1];
+
+    expect(unsupported).not.toEqual(failed);
+  });
+
+  // The warning outlives the stage it arrived on: a device that fell back to wasm is
+  // still slow once the model is ready.
+  it("keeps the slow device warning after the model is ready", () => {
     renderWithI18n(<Harness />);
-    waitOutTheSilence();
 
-    expect(workerAt(0).terminated).toBe(false);
-  });
+    act(() => {
+      pool().onModelProgress(0.2, "model.slowDevice");
+    });
 
-  it("stops watching a worker whose last file was taken away", () => {
-    submitTwo();
-    startFirstJob();
-    removeFirst();
-    removeFirst();
-    waitOutTheSilence();
+    act(() => {
+      pool().onModelProgress(1, "model.ready");
+    });
 
-    expect(workerAt(0).terminated).toBe(false);
-  });
-});
-
-// Taking a row off the page used to tell only the page. The worker carried on with
-// the file, and everything behind it waited for work nobody wanted.
-describe("removing a file", () => {
-  it("tells the worker to stop as well as the page", () => {
-    submitTwo();
-
-    const id = jobsNow()[0].id;
-
-    removeFirst();
-
-    expect(workerAt(0).posted.at(-1)).toEqual({ id, type: "cancel" });
-  });
-
-  it("takes the row off the page", () => {
-    submitTwo();
-    removeFirst();
-
-    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
-  });
-
-  it("cancels the file that is running, not whichever is first in the list", () => {
-    submitTwo();
-    startFirstJob();
-
-    const running = jobsNow().find((job) => job.status === "running");
-
-    removeFirst();
-
-    expect(workerAt(0).posted.at(-1)).toEqual({ id: running?.id, type: "cancel" });
-  });
-
-  it("leaves the rest of the queue where it was", () => {
-    submitTwo();
-    removeFirst();
-
-    expect(filesSentTo(0)).toEqual(["one.txt", "two.txt"]);
+    expect(screen.getByText("slow")).toBeInTheDocument();
   });
 });
 
@@ -391,66 +229,46 @@ describe("a forced document language", () => {
     renderWithI18n(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
 
-    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
-
-    expect(requests.map((request) => request.language)).toEqual(["pt", "pt"]);
-  });
-
-  // Recovery re-sends jobs from the store, so a language that only lived in the
-  // submit call would quietly fall off after a crash.
-  it("survives the move to a fresh worker after a crash", () => {
-    renderWithI18n(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
-    startFirstJob();
-    killFirstWorker();
-
-    const requeued = workerAt(1).posted.filter((request) => request.type === "redact");
-
-    expect(requeued.map((request) => request.language)).toEqual(["pt"]);
+    expect(submitted.map((job) => job.language)).toEqual(["pt"]);
   });
 
   it("stays absent when the reader left the picker on auto", () => {
     submitTwo();
 
-    const requests = workerAt(0).posted.filter((request) => request.type === "redact");
+    expect(submitted.map((job) => job.language)).toEqual([undefined, undefined]);
+  });
+});
 
-    expect(requests.map((request) => request.language)).toEqual([undefined, undefined]);
+// Taking a row off the page used to tell only the page. The worker carried on with the
+// file, and everything behind it waited for work nobody wanted.
+describe("removing a file", () => {
+  it("tells the pool to stop as well as the page", () => {
+    submitTwo();
+
+    const id = jobsNow()[0].id;
+
+    fireEvent.click(screen.getByRole("button", { name: "remove" }));
+
+    expect(cancelled).toEqual([id]);
+    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
   });
 });
 
 describe("clearing the list", () => {
-  it("empties the page", () => {
-    submitTwo();
-    clearAll();
-
-    expect(jobsNow()).toEqual([]);
-  });
-
-  // Emptying the list without telling the worker would leave it grinding through
-  // files nobody is waiting for, which is the bug the per-row cancel already fixed.
-  it("tells the worker to stop every one of them", () => {
+  it("empties the page and stops every file on it", () => {
     submitTwo();
 
     const ids = jobsNow().map((job) => job.id);
 
-    clearAll();
+    fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
-    expect(workerAt(0).posted.filter((request) => request.type === "cancel")).toEqual(
-      ids.map((id) => ({ id, type: "cancel" })),
-    );
-  });
-
-  it("leaves the worker alive for whatever is dropped next", () => {
-    submitTwo();
-    clearAll();
-
-    expect(workerAt(0).terminated).toBe(false);
-    expect(FakeWorker.instances.length).toBe(1);
+    expect(cancelled).toEqual(ids);
+    expect(jobsNow()).toEqual([]);
   });
 
   it("shrugs off a clear with nothing to clear", () => {
     renderWithI18n(<Harness />);
-    clearAll();
+    fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
     expect(jobsNow()).toEqual([]);
   });
