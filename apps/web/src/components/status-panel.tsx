@@ -44,13 +44,15 @@ const read = (jobs: Array<Job>, model: ModelState): Reading => {
     return { key: "stage.finished", resting: false, trailing: "tally" };
   }
 
-  return { key: "panel.idle", resting: true, trailing: "none" };
+  // Nothing is drawn at rest, so this only names the hidden bar. It reuses the queued
+  // wording rather than carrying a string of its own that renders nowhere.
+  return { key: "status.queued", resting: true, trailing: "none" };
 };
 
-// Always mounted and always the same height, so nothing below it moves as the state
-// changes. At rest the track fades out rather than unmounting: a bar sitting at zero
-// with nothing happening reads as a job that has stalled, and removing it outright
-// would give back the height this box exists to hold.
+// Always mounted and always the same height, so the footer under it never moves. At
+// rest it says nothing and the track fades out: a bar sitting at zero with nothing
+// happening reads as a job that has stalled. The line keeps its height while empty so
+// that the first thing the panel has to say does not push anything.
 const StatusPanel = ({ jobs, model }: StatusPanelProps) => {
   const { locale, t } = useTranslations();
   const reduced = useReducedMotion() ?? false;
@@ -80,7 +82,9 @@ const StatusPanel = ({ jobs, model }: StatusPanelProps) => {
             eight stages per file, and a fade on something that changes every second or
             two is a flicker rather than a transition. */}
         <div aria-live="polite" className="min-w-0">
-          <p className="text-muted-foreground text-base text-pretty sm:text-sm">{t(reading.key)}</p>
+          <p className="text-muted-foreground min-h-lh text-base text-pretty sm:text-sm">
+            {reading.resting ? "" : t(reading.key)}
+          </p>
         </div>
 
         {reading.trailing === "none" ? null : (
@@ -90,7 +94,11 @@ const StatusPanel = ({ jobs, model }: StatusPanelProps) => {
         )}
       </div>
 
+      {/* Hidden from assistive tech while resting rather than only faded out: a bar at
+          zero with no work behind it is not something to announce, and opacity alone
+          leaves it in the tree. */}
       <Progress
+        aria-hidden={reading.resting}
         className={`transition-opacity duration-200 ease-out ${reading.resting ? "opacity-0" : "opacity-100"}`}
         label={t(reading.key)}
         value={fraction}

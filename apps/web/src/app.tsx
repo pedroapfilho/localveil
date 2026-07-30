@@ -94,8 +94,6 @@ const App = () => {
         </header>
 
         <main className="flex flex-col gap-8" id="main">
-          <StatusPanel jobs={jobs} model={model} />
-
           <FileDropzone
             accept={ACCEPTED_FILES}
             formats={t("dropzone.formats")}
@@ -126,6 +124,12 @@ const App = () => {
               </motion.div>
             ) : null}
           </AnimatePresence>
+
+          {/* Last, under the files it reports on. Above the dropzone it was the one
+              thing on the page that changed height on its own, so everything the reader
+              was aiming at moved with it. Down here it has only the footer beneath it,
+              and it holds its height anyway. */}
+          <StatusPanel jobs={jobs} model={model} />
         </main>
       </div>
 

@@ -32,7 +32,6 @@ const pt: Messages = {
   "model.downloading": "Baixando o modelo de detecção",
   "model.ready": "Modelo de detecção pronto",
   "model.slowDevice": "Rodando sem aceleração de GPU, isso vai demorar.",
-  "panel.idle": "Aguardando arquivos",
   "panel.progress": "{done} de {total} ocultados",
   "stage.assembling": "Remontando o arquivo",
   "stage.detecting": "Procurando dados pessoais",

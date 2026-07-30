@@ -95,13 +95,24 @@ describe("App", () => {
     expect(within(files).getByText("Queued")).toBeInTheDocument();
   });
 
-  // The panel is reserved from first paint so that nothing below it moves as the state
-  // changes, which is the reason it reports at rest rather than appearing on demand.
-  it("holds the status panel open before anything has happened", () => {
+  // Last in the column, under the files it reports on. Above the dropzone it was the
+  // one thing on the page that changed height by itself, so everything the reader was
+  // aiming at moved with it.
+  it("puts the status panel below the files", () => {
     renderWithI18n(<App />);
 
-    expect(screen.getByText("Waiting for files")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("0");
+    const main = screen.getByRole("main");
+    const panel = main.querySelector('[data-slot="progress"]')?.closest("main > *");
+
+    expect(panel).toBe(main.lastElementChild);
+  });
+
+  it("says nothing in the panel before anything has happened", () => {
+    renderWithI18n(<App />);
+
+    const panel = screen.getByRole("main").lastElementChild;
+
+    expect(panel?.querySelector("p")?.textContent).toBe("");
   });
 
   it("reports the model download in the panel it already has", () => {

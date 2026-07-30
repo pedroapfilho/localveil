@@ -31,18 +31,27 @@ const SLOW = "Running without GPU acceleration, this will be slow.";
 
 describe("StatusPanel", () => {
   // A bar sitting at zero with nothing happening reads as a job that has stalled, so at
-  // rest the track fades out while the box keeps the height it reserved.
-  it("rests on a line, with the track faded out", () => {
-    setup([]);
+  // rest the panel says nothing and fades the track out, while keeping its height.
+  it("says nothing at all at rest", () => {
+    const { container } = setup([]);
 
-    expect(screen.getByText("Waiting for files")).toBeInTheDocument();
-    expect(screen.getByRole("progressbar").className).toContain("opacity-0");
+    expect(container.querySelector("p")?.textContent).toBe("");
+    expect(screen.queryByText("0%")).toBeNull();
   });
 
-  it("shows no number at rest", () => {
-    setup([]);
+  it("fades the track out at rest and takes it out of the tree", () => {
+    const { container } = setup([]);
 
-    expect(screen.queryByText("0%")).toBeNull();
+    const bar = container.querySelector('[data-slot="progress"]');
+
+    expect(bar?.className).toContain("opacity-0");
+    expect(bar?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("keeps the line's height while it has nothing to say", () => {
+    const { container } = setup([]);
+
+    expect(container.querySelector("p")?.className).toContain("min-h-lh");
   });
 
   it("names the model download and counts it as part of the whole job", () => {
