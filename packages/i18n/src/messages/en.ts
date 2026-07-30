@@ -30,7 +30,7 @@ const en = {
   "model.downloading": "Downloading the detection model",
   "model.ready": "Detection model ready",
   "model.slowDevice": "Running without GPU acceleration, this will be slow.",
-  "panel.progress": "{done} of {total} redacted",
+  "panel.label": "Redaction progress",
   "stage.assembling": "Rebuilding the file",
   "stage.detecting": "Looking for personal data",
   "stage.extracting": "Reading the document",

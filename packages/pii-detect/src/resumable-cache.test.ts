@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChunkStore, Manifest } from "./chunk-store.ts";
+import type { CacheProgress } from "./resumable-cache.ts";
 import { createResumableCache } from "./resumable-cache.ts";
 
 const URL_UNDER_TEST = "https://example.com/model.onnx_data";
+const OTHER_URL = "https://example.com/tokenizer.json";
 
 const BODY = Uint8Array.from({ length: 12 }, (_entry, index) => index);
 
@@ -213,7 +215,7 @@ describe("createResumableCache", () => {
   it("reports progress that reaches the whole file", async () => {
     memoryCaches();
 
-    const onProgress = vi.fn<(fraction: number) => void>();
+    const onProgress = vi.fn<(progress: CacheProgress) => void>();
 
     await createResumableCache({
       chunkSize: 5,
@@ -222,7 +224,37 @@ describe("createResumableCache", () => {
       store: memoryStore(),
     }).match(URL_UNDER_TEST);
 
-    expect(onProgress.mock.calls.at(-1)).toEqual([1]);
+    expect(onProgress.mock.calls.at(-1)?.[0]).toEqual({
+      loaded: BODY.length,
+      name: URL_UNDER_TEST,
+      total: BODY.length,
+    });
+  });
+
+  // The cache is handed one URL at a time and never learns how many are coming, so a
+  // total added up across them would be the total so far: a small file finishing would
+  // read as the whole job being done. Each file is reported on its own instead.
+  it("reports each file against its own size, not against the ones before it", async () => {
+    memoryCaches();
+
+    const onProgress = vi.fn<(progress: CacheProgress) => void>();
+    const cache = createResumableCache({
+      chunkSize: 5,
+      fetchRange: rangeServer(),
+      onProgress,
+      store: memoryStore(),
+    });
+
+    await cache.match(URL_UNDER_TEST);
+    await cache.match(OTHER_URL);
+
+    const names = new Set(onProgress.mock.calls.map(([progress]) => progress.name));
+
+    expect(names).toEqual(new Set([URL_UNDER_TEST, OTHER_URL]));
+
+    for (const [progress] of onProgress.mock.calls) {
+      expect(progress.total).toBe(BODY.length);
+    }
   });
 
   it("writes a small file straight through without downloading anything", async () => {

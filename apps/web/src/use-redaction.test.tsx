@@ -1,3 +1,4 @@
+import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -5,6 +6,10 @@ import { hasCompletedJobs, useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
 import type { WorkerRequest } from "./worker-protocol";
+
+vi.mock("@repo/ui/components/sonner", () => ({
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+}));
 
 type Handler = (event: unknown) => void;
 
@@ -59,7 +64,7 @@ class FakeWorker {
 }
 
 const Harness = () => {
-  const { clear, remove, removeMany, setLanguage, submit } = useRedaction();
+  const { clear, model, remove, removeMany, setLanguage, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -138,6 +143,8 @@ const Harness = () => {
       <button onClick={clear} type="button">
         clear
       </button>
+
+      <output>{model.fraction}</output>
     </>
   );
 };
@@ -638,6 +645,57 @@ describe("a superseded run answering late", () => {
     emitFor(after, { ...finishing, type: "done" });
 
     expect(jobsNow()[0]).toMatchObject({ status: "done" });
+  });
+});
+
+// The bar beside it has no words to spare, so this is said in a toast instead.
+describe("a device without GPU acceleration", () => {
+  // The module mock's own functions outlive `restoreAllMocks`, which only puts back
+  // what `spyOn` replaced.
+  beforeEach(() => {
+    vi.mocked(toast.warning).mockClear();
+  });
+
+  const reportSlow = () => {
+    act(() => {
+      workerAt(0).emit("message", {
+        data: { fraction: 0, stage: "model.slowDevice", type: "model-progress" },
+      });
+    });
+  };
+
+  it("says so once", () => {
+    submitTwo();
+    reportSlow();
+
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
+      "Running without GPU acceleration, this will be slow.",
+    );
+  });
+
+  // The detector raises it again when WebGPU fails and the load falls back to wasm.
+  it("does not say so twice", () => {
+    submitTwo();
+    reportSlow();
+    reportSlow();
+
+    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
+  });
+
+  // It carries a fraction of zero, and the fallback raises it after a whole download
+  // attempt has already finished.
+  it("does not send the bar back to empty", () => {
+    submitTwo();
+
+    act(() => {
+      workerAt(0).emit("message", {
+        data: { fraction: 0.8, stage: "model.downloading", type: "model-progress" },
+      });
+    });
+
+    reportSlow();
+
+    expect(screen.getByRole("status").textContent).toBe("0.8");
   });
 });
 

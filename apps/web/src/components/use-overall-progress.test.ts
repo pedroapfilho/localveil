@@ -10,7 +10,6 @@ type Props = { jobs: Array<Job>; model: ModelState };
 
 const model = (patch: Partial<ModelState> = {}): ModelState => ({
   fraction: 0,
-  slowDevice: false,
   ...patch,
 });
 

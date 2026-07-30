@@ -107,12 +107,10 @@ describe("App", () => {
     expect(panel).toBe(main.lastElementChild);
   });
 
-  it("says nothing in the panel before anything has happened", () => {
+  it("shows no progress bar before anything has happened", () => {
     renderWithI18n(<App />);
 
-    const panel = screen.getByRole("main").lastElementChild;
-
-    expect(panel?.querySelector("p")?.textContent).toBe("");
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("reports the model download in the panel it already has", () => {
@@ -130,8 +128,9 @@ describe("App", () => {
 
     // The download shares one bar with the file waiting behind it, so a half-finished
     // download is a quarter of the whole job rather than half of a bar that restarts.
-    expect(screen.getByText("Downloading the detection model")).toBeInTheDocument();
-    expect(screen.getByText("25%")).toBeInTheDocument();
+    const bar = screen.getByRole("progressbar", { name: "Redaction progress" });
+
+    expect(bar.getAttribute("aria-valuenow")).toBe("25");
   });
 
   it("drops a file from the list when it is removed", async () => {

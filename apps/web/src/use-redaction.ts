@@ -16,9 +16,9 @@ const ZIP_NAME = "localveil.zip";
 // several times per page even on the slow wasm path.
 const SILENCE_LIMIT = 120_000;
 
-type ModelState = { fraction: number; slowDevice: boolean; stage?: ModelStageKey };
+type ModelState = { fraction: number; stage?: ModelStageKey };
 
-const INITIAL_MODEL: ModelState = { fraction: 0, slowDevice: false };
+const INITIAL_MODEL: ModelState = { fraction: 0 };
 
 const triggerDownload = (blob: Blob) => {
   const url = URL.createObjectURL(blob);
@@ -63,6 +63,10 @@ const useRedaction = () => {
   const workerRef = useRef<Worker | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translateRef = useRef(t);
+
+  // The detector raises this twice on the fallback path, and it is the same news both
+  // times.
+  const saidSlowRef = useRef(false);
 
   const armWatchdogRef = useRef<(() => void) | null>(null);
 
@@ -154,19 +158,19 @@ const useRedaction = () => {
         // A slow device is a notice about the machine, not a measurement of the
         // download, and it is reported with a fraction of zero. Letting it through as
         // progress sent the bar back to empty on the wasm fallback, which is raised
-        // after a whole download attempt has already finished.
+        // after a whole download attempt has already finished. It is said once, in a
+        // toast, because the bar beside it has no words to spare.
         if (message.type === "model-progress" && message.stage === "model.slowDevice") {
-          setModel((current) => ({ ...current, slowDevice: true }));
+          if (!saidSlowRef.current) {
+            saidSlowRef.current = true;
+            toast.warning(translateRef.current("model.slowDevice"));
+          }
 
           return;
         }
 
         if (message.type === "model-progress") {
-          setModel((current) => ({
-            fraction: message.fraction,
-            slowDevice: current.slowDevice,
-            stage: message.stage,
-          }));
+          setModel({ fraction: message.fraction, stage: message.stage });
 
           return;
         }
