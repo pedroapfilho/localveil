@@ -77,4 +77,15 @@ describe("StatusPanel", () => {
 
     expect(bar().getAttribute("aria-valuenow")).toBe("100");
   });
+
+  // A failed file has settled too. Reading its last progress instead left the bar
+  // parked at a partial percentage over a queue that had nothing left to do.
+  it("fills even when every file failed", () => {
+    setup(
+      [job({ error: "boom", progress: 0.4, status: "error" })],
+      model({ fraction: 1, stage: "model.ready" }),
+    );
+
+    expect(bar().getAttribute("aria-valuenow")).toBe("100");
+  });
 });

@@ -105,6 +105,8 @@ const useJobStore = create<JobStore>((set) => ({
 
 type CompletedJob = Job & { result: JobResult };
 
+// Settled, whether or not it produced anything. A file that failed has finished: it is
+// not going to move again.
 const isFinished = (job: Job) => job.status === "done" || job.status === "error";
 
 const completedJobs = (jobs: Array<Job>): Array<CompletedJob> =>
@@ -117,5 +119,5 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
-export { completedJobs, failedJobs, hasCompletedJobs, useJobStore };
+export { completedJobs, failedJobs, hasCompletedJobs, isFinished, useJobStore };
 export type { CompletedJob, Job, JobResult, JobStatus };

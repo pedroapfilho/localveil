@@ -114,3 +114,80 @@ describe("useOverallProgress", () => {
     expect(result.current).toBe(0.75);
   });
 });
+
+// A file that fails stops reporting wherever it got to. Leaving that last fraction in
+// the sum held the bar short of full for a queue that had entirely finished.
+describe("a file that failed", () => {
+  const ready = model({ fraction: 1, stage: "model.ready" });
+
+  const failed = (patch: Partial<Job> = {}) =>
+    job({ error: "boom", progress: 0.4, status: "error", ...patch });
+
+  it("counts for its whole share rather than for where it stopped", () => {
+    const { rerender, result } = setup({ jobs: [], model: ready });
+
+    rerender({ jobs: [failed()], model: ready });
+
+    expect(result.current).toBe(1);
+  });
+
+  it("lets a queue that failed outright still read as finished", () => {
+    const { rerender, result } = setup({ jobs: [], model: ready });
+
+    rerender({ jobs: [failed(), failed({ id: "job-2", progress: 0 })], model: ready });
+
+    expect(result.current).toBe(1);
+  });
+
+  it("fills alongside the files that succeeded", () => {
+    const { rerender, result } = setup({ jobs: [], model: ready });
+
+    rerender({
+      jobs: [failed(), job({ id: "job-2", progress: 1, status: "done" })],
+      model: ready,
+    });
+
+    expect(result.current).toBe(1);
+  });
+
+  it("still leaves room for a file that is only part way through", () => {
+    const { rerender, result } = setup({ jobs: [], model: ready });
+
+    rerender({
+      jobs: [failed(), job({ id: "job-2", progress: 0.5, status: "running" })],
+      model: ready,
+    });
+
+    expect(result.current).toBe(0.75);
+  });
+
+  // A file the worker cannot read fails before the model is ever asked for, so the
+  // model's own share of the bar would otherwise never be filled in.
+  it("fills even when the batch failed before the model was needed", () => {
+    const { rerender, result } = setup({ jobs: [], model: model() });
+
+    rerender({ jobs: [failed({ progress: 0 })], model: model() });
+
+    expect(result.current).toBe(1);
+  });
+
+  // The crash path fails whichever file was running and hands the rest to a new worker,
+  // so a failure lands mid-batch with work still queued behind it.
+  it("never sends the bar backwards when a file fails mid-batch", () => {
+    const { rerender, result } = setup({ jobs: [], model: ready });
+
+    const seen: Array<number> = [];
+
+    const step = (jobs: Array<Job>) => {
+      rerender({ jobs, model: ready });
+      seen.push(result.current);
+    };
+
+    step([job({ progress: 0.4, status: "running" }), job({ id: "job-2" })]);
+    step([failed(), job({ id: "job-2", progress: 0.5, status: "running" })]);
+    step([failed(), job({ id: "job-2", progress: 1, status: "done" })]);
+
+    expect(seen).toEqual([...seen].toSorted((left, right) => left - right));
+    expect(seen.at(-1)).toBe(1);
+  });
+});

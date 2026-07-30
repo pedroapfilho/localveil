@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { Job } from "../store";
+import { isFinished } from "../store";
 import type { ModelState } from "../use-redaction";
 
 type Batch = { busy: boolean; countsModel: boolean };
@@ -33,11 +34,22 @@ const useOverallProgress = (jobs: Array<Job>, model: ModelState) => {
     return 0;
   }
 
+  // Nothing left to do is full, whatever happened on the way. A batch of files the
+  // worker cannot read fails before the model is ever asked for, so the model's own
+  // share would otherwise sit unfilled over a queue that had already settled.
+  if (jobs.every((job) => isFinished(job))) {
+    return 1;
+  }
+
   // Counted as finished once the model is ready rather than read off the fraction: the
   // last progress message and the ready message are two separate posts, and the gap
   // between them would otherwise show as the bar stalling a hair short.
   const modelDone = model.stage === "model.ready" ? 1 : model.fraction;
-  const done = jobs.reduce((sum, job) => sum + job.progress, 0);
+
+  // A file that failed counts for its whole share. It stops reporting wherever it got
+  // to, and leaving that last fraction in the sum held the bar short of full for a
+  // queue that had entirely finished.
+  const done = jobs.reduce((sum, job) => sum + (isFinished(job) ? 1 : job.progress), 0);
 
   if (!countsModel) {
     return Math.min(1, done / jobs.length);
