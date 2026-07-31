@@ -60,20 +60,30 @@ const hangUp = (channel: string) => {
   channels.delete(channel);
 };
 
-globalThis.addEventListener("message", (event: MessageEvent<ModelRequest>) => {
-  if (event.data.type === "disconnect") {
-    hangUp(event.data.channel);
+// ONNX Runtime starts its wasm threads by loading the module it was bundled into,
+// which is this file, so a copy of everything here comes back up inside each of them.
+// That copy is emscripten's thread and not a second model host: what it receives on
+// this global is emscripten's own load command, which has no port on it, and reading
+// one off it throws where the page can only see the model worker die. emscripten
+// names those threads, and the name is the one thing that tells them apart.
+const isEmscriptenThread = self.name.startsWith("em-pthread");
 
-    return;
-  }
+if (!isEmscriptenThread) {
+  globalThis.addEventListener("message", (event: MessageEvent<ModelRequest>) => {
+    if (event.data.type === "disconnect") {
+      hangUp(event.data.channel);
 
-  const { channel, port } = event.data;
+      return;
+    }
 
-  channels.set(channel, port);
-  port.addEventListener("close", () => {
-    hangUp(channel);
+    const { channel, port } = event.data;
+
+    channels.set(channel, port);
+    port.addEventListener("close", () => {
+      hangUp(channel);
+    });
+
+    void warmUp();
+    serveDetect(port, detect);
   });
-
-  void warmUp();
-  serveDetect(port, detect);
-});
+}
