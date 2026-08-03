@@ -1,6 +1,3 @@
-// The stock filter factory builds SVG filter elements and appends them to the
-// document body. Returning "none" is what pdf.js's own base class does, and it is
-// what runs when a page uses no filters at all.
 class NoFilterFactory {
   addFilter() {
     return "none";

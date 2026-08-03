@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { SpanCandidate } from "./gliner-decode.ts";
 import { decodeSpans, suppressOverlaps, toLogits } from "./gliner-decode.ts";
 
-// dims: [1, words, widths, entities]
 const logitsOf = (words: number, widths: number, entities: number, values: Array<number>) => ({
   data: values,
   dims: [1, words, widths, entities],
@@ -11,7 +10,6 @@ const logitsOf = (words: number, widths: number, entities: number, values: Array
 
 describe("decodeSpans", () => {
   it("keeps a span at or above the threshold and drops the rest", () => {
-    // Two words, width 1, one entity: word 0 confident, word 1 not.
     const logits = logitsOf(2, 1, 1, [5, -5]);
 
     expect(decodeSpans(logits, 2, 1, 0.5)).toEqual([
@@ -20,7 +18,6 @@ describe("decodeSpans", () => {
   });
 
   it("ignores spans that run past the last word", () => {
-    // One word, widths up to 2: the two-word span cannot exist.
     const logits = logitsOf(1, 2, 1, [5, 5]);
 
     expect(decodeSpans(logits, 1, 1, 0.5).length).toBe(1);

@@ -12,8 +12,6 @@ import {
   taskAt,
 } from "./worker-pool-fixture";
 
-// The factories import for themselves: vi.mock is hoisted above this file's own
-// imports, so a binding from up there is not initialised yet when they run.
 vi.mock("./redact-worker.ts?worker&url", () => ({ default: "/redact-worker.js" }));
 vi.mock("./model-host", async () => {
   const fixture = await import("./worker-pool-fixture");
@@ -119,7 +117,6 @@ describe("createRedactionPool", () => {
     expect(reported.errors[0].unsupported).toBe(true);
   });
 
-  // Past maxQueueSize, workerpool throws where everything else here rejects.
   it("reports a full queue rather than throwing at the caller, and hangs up", () => {
     const pool = build();
 
@@ -134,8 +131,6 @@ describe("createRedactionPool", () => {
   });
 });
 
-// Cancelling makes the task reject, and a row that is gone has nothing to report to.
-// That is how "Could not redact ." reached the screen.
 describe("cancelling a file", () => {
   it("says nothing about a file the reader took away", () => {
     const pool = build();
@@ -156,9 +151,6 @@ describe("cancelling a file", () => {
     }).not.toThrow();
   });
 
-  // workerpool keeps forwarding progress events after a cancel, from its own tracking
-  // map. Acting on one used to flip the row back to running, and since nothing would
-  // settle it again the ZIP button never re-enabled.
   it("ignores progress that arrives after the file is gone", () => {
     const pool = build();
 
@@ -180,8 +172,6 @@ describe("cancelling a file", () => {
   });
 });
 
-// A worker killed for running out of memory raises nothing at all: it just stops
-// answering. Only the length of the silence tells it apart from slow work.
 describe("when a worker goes quiet", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -191,8 +181,6 @@ describe("when a worker goes quiet", () => {
     vi.useRealTimers();
   });
 
-  // The timer starts on the first thing the worker says: a file can sit in the queue
-  // for as long as the ones ahead of it take.
   it("leaves a file still waiting for a worker alone", () => {
     const pool = build(1);
 
@@ -226,8 +214,6 @@ describe("when a worker goes quiet", () => {
     expect(reported.errors).toEqual([]);
   });
 
-  // On a first visit every file blocks waiting for the weights, so without this the
-  // whole batch trips the timer while the download is plainly still running.
   it("counts the model downloading as a sign of life", () => {
     const pool = build();
 
@@ -278,8 +264,6 @@ describe("when the model is lost", () => {
     expect(reported.errors.map((entry) => entry.id)).toEqual(["a"]);
   });
 
-  // The files behind it never got a turn and are innocent. Their ports died with the
-  // model, so they go back through the queue with fresh ones.
   it("hands a file that never started back with a new channel", () => {
     const pool = build();
 
@@ -311,8 +295,6 @@ describe("when the model is lost", () => {
     expect(reported.modelLost).toEqual(["The detection model stopped answering"]);
   });
 
-  // The host respawns and the files it was holding go back through the queue, so the
-  // page has nothing to tell anyone about.
   it("stays quiet about a loss it recovers from", () => {
     const pool = build();
 
@@ -324,8 +306,6 @@ describe("when the model is lost", () => {
 });
 
 describe("destroying the pool", () => {
-  // workerpool rejects every task it kills. A job still on the books would be reported
-  // as a failure, toast and all, to a page that has already gone.
   it("says nothing about the files it kills on the way out", () => {
     const pool = build();
 

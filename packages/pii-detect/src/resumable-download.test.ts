@@ -64,9 +64,6 @@ const startsOf = (calls: Array<Span>) =>
     .map(({ start }) => start)
     .toSorted((left, right) => left - right);
 
-// A server that answers ranges out of one in-memory body, the way the real CDN does.
-// `delayFor` decides how long each range takes, which is how a test makes the answers
-// come back in an order other than the one they were asked in.
 const rangeServer = (body: Uint8Array, etag = "v1", delayFor?: (span: Span) => number) => {
   const calls: Array<Span> = [];
   let inFlight = 0;
@@ -255,7 +252,6 @@ describe("downloadResumable", () => {
 
       served += 1;
 
-      // Fail on the second real chunk, leaving the first one banked.
       if (served > 2) {
         return Promise.reject(new Error("connection lost"));
       }

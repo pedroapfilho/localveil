@@ -21,9 +21,6 @@ const CollapsibleTrigger = ({
   />
 );
 
-// The height comes from Base UI as a variable because only it can measure a panel
-// that is closed. Animated in CSS rather than by a spring so a panel opened during a
-// scroll does not fight the scroll for frames.
 const CollapsiblePanel = ({
   className,
   ...props

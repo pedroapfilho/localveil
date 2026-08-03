@@ -1,5 +1,3 @@
-// The shared setup file loads these matchers at run time, but it lives in another
-// package, so this is what puts their types in front of `tsc` here.
 import "@testing-library/jest-dom/vitest";
 
 import { I18nProvider } from "@repo/i18n";

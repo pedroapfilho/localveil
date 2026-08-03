@@ -16,9 +16,6 @@ vi.mock("@repo/redact-node", () => ({
   SUPPORTED_EXTENSIONS: [".txt", ".md"],
 }));
 
-// The pool is stood in for rather than started: worker_threads would need the real
-// model behind them, and what these tests are about is how the run gathers results.
-// The RPC that carries detection between the two has its own tests in redact-core.
 vi.mock("workerpool", () => ({
   default: {
     pool: () => ({

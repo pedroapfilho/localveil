@@ -14,14 +14,10 @@ type ReadOptions = {
 
 const PROBE = "en";
 
-// Acting on a weak guess costs a second OCR pass and can make the result worse, so
-// an uncertain reading stays with what the probe already produced.
 const MIN_CONFIDENCE = 0.5;
 
 const textOf = (recognition: Recognition) => recognition.words.map((word) => word.text).join(" ");
 
-// An image carries no text until it has been read once, so the language cannot be
-// known in advance. A caller that already knows it skips the probe.
 const readImageText = async (
   image: ImageLike,
   options: ReadOptions = {},

@@ -5,9 +5,6 @@ import { describe, expect, it } from "vitest";
 import { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
 import type { Span } from "./types.ts";
 
-// worker_threads gives the same MessagePort shape the browser does, so the transport
-// under test here is the real one rather than a stand-in for it. The ports are passed
-// straight through with no assertion, which is what proves that claim.
 const wire = () => {
   const channel = new MessageChannel();
 
@@ -61,8 +58,6 @@ describe("detect RPC", () => {
       return [];
     });
 
-    // A port each, the way the pool hands one to every file it starts. A queue per
-    // port would be a queue per file, which is what this is here to catch.
     const first = wire();
     const second = wire();
 
@@ -117,8 +112,6 @@ describe("detect RPC", () => {
 
     const detect = createDetectClient(client);
 
-    // A MessagePort takes no target origin; the rule is written for the window-to-
-    // window call of the same name.
     /* oxlint-disable unicorn/require-post-message-target-origin */
     server.postMessage({ hello: true });
     client.postMessage({ hello: true });

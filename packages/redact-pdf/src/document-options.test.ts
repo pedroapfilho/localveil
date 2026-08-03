@@ -8,9 +8,6 @@ import { documentOptions } from "./index.ts";
 const options = documentOptions(new Uint8Array([1, 2, 3]));
 
 describe("documentOptions", () => {
-  // This one line is the difference between a readable page and a page of .notdef
-  // boxes, and nothing else in the suite would notice it going missing: the PDF
-  // fixture uses Helvetica, which renders without an embedded font either way.
   it("draws glyph outlines rather than asking for a font face there is no document to hold", () => {
     expect(options.disableFontFace).toBe(true);
   });

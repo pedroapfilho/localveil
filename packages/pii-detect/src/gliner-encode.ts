@@ -5,9 +5,7 @@ type TokenFrame = { cls: number; sep: number };
 type GlinerInput = {
   attentionMask: Array<number>;
   inputIds: Array<number>;
-  // Indices into the caller's word list for words that produced at least one
-  // token. The model numbers words by this filtered order, so span decoding must
-  // map back through it or every offset after a dropped word would shift.
+
   keptWords: Array<number>;
   spanIdx: Array<number>;
   spanMask: Array<number>;
@@ -65,8 +63,7 @@ const encodeGlinerInput = ({
     ids.forEach((id, at) => {
       attentionMask.push(1);
       inputIds.push(id);
-      // The model gathers one vector per word from the first token carrying its
-      // number; later tokens of the same word stay unnumbered.
+
       wordsMask.push(at === 0 ? keptWords.length : 0);
     });
   });

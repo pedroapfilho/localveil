@@ -56,15 +56,11 @@ const FileDropzone = ({
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     report(event.target.files);
-    // Clearing the value is what lets the same file be picked twice in a row: an
-    // unchanged value fires no change event.
+
     event.target.value = "";
   };
 
   return (
-    // The drag handlers sit on a presentational wrapper rather than on the label:
-    // a label carries no interactive role, and the real control is the nested
-    // input, which is visually hidden and so cannot be the drop surface itself.
     <div
       className="w-full"
       onDragLeave={handleDragLeave}
@@ -72,9 +68,6 @@ const FileDropzone = ({
       onDrop={handleDrop}
       role="presentation"
     >
-      {/* Making the zone the label means a click anywhere in it reaches the input
-          through native label activation, and keyboard users get the input's own
-          Enter and Space behaviour with no key handling of ours. */}
       <label
         className={cn(
           "group border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/70 has-[input:focus-visible]:ring-ring has-[input:focus-visible]:ring-offset-background data-dragging:border-primary data-dragging:bg-primary/5 flex w-full cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed px-6 py-12 text-center has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-offset-2 data-disabled:cursor-not-allowed data-disabled:opacity-60 sm:py-14",
@@ -84,8 +77,6 @@ const FileDropzone = ({
         data-dragging={dragging || undefined}
         data-slot="file-dropzone"
       >
-        {/* The ring reads as the surface the file lands on, so it moves with the
-            drag state rather than sitting still while the border changes. */}
         <span className="bg-background ring-foreground/10 group-data-dragging:ring-primary/40 mb-3 flex size-11 items-center justify-center rounded-full shadow-xs ring-1 sm:size-10">
           <UploadIcon aria-hidden className="text-muted-foreground size-5 shrink-0 sm:size-4" />
         </span>

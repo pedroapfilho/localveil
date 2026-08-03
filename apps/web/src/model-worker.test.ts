@@ -15,9 +15,6 @@ vi.mock("@repo/redact-core", () => ({
   },
 }));
 
-// The module registers on the worker global as it loads and never detaches, so reading
-// listeners back off the global would show every earlier import's as well. Collecting
-// them as they go on is what keeps one load's answer separate from another's.
 const loadWorkerNamed = async (name: string) => {
   const captured: Array<EventListener> = [];
   const register = vi.spyOn(globalThis, "addEventListener").mockImplementation((type, listener) => {
@@ -53,17 +50,12 @@ describe("model worker", () => {
 
     listen?.(connectRequest(port2));
 
-    // Compared by identity rather than through a matcher: a MessagePort is cyclic, and
-    // the walk a matcher makes over one never comes back.
     expect(serveDetect.mock.calls.some(([served]) => served === port2)).toBe(true);
 
     port1.close();
     port2.close();
   });
 
-  // ONNX Runtime starts its wasm threads by reloading this module, and emscripten's
-  // load command carries no port. Answering it as a connect request throws where the
-  // page reads it as the model dying, which fails every file on the page.
   it("stands down when it comes up as an ONNX Runtime thread", async () => {
     const listeners = await loadWorkerNamed("em-pthread-3");
 

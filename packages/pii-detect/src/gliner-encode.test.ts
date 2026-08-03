@@ -4,8 +4,6 @@ import { encodeGlinerInput } from "./gliner-encode.ts";
 
 const FRAME = { cls: 1, sep: 2 };
 
-// Deterministic multi-token stub: <<ENT>> and <<SEP>> are single markers, every
-// other word becomes one token per character.
 const encodeWord = (word: string) => {
   if (word === "<<ENT>>") {
     return [8];
@@ -44,7 +42,6 @@ describe("encodeGlinerInput", () => {
       words: ["ab", "c"],
     });
 
-    // cls, <<ENT>>, i, d, <<SEP>>, a, b, c, sep
     expect(input.wordsMask).toEqual([0, 0, 0, 0, 0, 1, 0, 2, 0]);
   });
 
@@ -58,7 +55,7 @@ describe("encodeGlinerInput", () => {
     });
 
     expect(input.keptWords).toEqual([0, 2]);
-    // cls, <<SEP>>, a, b, c, sep
+
     expect(input.wordsMask).toEqual([0, 0, 1, 0, 2, 0]);
   });
 

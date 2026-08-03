@@ -2,9 +2,6 @@ import type { SourceWord } from "./split-words.ts";
 
 type WordChunk = { end: number; start: number; words: Array<SourceWord> };
 
-// Chunked by words rather than characters because the model's context is a word
-// count; a character budget can silently overshoot it on short-word text, and
-// whatever falls off the end is PII nobody scanned.
 const chunkWords = (words: Array<SourceWord>, size: number, overlap: number): Array<WordChunk> => {
   if (overlap >= size) {
     throw new RangeError(

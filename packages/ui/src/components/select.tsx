@@ -44,9 +44,6 @@ const SelectContent = ({
 }: ComponentProps<typeof SelectPrimitive.Popup>) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Positioner alignItemWithTrigger={false} sideOffset={6}>
-      {/* Scaled from the trigger rather than from its own middle, which is where a
-          menu opened by a control actually comes from. Base UI hands the origin down
-          as a variable because only it knows which side there was room on. */}
       <SelectPrimitive.Popup
         className={cn(
           "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 z-50 min-w-(--anchor-width) origin-(--transform-origin) overflow-hidden rounded-xl p-1 shadow-md ring-1 duration-150",

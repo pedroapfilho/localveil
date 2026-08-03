@@ -34,8 +34,6 @@ describe("legibleWords", () => {
     expect(kept(LEGIBLE_WORD - 1)).toEqual([]);
   });
 
-  // A driving licence recognised 244 words, 56 of them above 90, and still averaged
-  // 46. The old page-average floor threw all 244 away.
   it("keeps the readable half of a page the average would have condemned", () => {
     const page = reading(95, 92, 91, 4, 7, 11, 3, 9);
 
@@ -43,8 +41,6 @@ describe("legibleWords", () => {
     expect(legibleWords(page).length).toBe(3);
   });
 
-  // What the old floor existed for: fonts that did not resolve, recognised as
-  // gibberish, then tagged by the model as one long name and painted over end to end.
   it("keeps nothing at all from a page of tofu", () => {
     expect(legibleWords(reading(21, 8, 14, 30, 19))).toEqual([]);
   });
@@ -67,7 +63,6 @@ describe("muchWasUnreadable", () => {
     expect(muchWasUnreadable(reading(95, 88, 74))).toBe(false);
   });
 
-  // Every real scan has a stray mark under the floor.
   it("stays quiet about the odd word it could not make out", () => {
     expect(muchWasUnreadable(reading(95, 92, 88, 91, 90, 87, 94, 12))).toBe(false);
   });
@@ -76,7 +71,6 @@ describe("muchWasUnreadable", () => {
     expect(muchWasUnreadable(reading(95, 92, 12, 8))).toBe(true);
   });
 
-  // The measured shape of a driving licence: mostly background, fields in a minority.
   it("speaks up about a page that was mostly background", () => {
     expect(muchWasUnreadable(reading(95, 91, 4, 7, 11, 3, 9, 14))).toBe(true);
   });

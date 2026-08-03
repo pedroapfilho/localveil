@@ -66,8 +66,6 @@ describe("detectLanguage", () => {
     expect(strong.confidence).toBeGreaterThan(weak.confidence);
   });
 
-  // An identity card carries almost no prose: the vote has to come from name
-  // particles and the field labels printed on it.
   it("recognises Portuguese from the fields of an identity document", () => {
     const { confidence, language } = detectLanguage(
       "NOME JOSE DA SILVA FILIACAO MARIA DA SILVA DATA NASCIMENTO VALIDADE EMISSAO ASSINATURA",

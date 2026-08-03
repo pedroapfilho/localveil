@@ -8,10 +8,10 @@ import {
   tokensFromSpans,
 } from "@repo/redact-core";
 
+import { betterReading, binarizeForOcr, shouldRetryOcr } from "./ocr-retry.ts";
+
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-// A file dragged out of some archives and file managers arrives with no type at
-// all, so the name has to be able to answer on its own.
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
   ".bmp",
@@ -55,13 +55,20 @@ const imageRedactor: Redactor = {
 
     onProgress(0.1, "stage.recognising");
 
-    // The file goes to the recogniser rather than the bitmap: Tesseract decodes it
-    // itself, and its boxes come back in the image's own pixels, which is the space
-    // the canvas draws in.
-    const reading = await readImageText(
+    let reading = await readImageText(
       file,
       options?.language === undefined ? {} : { known: options.language },
     );
+
+    if (shouldRetryOcr(reading)) {
+      const prepared = binarizeForOcr(bitmap);
+      const retried = await readImageText(prepared, {
+        known: options?.language ?? reading.language,
+      });
+
+      reading = betterReading(reading, retried);
+    }
+
     const warnings: Array<WarningKey> = [];
 
     if (reading.words.length === 0) {
@@ -72,7 +79,6 @@ const imageRedactor: Redactor = {
 
     onProgress(0.6, "stage.detecting");
 
-    // See readable.ts for why the words are filtered rather than the page vetoed.
     const { text, words } = buildWordIndex(legibleWords(reading));
     const detected = await detect(text);
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
@@ -85,8 +91,6 @@ const imageRedactor: Redactor = {
     paint(canvas, bitmap, rects);
     bitmap.close();
 
-    // An animated GIF or an SVG cannot be written back out, so the redacted copy
-    // becomes a PNG rather than failing the file.
     const type = ENCODABLE.has(file.type) ? file.type : "image/png";
     const blob = await canvas.convertToBlob({ type });
 

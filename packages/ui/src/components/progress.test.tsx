@@ -41,8 +41,6 @@ describe("Progress", () => {
     expect(percentOf(renderProgress(Number.NaN))).toBe(0);
   });
 
-  // The fill travels on the GPU rather than by growing a box, so a download that
-  // arrives in eight-megabyte steps still reads as movement.
   it("draws the fill with a transform", () => {
     expect(fillOf(renderProgress(0.42))).toBe("scaleX(0.42)");
   });

@@ -11,8 +11,6 @@ type WorkerSetup = { port: EventPort };
 const isSetup = (value: unknown): value is WorkerSetup =>
   typeof value === "object" && value !== null && "port" in value && value.port !== null;
 
-// The port arrives through workerThreadOpts.workerData, which onCreateWorker refreshes
-// for a thread the pool respawns, so a replacement is never left without one.
 if (!isSetup(workerData)) {
   throw new TypeError("The redaction thread started without a port to the model");
 }

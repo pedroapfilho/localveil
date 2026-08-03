@@ -15,8 +15,6 @@ type NodeRedactionOutput = {
   warnings: Array<string>;
 };
 
-// The three predicates are disjoint (text/*, application/pdf, image/*), so the order
-// only decides which one is asked first.
 const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
 
 const redactPath = async (
@@ -25,8 +23,6 @@ const redactPath = async (
   onProgress: NodeRedactionProgress,
   options: RedactOptions = {},
 ): Promise<NodeRedactionOutput> => {
-  // Before the redactor runs rather than at import: pdf.js and the image redactor read
-  // these globals when they draw, and both are loaded lazily.
   installCanvas();
 
   const file = await readFileAsFile(path);

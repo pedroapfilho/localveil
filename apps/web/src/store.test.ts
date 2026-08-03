@@ -101,8 +101,6 @@ describe("requeueing", () => {
     });
   };
 
-  // A row sent back to the queue carrying its old result would offer a download of the
-  // file it is in the middle of replacing.
   it("wipes everything the last run left behind", () => {
     const [job] = useJobStore.getState().addFiles([textFile("a.txt")]);
 

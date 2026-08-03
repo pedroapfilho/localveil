@@ -31,7 +31,7 @@ const textRedactor: Redactor = {
     onProgress(0.2, "stage.detecting");
 
     const detected = await detect(text);
-    // A name the model tagged once but missed later is still that name.
+
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
 
     onProgress(0.8, "stage.redacting");

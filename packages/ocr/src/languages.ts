@@ -2,17 +2,12 @@ type OcrLanguage = "en" | "es" | "pt";
 
 type DetectedLanguage = { confidence: number; language: OcrLanguage };
 
-// Tesseract names languages by ISO 639-2, the app by ISO 639-1.
 const TRAINEDDATA: Record<OcrLanguage, string> = {
   en: "eng",
   es: "spa",
   pt: "por",
 };
 
-// Words that appear in one of the three lists only: function words, plus the field
-// labels identity documents print, because an ID card carries almost no prose to
-// vote with. Written without accents, since the first OCR pass runs in English and
-// drops most of them.
 const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
   en: new Set([
     "and",
@@ -99,7 +94,6 @@ const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
 
 const LANGUAGES: ReadonlyArray<OcrLanguage> = ["en", "es", "pt"];
 
-// Below this many stopword matches, the winner's share is not evidence of anything.
 const MIN_HITS = 5;
 
 const WORD = /[\p{Letter}']+/gv;
@@ -122,9 +116,6 @@ const tally = (tokens: Array<string>) => {
   return scores;
 };
 
-// "tambem" sits in both Iberian lists on purpose: it is common enough to be worth
-// counting and it never points at English, so it lifts both equally and decides
-// nothing on its own.
 const detectLanguage = (text: string, fallback: OcrLanguage = "en"): DetectedLanguage => {
   const tokens = normalise(text).match(WORD) ?? [];
   const scores = tally([...tokens]);
@@ -136,7 +127,6 @@ const detectLanguage = (text: string, fallback: OcrLanguage = "en"): DetectedLan
     return { confidence: 0, language: fallback };
   }
 
-  // One lucky hit would otherwise score a perfect share.
   const share = top[1] / hits;
   const volume = Math.min(1, hits / MIN_HITS);
   const decisive = second === undefined || top[1] > second[1];

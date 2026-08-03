@@ -24,8 +24,6 @@ const makeDirectory = async () => {
   return directory;
 };
 
-// The listing arrives after an effect, and the parent row sits above it, so tests
-// wait for the first real name before they start pressing keys.
 const openBrowser = async (
   directory: string,
   onConfirm = vi.fn<(files: Array<string>) => void>(),

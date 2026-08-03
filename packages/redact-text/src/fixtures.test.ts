@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import { textRedactor } from "./index.ts";
 
-// The same people appear in every fixture, so one list checks them all.
 const PII = [
   "John Smith",
   "Maria Garcia",
@@ -28,8 +27,6 @@ const LABELS: Record<string, Span["label"]> = {
   "Maria Garcia": "private_person",
 };
 
-// A stand-in for the model: it finds exactly the strings the fixtures were written
-// around, so a failure here is the redactor's, never the model's.
 const detectKnown: Detect = (text) => {
   const spans: Array<Span> = [];
 
@@ -54,8 +51,6 @@ const FIXTURES = [
 ] as const;
 
 const bytesOf = (name: string) =>
-  // Sync on purpose: a test that has to await its own fixtures reads worse than one
-  // that does not, and there is no event loop to keep free here.
   // oxlint-disable-next-line node/no-sync
   readFileSync(new URL(`../../../fixtures/${name}`, import.meta.url));
 

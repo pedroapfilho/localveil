@@ -6,9 +6,6 @@ import type { ProgressEvent } from "./worker-protocol";
 
 type ExecOptions = { on: (payload: unknown) => void; transfer: Array<unknown> };
 
-// Stands in for workerpool's own promise, which carries `cancel` and whose `then`
-// takes two required callbacks rather than optional ones. Reproducing that thenable is
-// the point of the fake, so the rule against it is not the one to follow here.
 class FakeTask {
   cancelled = false;
 
@@ -47,8 +44,6 @@ class FakeTask {
   }
 }
 
-// Module state rather than per-test locals: `vi.mock` factories are hoisted above
-// anything a test file declares, so the doubles they build have to reach it here.
 const pooled = {
   connected: [] as Array<string>,
   disconnected: [] as Array<string>,

@@ -12,8 +12,6 @@ type AttachmentProps = ComponentProps<"div"> & {
   state?: AttachmentState;
 };
 
-// The error state is a colour, so the reason for it belongs in the description where
-// it can be read rather than only seen.
 const Attachment = ({
   className,
   orientation = "horizontal",
@@ -101,8 +99,6 @@ const AttachmentAction = ({
     variant={variant}
     {...props}
   >
-    {/* Widens the tap area to the 48px minimum on touch without moving anything a
-        pointer user can see. */}
     <span
       aria-hidden
       className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"

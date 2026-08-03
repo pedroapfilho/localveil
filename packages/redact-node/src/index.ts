@@ -13,8 +13,6 @@ type NodeRedactor = {
   redactFile: (path: string, onProgress: NodeRedactionProgress) => Promise<NodeRedactionOutput>;
 };
 
-// The weights take a while to load, so they are paid for once and the
-// detector is handed to every file after that.
 const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<NodeRedactor> => {
   const { language, onModelProgress } = options;
 
@@ -22,8 +20,7 @@ const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<No
     onProgress: (fraction) => {
       onModelProgress?.(fraction);
     },
-    // The resumable cache is built on the Cache API and IndexedDB. transformers.js
-    // keeps the weights on disk here instead, and resumes there itself.
+
     resumableCache: false,
   });
 
@@ -32,8 +29,6 @@ const createNodeRedactor = async (options: NodeRedactorOptions = {}): Promise<No
   };
 };
 
-// The pool needs the two halves apart: one detector on the main thread, and the
-// per-file work in a thread that reaches it over a port.
 const createNodeDetector = (options: NodeRedactorOptions = {}): Promise<Detect> =>
   createDetector({
     onProgress: (fraction) => {

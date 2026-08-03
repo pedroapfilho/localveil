@@ -18,15 +18,12 @@ vi.mock("#ort", () => ({
   pickDevice: vi.fn(),
 }));
 
-// A hit names the words (inclusive) and the prompt that should claim them.
 type Hit = { end: number; logit?: number; prompt: string; start: number };
 
 type Respond = (words: Array<string>) => Array<Hit>;
 
 const FIRST_WORD_ID = 10;
 
-// One token per word, with a registry both directions: the runner stub reads the
-// words back out of the encoded input, so tests can answer to text rather than ids.
 const createHarness = () => {
   const idsByWord = new Map<string, number>();
   const wordsById = new Map<number, string>();
@@ -177,8 +174,6 @@ describe("createDetector", () => {
 
     const urls = vi.mocked(fetchModelBytes).mock.calls.map(([url]) => url);
 
-    // Both tiers read the same file, so falling back costs a cache lookup rather
-    // than a second download of the weights.
     expect(urls.at(0)).toContain("model_q4.onnx");
     expect(urls.at(1)).toBe(urls.at(0));
     expect(stages).toContain("model.slowDevice");
@@ -231,7 +226,6 @@ describe("shouting text", () => {
     expect(run.mock.calls.length).toBe(1);
   });
 
-  // An acronym is not a name, and treating one as shouting doubled every log file.
   it("does not pay for a second pass over a lone acronym", async () => {
     const { run } = setup(() => []);
     const detect = await createDetector();

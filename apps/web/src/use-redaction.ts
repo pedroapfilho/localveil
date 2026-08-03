@@ -14,11 +14,6 @@ const ZIP_NAME = "localveil.zip";
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
-// The weights arrive as a stream of progress messages rather than as a promise, and
-// sonner wants a promise to hang a spinner on, so one is made to stand for the download
-// and settled by hand when it lands. The executor runs before the constructor returns,
-// which is what leaves both handles set here; checked rather than asserted, the way the
-// pool checks what workerpool hands it.
 const deferred = (): Deferred => {
   let resolve: Deferred["resolve"] | undefined;
   let reject: Deferred["reject"] | undefined;
@@ -43,8 +38,6 @@ const triggerDownload = (blob: Blob) => {
   link.href = url;
   link.click();
 
-  // WebKit aborts a download whose object URL is revoked in the same task, so the
-  // click gets a turn of the event loop to itself first.
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, 0);
@@ -55,13 +48,8 @@ const useRedaction = () => {
   const poolRef = useRef<RedactionPool | null>(null);
   const translateRef = useRef(t);
 
-  // The detector raises this twice on the fallback path, and it is the same news both
-  // times.
   const saidSlowRef = useRef(false);
 
-  // Null between downloads. Holding the pair is what keeps one download to one toast:
-  // the weights report their way up in hundreds of messages, and each of them would
-  // otherwise raise a spinner of its own.
   const modelRef = useRef<Deferred | null>(null);
 
   useEffect(() => {
@@ -103,19 +91,15 @@ const useRedaction = () => {
             : translateRef.current("toast.failed", { name }),
         );
       },
-      // Raised only for a model past recovering, so the spinner this settles is never
-      // one the next respawn was about to make good on.
+
       onModelLost: (reason) => {
         const lost = modelRef.current;
 
         modelRef.current = null;
         lost?.reject(new Error(reason));
       },
-      // The fraction goes unread: sonner's spinner has no percentage to put it in, and
-      // the file rows have their own bars for the work behind this one.
+
       onModelProgress: (_fraction, stage) => {
-        // A slow device is a notice about the machine rather than a step of the
-        // download, so it neither opens the download's notice nor settles it.
         if (stage === "model.slowDevice") {
           if (!saidSlowRef.current) {
             saidSlowRef.current = true;
@@ -173,8 +157,6 @@ const useRedaction = () => {
       const { addFiles, updateJob } = useJobStore.getState();
 
       for (const job of addFiles(files, language)) {
-        // Set before the worker says anything of its own: on a first visit the weights
-        // are still downloading, and a row that says nothing reads as a row stuck.
         updateJob(job.id, { stage: "stage.loadingModel" });
         pool.submit({ file: job.file, id: job.id, language: job.language });
       }
@@ -199,17 +181,11 @@ const useRedaction = () => {
     useJobStore.getState().removeJobs(ids);
   }, []);
 
-  // Cancel before re-submitting, never after: the pool keys a running job by its id,
-  // and a cancel arriving behind the replacement would take the replacement down with
-  // it. The attempt being replaced can still be several stages deep, and the pool tells
-  // its answers apart from the new one's by the channel it was given.
   const setLanguage = useCallback(
     (ids: ReadonlyArray<string>, language?: DocumentLanguage) => {
       const { jobs, requeue, updateJob } = useJobStore.getState();
       const byId = new Map(jobs.map((job) => [job.id, job]));
 
-      // A text file's output cannot change with the language, so the choice is recorded
-      // and no work is redone.
       const rerunning = ids.filter((id) => {
         const job = byId.get(id);
 

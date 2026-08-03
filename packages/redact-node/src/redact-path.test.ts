@@ -6,10 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 
-// The two recogniser-backed redactors are stood down, keeping their real `accepts`:
-// what is under test is which one a path reaches, and running either for real means
-// a wasm build, a language download and a minute of OCR. The text redactor stays
-// real, so one file does go through end to end.
 const stubResult = (): Promise<RedactionResult> =>
   Promise.resolve({
     blob: new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
@@ -37,7 +33,6 @@ vi.mock("@repo/redact-image", async (importOriginal) => {
 
 const { redactPath } = await import("./redact-path.ts");
 
-// Tags every "John Smith" it is shown, wherever it sits.
 const detecting = (target: string): Detect =>
   vi.fn((text: string) => {
     const spans = [];

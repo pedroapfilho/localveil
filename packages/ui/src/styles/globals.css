@@ -69,10 +69,6 @@
 }
 
 @theme inline {
-  /* The platform's own UI face, and nothing fetched. A webfont would be the only
-     network request this app makes besides the model, and the page promises there
-     is no other. Naming a font we do not ship would also mean two readers seeing
-     two different designs depending on what they happen to have installed. */
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --color-background: var(--background);
@@ -126,15 +122,6 @@
   }
 }
 
-/* The shadcn package publishes only its CLI, not the stylesheet its docs import, so
-   the scroll-fade utilities are written out here. Behaviour follows the documented
-   one: the mask dissolves the content rather than laying a colour over it, so it
-   works on any background, and a container whose content does not overflow shows no
-   fade at all because there is nothing for the timeline to drive.
-
-   Custom properties cannot be interpolated until they are registered, which is what
-   `@property` is for. A browser without scroll-driven animations keeps the initial
-   values and gets a plain bottom fade, which is the honest degradation. */
 @property --scroll-fade-top {
   syntax: "<length>";
   inherits: false;
@@ -196,10 +183,6 @@
   }
 }
 
-/* Asking for less motion is not asking for none. Keyframes here are all movement, so
-   they go, and so does smooth scrolling. Transitions are left alone: most of them
-   carry only colour or opacity, which explain a change without travelling, and the
-   ones that do travel opt out for themselves with `motion-reduce:transition-none`. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

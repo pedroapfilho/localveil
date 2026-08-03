@@ -39,10 +39,6 @@ describe("installCanvas", () => {
     bitmap.close();
   });
 
-  // The bug this covers: skia type-checks what it is asked to draw and refused the
-  // object that used to stand in for a canvas. pdf.js only asks its factory for a
-  // surface when an image has to shrink by more than half, so a text-only PDF rendered
-  // either way and every PDF carrying a photo threw.
   it("hands pdf.js a scratch surface its own drawImage will take", () => {
     const factory = new (documentOptions(new Uint8Array()).CanvasFactory)();
     const scratch = factory.create(16, 16).canvas;
@@ -76,8 +72,6 @@ describe("createNodeCanvas", () => {
     expect(canvas.height).toBe(25);
   });
 
-  // skia calls the option `mime`, so a `type` that never gets renamed encodes a PNG
-  // and labels it a JPEG.
   it("encodes the image type it was asked for rather than always a PNG", async () => {
     const canvas = filled(20, 20);
 
@@ -95,8 +89,6 @@ describe("createNodeCanvas", () => {
     await expect(filled(20, 20).convertToBlob()).resolves.toHaveProperty("type", "image/png");
   });
 
-  // tesseract's node loader ends in `new Uint8Array(image)`, which is why the canvas
-  // has to be able to spell itself out as bytes.
   it("spells itself out as a PNG for a recogniser that only reads bytes", () => {
     const bytes = new Uint8Array(filled(20, 20));
 

@@ -5,8 +5,6 @@ import { isLineBreak } from "./line-break.ts";
 
 const BLOCK = "█";
 
-// Graphemes, not UTF-16 units: an emoji or an accented letter is one block, so the
-// mask keeps the visual width of what it hides.
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 const assertInside = (range: Range, length: number) => {
@@ -24,8 +22,6 @@ const maskSpans = (text: string, spans: Array<Span>): string => {
     assertInside(range, text.length);
   }
 
-  // Right to left, so the offsets of the ranges still ahead stay valid even when a
-  // replacement changes length (an emoji is two units but one block).
   return ranges.toReversed().reduce((masked, range) => {
     const covered = [...GRAPHEMES.segment(masked.slice(range.start, range.end))]
       .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))

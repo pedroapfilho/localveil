@@ -3,11 +3,6 @@ type CanvasEntry = {
   context: OffscreenCanvasRenderingContext2D | null;
 };
 
-// pdf.js reaches for `document.createElement("canvas")` whenever it needs a scratch
-// surface for a pattern, a mask or a transparency group. There is no document in a
-// worker, so it is handed a factory that makes the same thing out of an
-// OffscreenCanvas. Classes rather than the usual factory functions because pdf.js
-// calls `new` on whatever it is given.
 class OffscreenCanvasFactory {
   create(width: number, height: number): CanvasEntry {
     if (width <= 0 || height <= 0) {

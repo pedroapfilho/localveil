@@ -111,8 +111,6 @@ describe("patternSpans", () => {
     expect(covered("codigo 32/13/1985 interno")).toEqual([]);
   });
 
-  // An invoice is mostly digits. Blacking out the ones that merely look like an
-  // identifier is how a page ends up unreadable.
   it("leaves an eleven-digit number that fails the CPF check alone", () => {
     expect(covered("total 12345678901 units")).toEqual([]);
   });

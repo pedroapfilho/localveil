@@ -8,7 +8,6 @@ const IDENTITY_CARD = new URL("../fixtures/identity-card.pdf", import.meta.url).
 
 const PNG_MAGIC = new Uint8Array([137, 80, 78, 71]);
 
-// Tags the one word it is shown, wherever it sits, so the model never has to load.
 const tagging =
   (target: string): Detect =>
   (text) => {
@@ -26,9 +25,6 @@ const tagging =
     return Promise.resolve(spans);
   };
 
-// Renders and recognises for real, which downloads a tesseract language file into the
-// working directory the first time. Detection is still stubbed: the weights
-// are the other suite's problem.
 describe.skipIf(process.env.OCR_PIPELINE_TEST === undefined)(
   "redactPath against a real canvas and recogniser",
   () => {
@@ -43,9 +39,6 @@ describe.skipIf(process.env.OCR_PIPELINE_TEST === undefined)(
       expect(redactionCount).toBeGreaterThan(0);
     }, 600_000);
 
-    // "Registro" is painted inside an embedded PNG and appears nowhere in the text
-    // layer, so a redaction here proves the page was rendered, images and all, and then
-    // read back. Rendering that page is what used to throw.
     it("covers a word that exists only inside an image on the page", async () => {
       const { bytes, redactionCount } = await redactPath(
         IDENTITY_CARD,

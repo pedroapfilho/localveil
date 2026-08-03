@@ -7,7 +7,6 @@ const workingDirectory = process.cwd();
 
 const resolved = await resolveArguments(process.argv.slice(2), workingDirectory).catch(
   (error: unknown) => {
-    // A bad flag is a usage error: name it on stderr and stop before any UI mounts.
     // oxlint-disable-next-line eslint/no-console
     console.error(error instanceof Error ? error.message : String(error));
     // oxlint-disable-next-line unicorn/no-process-exit
@@ -17,8 +16,6 @@ const resolved = await resolveArguments(process.argv.slice(2), workingDirectory)
 
 const { directory, jobs, language, selection } = resolved;
 
-// Ink's own Ctrl+C handling unmounts without telling the app, which would abandon a
-// temporary archive mid-write. The app takes the key itself instead.
 const instance = render(
   <App
     initialDirectory={directory}
