@@ -14,8 +14,6 @@ let destroyed = 0;
 let pools = 0;
 let options: RedactionPoolOptions | undefined;
 
-// The pool has its own tests. What matters here is that the hook feeds it the right
-// files and turns what it reports back into rows on the page.
 vi.mock("./worker-pool", () => ({
   createRedactionPool: (given: RedactionPoolOptions) => {
     options = given;
@@ -125,8 +123,6 @@ const Harness = () => {
 
 const jobsNow = () => useJobStore.getState().jobs;
 
-// sonner takes either a promise or a function returning one, and only the first of
-// those can be settled from here.
 const modelNotice = () => {
   const [given] = vi.mocked(toast.promise).mock.calls[0];
 
@@ -160,8 +156,7 @@ beforeEach(() => {
   useJobStore.getState().reset();
   vi.spyOn(toast, "error").mockImplementation(() => "");
   vi.spyOn(toast, "warning").mockImplementation(() => "");
-  // Stubbed rather than left real: sonner attaches the handlers that keep a rejection
-  // from surfacing as an unhandled one, and each test that rejects attaches its own.
+
   vi.spyOn(toast, "promise").mockImplementation(() => ({ unwrap: () => Promise.resolve() }));
 });
 
@@ -189,8 +184,6 @@ describe("useRedaction", () => {
     expect(pool().maxWorkers).toBeGreaterThanOrEqual(1);
   });
 
-  // On a first visit the weights are still downloading, and a row that says nothing
-  // for a minute reads as a row that is stuck.
   it("says the model is loading before the worker says anything", () => {
     submitTwo();
 
@@ -267,8 +260,6 @@ describe("what the pool reports", () => {
     expect(unsupported).not.toEqual(failed);
   });
 
-  // Its own notice rather than a line inside the download's: it is news about the
-  // machine, and it outlives the download it arrives during.
   it("warns once about a device without GPU acceleration", () => {
     renderWithI18n(<Harness />);
 
@@ -281,7 +272,6 @@ describe("what the pool reports", () => {
     );
   });
 
-  // The detector raises it again when WebGPU fails and the load falls back to wasm.
   it("does not warn twice", () => {
     renderWithI18n(<Harness />);
 
@@ -354,8 +344,6 @@ describe("the model download", () => {
     await expect(notice).rejects.toThrow("The detection model stopped answering");
   });
 
-  // A host that dies and respawns fetches the weights again, from cache this time. The
-  // first notice is over by then, so the second fetch needs one of its own.
   it("is announced again when the weights are fetched a second time", () => {
     renderWithI18n(<Harness />);
 
@@ -394,8 +382,6 @@ describe("a forced document language", () => {
   });
 });
 
-// Taking a row off the page used to tell only the page. The worker carried on with the
-// file, and everything behind it waited for work nobody wanted.
 describe("removing a file", () => {
   it("tells the pool to stop as well as the page", () => {
     submitTwo();
@@ -422,8 +408,6 @@ describe("changing a document's language", () => {
     ]);
   });
 
-  // The pool keys a running job by its id, so a cancel arriving behind the replacement
-  // would take the replacement down with it.
   it("cancels before it re-submits, never after", () => {
     submitScans();
 
@@ -457,8 +441,6 @@ describe("changing a document's language", () => {
     });
   });
 
-  // A text file's output cannot change with the language, so the choice is recorded and
-  // nothing is redone.
   it("records the choice on a text file without redoing the work", () => {
     submitTwo();
     setPortuguese();

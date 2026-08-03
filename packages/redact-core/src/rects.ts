@@ -4,9 +4,6 @@ const height = (word: PositionedWord) => word.bbox.y1 - word.bbox.y0;
 
 const midpoint = (word: PositionedWord) => (word.bbox.y0 + word.bbox.y1) / 2;
 
-// OCR baselines wobble by a few pixels, so equal `y0` is too strict a test for
-// "same line". Two words share a line when their vertical centres are closer
-// together than half the shorter word's height.
 const onSameLine = (a: PositionedWord, b: PositionedWord) =>
   Math.abs(midpoint(a) - midpoint(b)) < Math.min(height(a), height(b)) / 2;
 

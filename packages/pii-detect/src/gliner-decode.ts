@@ -1,6 +1,5 @@
 type Logits = { data: ArrayLike<number>; dims: ReadonlyArray<number> };
 
-// Word indices, closed on both ends: a single-word span has start === end.
 type SpanCandidate = { end: number; entity: number; score: number; start: number };
 
 const sigmoid = (value: number) => 1 / (1 + Math.exp(-value));
@@ -19,9 +18,6 @@ const isNumberArray = (value: unknown): value is ArrayLike<number> => {
   return length === 0 || typeof Reflect.get(value, 0) === "number";
 };
 
-// The q4f16 export answers in float16 and the int8 one in float32; both read as
-// numbers, but an int64 tensor of bigints would not, and must fail loudly rather
-// than turn every score into NaN.
 const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> }): Logits => {
   if (!isNumberArray(tensor.data)) {
     throw new TypeError("The model returned logits that are not numbers");
@@ -75,8 +71,6 @@ const decodeSpans = (
   return candidates;
 };
 
-// Flat decoding: the most confident span claims its words, and anything crossing
-// them loses, including the same words under another label.
 const suppressOverlaps = (candidates: Array<SpanCandidate>): Array<SpanCandidate> => {
   const byScore = candidates.toSorted((a, b) => b.score - a.score);
   const kept: Array<SpanCandidate> = [];

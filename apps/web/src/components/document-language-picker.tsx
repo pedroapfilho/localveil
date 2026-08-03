@@ -9,9 +9,6 @@ import {
   SelectValue,
 } from "@repo/ui/components/select";
 
-// "auto" keeps today's behaviour: probe in English, then guess from stopwords. The
-// explicit choices exist because that guess has almost nothing to read on an
-// identity card, and the reader holding one knows the answer already.
 type DocumentLanguageChoice = "auto" | DocumentLanguage;
 
 type Props = {
@@ -29,9 +26,6 @@ const asChoice = (language?: DocumentLanguage): DocumentLanguageChoice => langua
 
 const asLanguage = (choice: DocumentLanguageChoice) => (choice === "auto" ? undefined : choice);
 
-// Labelled rather than captioned: this now sits in a file row and in a selection
-// toolbar, where a visible "Document language" beside every one of them would say the
-// same thing as many times as there are files.
 const DocumentLanguagePicker = ({ className, onChange, value }: Props) => {
   const { t } = useTranslations();
 

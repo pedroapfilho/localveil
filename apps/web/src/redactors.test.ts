@@ -7,22 +7,16 @@ import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
 import { describe, expect, it } from "vitest";
 
-// The same list the worker builds, so this is the routing the app actually does.
 const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
 
-// Resolved from the package root rather than `import.meta.url`: under Vite that is
-// an `/@fs/` URL, which is not a path anything can open.
 const FIXTURES = join(process.cwd(), "../../fixtures");
 
 const bytesOf = (name: string) =>
-  // Sync on purpose: a test that has to await its own fixtures reads worse than one
-  // that does not, and there is no event loop to keep free here.
   // oxlint-disable-next-line node/no-sync
   readFileSync(join(FIXTURES, name));
 
 const fixture = (name: string, type: string) => new File([bytesOf(name)], name, { type });
 
-// One of every format the dropzone advertises, each carrying the same personal data.
 const SAMPLES = [
   { handler: "text", name: "sample.txt", type: "text/plain" },
   { handler: "text", name: "sample.md", type: "text/markdown" },

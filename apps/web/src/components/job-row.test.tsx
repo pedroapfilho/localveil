@@ -57,10 +57,6 @@ const LOW_CONFIDENCE =
   "Some text was hard to read, so a little personal data may have been missed.";
 
 describe("JobRow", () => {
-  // jsdom lays out nothing, so this reads the rule rather than the pixels: the panel is
-  // a flex child whose height animates up from zero, and a gap on its parent would be
-  // reserved in full the moment it mounts, stepping the rows below down before the
-  // panel had opened at all.
   it("reserves no gap around the panel that animates open", () => {
     const { container } = setup(pdf());
 
@@ -84,7 +80,6 @@ describe("JobRow", () => {
     expect(screen.getByText(LOW_CONFIDENCE)).toBeInTheDocument();
   });
 
-  // The reason a file failed is the point of the row, so it is never one click away.
   it("opens a failed row without being asked", () => {
     setup(text({ error: "The worker gave up", status: "error" }));
 
@@ -92,8 +87,6 @@ describe("JobRow", () => {
     expect(screen.getByText("The worker gave up")).toBeInTheDocument();
   });
 
-  // Every row mounts queued and fails later, if at all, so a default read once at mount
-  // would leave every real failure shut.
   it("opens a row that fails long after it mounted", () => {
     const { rerenderWith } = setup(text());
 
@@ -119,8 +112,6 @@ describe("JobRow", () => {
     expect(screen.getByRole("combobox", { name: "Document language" })).toBeInTheDocument();
   });
 
-  // Language only reaches the recogniser, and the text redactor ignores it, so offering
-  // it on a .txt would be offering a control that does nothing.
   it("offers no disclosure at all on a clean text file", () => {
     setup(
       text({ result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] }, status: "done" }),

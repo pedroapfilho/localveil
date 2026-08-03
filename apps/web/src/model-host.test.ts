@@ -4,8 +4,6 @@ import { createModelHost, MAX_RESPAWNS } from "./model-host";
 
 type Listener = (event: unknown) => void;
 
-// jsdom has no Worker. A test needs to be able to kill this one: the recovery path
-// cannot be exercised any other way.
 class FakeWorker {
   static instances: Array<FakeWorker> = [];
 
@@ -24,8 +22,6 @@ class FakeWorker {
     forType.add(handler);
     this.handlers.set(type, forType);
 
-    // The host detaches through an AbortController, so a fake that ignored the signal
-    // would keep delivering events from a worker it had already retired.
     options?.signal?.addEventListener("abort", () => {
       forType.delete(handler);
     });
@@ -40,7 +36,6 @@ class FakeWorker {
   }
 
   emit(type: string, event: unknown) {
-    // Copied first: a handler that retires the worker detaches itself mid-loop.
     // oxlint-disable-next-line unicorn/no-useless-spread
     for (const handler of [...(this.handlers.get(type) ?? [])]) {
       handler(event);
@@ -137,8 +132,6 @@ describe("when the model worker dies", () => {
     expect(workerAt(0).posted.length).toBe(0);
   });
 
-  // A second event from a worker already replaced used to run the whole recovery
-  // again, taking down the files its healthy successor had been given.
   it("ignores a late event from a worker it already replaced", () => {
     build();
     workerAt(0).emit("error", {});
@@ -152,8 +145,6 @@ describe("when the model worker dies", () => {
     expect(FakeWorker.instances.length).toBe(2);
   });
 
-  // A worker that throws while its module evaluates fails on every attempt, so an
-  // uncapped respawn is an infinite create-and-terminate loop.
   it("gives up rather than respawning forever", () => {
     build();
 
@@ -174,8 +165,6 @@ describe("destroying the host", () => {
     expect(workerAt(0).terminated).toBe(true);
   });
 
-  // An error already queued when the page went would otherwise spawn a replacement
-  // that nothing holds a reference to, downloading the weights for nobody.
   it("does not respawn from an event that arrives after teardown", () => {
     const host = build();
 

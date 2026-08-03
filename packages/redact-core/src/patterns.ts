@@ -1,13 +1,6 @@
 import type { PiiLabel, Span } from "./types.ts";
 
-// Most of these carry a check digit, so a number that merely looks right is
-// rejected rather than blacked out; an invoice is mostly digits that are not
-// identifiers. The rest are anchored to the label printed beside them, which is
-// the same precision by other means: RG check digits vary by state, so arithmetic
-// there would reject real documents.
 type Pattern = {
-  // With `capture`, the span is the first capture group rather than the whole
-  // match, so a label used as an anchor is not itself blacked out.
   capture?: boolean;
   label: PiiLabel;
   matcher: RegExp;
@@ -16,7 +9,6 @@ type Pattern = {
 
 const digitsOf = (value: string) => value.replaceAll(/\D/gv, "");
 
-// Brazilian CPF: nine digits then two check digits, each a weighted sum mod 11.
 const cpfDigit = (digits: string, upto: number) => {
   let sum = 0;
 
@@ -32,7 +24,6 @@ const cpfDigit = (digits: string, upto: number) => {
 const isCpf = (value: string) => {
   const digits = digitsOf(value);
 
-  // A run of one repeated digit passes the arithmetic and is never a real number.
   if (digits.length !== 11 || /^(?<same>\d)\k<same>+$/v.test(digits)) {
     return false;
   }
@@ -76,8 +67,6 @@ const luhn = (value: string) => {
 
   let sum = 0;
 
-  // Right to left, doubling every second digit. Indexing backwards avoids building
-  // a reversed copy of what can be a nineteen-character string.
   for (let offset = 0; offset < digits.length; offset += 1) {
     const digit = Number(digits[digits.length - 1 - offset]);
     const doubled = offset % 2 === 1 ? digit * 2 : digit;
@@ -88,8 +77,6 @@ const luhn = (value: string) => {
   return sum % 10 === 0;
 };
 
-// IBAN: move the first four characters to the end, turn letters into numbers, and
-// the whole thing read as an integer must leave 1 when divided by 97.
 const isIban = (value: string) => {
   const compact = value.replaceAll(/\s/gv, "").toUpperCase();
   const rotated = compact.slice(4) + compact.slice(0, 4);
@@ -110,7 +97,6 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
-// "2019-2024" is a span of years, not a telephone.
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
 const PATTERNS: ReadonlyArray<Pattern> = [
@@ -129,8 +115,6 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: isCnpj,
   },
   {
-    // IBANs are conventionally printed in groups of four, so single spaces are
-    // allowed between the characters; the mod-97 check still decides.
     label: "account_number",
     matcher: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b/gv,
     verify: isIban,
@@ -141,14 +125,11 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: luhn,
   },
   {
-    // Brazilian RG, anchored to its printed label because the check digit differs
-    // by issuing state.
     capture: true,
     label: "account_number",
     matcher: /\bRG[.:]?\s?(?<value>\d{1,2}\.?\d{3}\.?\d{3}-?[\dX])\b/dgv,
   },
   {
-    // CNH registration numbers, anchored to the label a licence prints beside them.
     capture: true,
     label: "account_number",
     matcher: /\b(?:CNH|[Rr]egistro)[.:]?\s?(?<value>\d{9,11})\b/dgv,
@@ -163,17 +144,12 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     matcher: /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2}\b/gv,
   },
   {
-    // A country code, brackets or a hyphen is required: two runs of digits either side
-    // of a space is an amount far more often than a telephone number.
     label: "private_phone",
     matcher:
       /\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{3,5}|\(\d{2,4}\)\s?\d{3,5}[\s\-]\d{3,5}|\b\d{3,4}-\d{4}\b/gv,
     verify: (value) => !isYearRange(value),
   },
   {
-    // Shapes the alternation above cannot reach: full US numbers (its tail-only
-    // match left the area code beside the box), Brazilian mobiles with a bare
-    // area code, and the nine-digit mobile whose leading 9 marks it as one.
     label: "private_phone",
     matcher: /\b\d{3}-\d{3}-\d{4}\b|\b\d{2}\s9?\d{4}-\d{4}\b|\b9\d{4}-\d{4}\b/gv,
   },

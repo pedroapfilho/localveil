@@ -4,14 +4,10 @@ import { cn } from "../lib/utils";
 
 type CheckboxProps = Omit<ComponentProps<"input">, "type"> & { indeterminate?: boolean };
 
-// A native input with the tick drawn over it, so every state comes from CSS. Nothing
-// here toggles a class from JavaScript: `:checked` and `:indeterminate` already know,
-// and a second copy of that knowledge in React is a second copy that can be wrong.
 const Checkbox = ({ className, indeterminate = false, ...props }: CheckboxProps) => (
   <span className={cn("group inline-grid size-5 grid-cols-1 sm:size-4", className)}>
     <input
       className="border-input checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary focus-visible:outline-ring disabled:border-input disabled:bg-muted disabled:checked:bg-muted col-start-1 row-start-1 appearance-none rounded-sm border bg-white focus-visible:outline-2 focus-visible:outline-offset-2 forced-colors:appearance-auto"
-      // Only the DOM property carries the third state; there is no attribute for it.
       ref={(node) => {
         if (node !== null) {
           node.indeterminate = indeterminate;

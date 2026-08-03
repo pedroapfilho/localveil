@@ -1,5 +1,3 @@
-// Safari drops list semantics from a `ul` whose bullets are removed, and these have
-// none, so `role="list"` restores what the styling took away.
 /* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
 import type { DocumentLanguage } from "@repo/redact-core";
@@ -19,8 +17,6 @@ import { JobSelectionToolbar } from "./job-selection-toolbar";
 const VISIBLE_ROWS = 4;
 const ROW_HEIGHT = 88;
 
-// Row borders and shadows reach past the viewport edge, so without this bleed the
-// scroll area slices them off at the top and bottom.
 const BLEED = 4;
 
 type JobListProps = {
@@ -35,9 +31,6 @@ const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListP
   const { t } = useTranslations();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
-  // Derived rather than pruned on removal: a row can leave for reasons this component
-  // never hears about, and an id left behind in the set would be handed to a bulk
-  // action as though the file were still there.
   const selected = jobs.flatMap((job) => (picked.has(job.id) ? [job.id] : []));
 
   const handleSelect = (id: string, next: boolean) => {
@@ -84,9 +77,6 @@ const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListP
 
   return (
     <section className="flex flex-col gap-3">
-      {/* One height for both, taken from the taller of the two. Picking a row swaps the
-          heading out for the toolbar, and without this the list below would step down
-          by the difference between a select and a ghost button. */}
       <div className="flex min-h-9 items-center sm:min-h-8">
         {selected.length > 0 ? (
           <JobSelectionToolbar

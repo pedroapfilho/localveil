@@ -22,9 +22,6 @@ const App = ({ initialDirectory, initialSelection, jobs, language, outputDirecto
   const [files, setFiles] = useState<ReadonlyArray<string> | null>(null);
   const [stopping, setStopping] = useState(false);
 
-  // Ink holds the process open until the tree unmounts, so the run has to hand the
-  // exit back itself once it settles or the summary would sit there with nothing
-  // left to do. `exit` is stable, so this does not re-arm the callback every render.
   const { cancel, failure, progress, result, start } = useRedactionRun({
     jobs,
     language,
@@ -37,9 +34,6 @@ const App = ({ initialDirectory, initialSelection, jobs, language, outputDirecto
       return;
     }
 
-    // The redactor cannot be interrupted part way through a file, so the first Ctrl+C
-    // asks the run to stop at the next boundary, which lets it clear away its
-    // temporary archive. A second one is taken as "I mean now" and walks away.
     if (files === null || stopping) {
       exit();
       return;

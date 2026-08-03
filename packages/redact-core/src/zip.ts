@@ -5,7 +5,6 @@ type ZipEntry = { blob: Blob; name: string };
 const splitExtension = (name: string) => {
   const dot = name.lastIndexOf(".");
 
-  // A leading dot means a dotfile (".env"), not an extension.
   if (dot <= 0) {
     return { base: name, extension: "" };
   }
@@ -28,9 +27,6 @@ const uniqueFilename = (name: string, taken: Set<string>): string => {
   return `${base} (${counter})${extension}`;
 };
 
-// `Blob` only accepts an `ArrayBuffer`, while `Uint8Array#buffer` is typed as the
-// wider `ArrayBufferLike`. Hand the buffer straight over when it really is one and
-// the view spans all of it, so a large archive is not copied a second time.
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const { buffer, byteLength, byteOffset } = bytes;
 

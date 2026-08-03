@@ -22,8 +22,6 @@ vi.mock("./resumable-cache.ts", () => ({
 
 const HOST = "https://huggingface.co/onnx-community/gliner_multi_pii-v1/resolve/abc";
 
-// The cache hook is installed at the very top of createDetector, so it is in hand well
-// before the tokenizer the rest of the load would need.
 const installedReporter = async () => {
   const reported: Array<{ fraction: number; stage: StageKey }> = [];
 
@@ -58,8 +56,6 @@ describe("what the detector counts as the model download", () => {
     expect(reported).toContainEqual({ fraction: 0.25, stage: "model.downloading" });
   });
 
-  // Every small file finishing used to run the bar to full and back, because the total
-  // was only ever the total of the files seen so far.
   it("says nothing for the tokenizer and the config beside it", async () => {
     const { onProgress, reported } = await installedReporter();
 
@@ -71,8 +67,6 @@ describe("what the detector counts as the model download", () => {
     expect(reported.length).toBe(before);
   });
 
-  // A tier that is no longer the one being loaded may still be sitting in the cache
-  // from an earlier revision, and purging it is not the download anybody is waiting on.
   it("says nothing for a weights file that is not the one being loaded", async () => {
     const { onProgress, reported } = await installedReporter();
 

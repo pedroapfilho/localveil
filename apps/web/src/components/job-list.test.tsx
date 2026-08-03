@@ -155,8 +155,6 @@ describe("selecting files", () => {
     expect(onRemoveMany).toHaveBeenCalledWith(["job-1", "job-2"]);
   });
 
-  // A row can leave for reasons this component never hears about, and a stale id handed
-  // to a bulk action would name a file that is no longer there.
   it("forgets a picked row that has left the list", () => {
     const { onRemoveMany, rerenderWith } = setup([job(), job({ id: "job-2" })]);
 

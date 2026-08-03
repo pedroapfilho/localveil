@@ -1,6 +1,3 @@
-// Safari drops list semantics from a `ul` whose bullets are removed, and these have
-// none, so `role="list"` restores what the styling took away rather than repeating
-// what the element already says.
 /* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
 import { ArrowUpRightIcon } from "lucide-react";
@@ -10,8 +7,6 @@ const LINKS = [
   { href: "https://huggingface.co/urchade/gliner_multi_pii-v1", key: "footer.model" },
 ] as const;
 
-// New tabs on purpose. Following a link in this one would throw away every file in
-// the queue, and there is no server holding any of it.
 const SiteFooter = () => {
   const { t } = useTranslations();
 

@@ -3,9 +3,6 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 
-// Node ships its own `localStorage` global that stays undefined without
-// --localstorage-file, and it shadows the one jsdom installs, so storage-backed
-// code has nothing to talk to. This puts a working store back in that slot.
 const installLocalStorage = () => {
   if (window.localStorage !== undefined) {
     return;

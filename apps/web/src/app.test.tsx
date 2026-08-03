@@ -5,8 +5,6 @@ import { App } from "./app";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 
-// The pool has its own tests, and workers cannot run here. What is left is the shell,
-// which only has to mount for these.
 vi.mock("./worker-pool", () => ({
   createRedactionPool: () => ({ cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() }),
 }));
@@ -14,8 +12,7 @@ vi.mock("./worker-pool", () => ({
 describe("App", () => {
   beforeEach(() => {
     useJobStore.getState().reset();
-    // The picker remembers the choice, so a test that switches language would
-    // otherwise decide the language of every test that follows it.
+
     localStorage.clear();
   });
 
@@ -72,7 +69,6 @@ describe("App", () => {
     expect(within(files).getByText("Queued")).toBeInTheDocument();
   });
 
-  // Every bar on the page belongs to a file, so an empty page has none.
   it("shows no progress bar before anything has happened", () => {
     renderWithI18n(<App />);
 
@@ -89,8 +85,6 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByLabelText("Remove notes.txt"));
 
-    // The row plays its way out before it goes, so the assertion waits for the
-    // animation rather than racing it.
     await waitFor(() => {
       expect(screen.queryByText("notes.txt")).toBeNull();
     });
@@ -131,8 +125,6 @@ describe("App", () => {
 
     const option = await screen.findByRole("option", { name: "Português" });
 
-    // The full pointer sequence, not a bare click: the menu commits its choice on
-    // pointer-up, the way a real one has to so a drag off the list can cancel.
     fireEvent.pointerDown(option);
     fireEvent.pointerUp(option);
     fireEvent.click(option);

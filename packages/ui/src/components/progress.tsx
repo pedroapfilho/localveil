@@ -16,13 +16,6 @@ const clampFraction = (value: number) => {
   return Math.min(1, Math.max(0, value));
 };
 
-// By transform rather than by growing a box: width is a layout property, and a
-// download arriving in eight-megabyte steps would jerk through three rendering stages
-// on every one.
-//
-// 200ms rather than 300 because those steps land about that often, and a transition
-// longer than the gap between them never settles: the bar reads as permanently behind
-// the number beside it.
 const Progress = ({ className, label, value, ...props }: ProgressProps) => {
   const fraction = clampFraction(value);
 

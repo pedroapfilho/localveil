@@ -27,7 +27,6 @@ const isDocumentLanguage = (value: string): value is DocumentLanguage =>
 
 type ParsedFlags = { jobs?: number; language?: DocumentLanguage; paths: Array<string> };
 
-// Both flags take a value and accept either `--flag value` or `--flag=value`.
 const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
   const arg = args[at];
 
@@ -40,9 +39,6 @@ const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
   return arg.startsWith(prefix) ? { extra: 0, value: arg.slice(prefix.length) } : undefined;
 };
 
-// `--lang pt` skips the language guessing, which is the weakest stage on documents
-// that carry almost no prose, identity cards above all. `--jobs` overrides how many
-// files run side by side.
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   const paths: Array<string> = [];
   let language: DocumentLanguage | undefined;
@@ -123,8 +119,6 @@ const parentEntry = (directory: string): DirectoryEntry | null => {
   return { isDirectory: true, name: PARENT_NAME, path: parent, supported: false };
 };
 
-// A path that cannot be reached is dropped rather than thrown: one bad argument
-// should not stop somebody browsing for the files that are fine.
 const describePath = async (path: string) => {
   const info = await stat(path);
 

@@ -9,8 +9,7 @@ type Job = {
   error?: string;
   file: File;
   id: string;
-  // Carried on the job rather than the submit call: crash recovery re-sends jobs
-  // from here, and a forced OCR language has to survive that.
+
   language?: DocumentLanguage;
   progress: number;
   result?: JobResult;
@@ -30,8 +29,6 @@ type JobStore = {
   updateJob: (id: string, patch: JobPatch) => void;
 };
 
-// Everything a previous run left behind. A row sent back to the queue carrying its old
-// result would offer a download of the file it is in the middle of replacing.
 const REQUEUED = {
   error: undefined,
   progress: 0,
@@ -63,9 +60,7 @@ const useJobStore = create<JobStore>((set) => ({
 
     set((state) => ({ jobs: state.jobs.filter((job) => !dropping.has(job.id)) }));
   },
-  // Returns the jobs it reset so the caller can post them: it is the only place that
-  // knows which rows actually changed, and re-reading the store afterwards would
-  // include rows that were already queued for another reason.
+
   requeue: (ids, language) => {
     const requeueing = new Set(ids);
     const queued: Array<Job> = [];
@@ -98,15 +93,11 @@ const useJobStore = create<JobStore>((set) => ({
 
 type CompletedJob = Job & { result: JobResult };
 
-// Settled, whether or not it produced anything. A file that failed has finished: it is
-// not going to move again.
 const isFinished = (job: Job) => job.status === "done" || job.status === "error";
 
 const completedJobs = (jobs: Array<Job>): Array<CompletedJob> =>
   jobs.filter((job): job is CompletedJob => job.status === "done" && job.result !== undefined);
 
-// Downloading half an archive is worse than waiting: the ZIP is offered only once
-// every file has settled and at least one of them produced something.
 const hasCompletedJobs = (jobs: Array<Job>) =>
   jobs.every((job) => isFinished(job)) && completedJobs(jobs).length > 0;
 

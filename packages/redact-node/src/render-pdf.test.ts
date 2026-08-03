@@ -2,9 +2,6 @@ import type * as Ocr from "@repo/ocr";
 import type { Detect } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Only the recogniser is stood down. pdf.js, skia and the canvas shim all run for
-// real, because the bug this file exists for was a real render throwing on a real
-// page, and a faked canvas would have sailed straight past it.
 const recognised: Array<Uint8Array> = [];
 
 vi.mock("@repo/ocr", async (importOriginal) => ({
@@ -33,11 +30,6 @@ beforeEach(() => {
 });
 
 describe("rendering a PDF through the node canvas", () => {
-  // identity-card.pdf is invented, built with pdf-lib, and carries two PNGs drawn at a
-  // fifth of their natural size. That last part is the whole point: pdf.js reaches for
-  // its CanvasFactory only when an image has to shrink by more than half, and skia
-  // refused the surface it got back. sample.pdf paints no images at all, which is why
-  // the first round of this package looked fine.
   it("rebuilds a PDF that paints images", async () => {
     const { bytes } = await run(IDENTITY_CARD);
 
@@ -50,8 +42,6 @@ describe("rendering a PDF through the node canvas", () => {
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
   });
 
-  // tesseract's node loader reads nothing but bytes, and a page it cannot decode comes
-  // back as an empty reading rather than an error, so nothing downstream would notice.
   it("hands the recogniser a page it can actually decode", async () => {
     await run(IDENTITY_CARD);
 

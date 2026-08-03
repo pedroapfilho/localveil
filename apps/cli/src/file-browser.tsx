@@ -14,8 +14,6 @@ const LEGEND = "[x] picked  [ ] pick with space  [-] unsupported  [>] folder";
 
 const HELP = "up/down move  space pick  enter open folder or confirm  esc quit";
 
-// Hoisted so the default does not hand the component a brand new array on every
-// render, which would restart the picked set each time.
 const NO_SELECTION: ReadonlyArray<string> = [];
 
 type Listing = {
@@ -43,8 +41,6 @@ const markerFor = (entry: DirectoryEntry, picked: boolean): string => {
   return picked ? "[x]" : "[ ]";
 };
 
-// A window rather than the whole listing, kept around the cursor, so a directory
-// with a thousand entries does not redraw a thousand lines on every keystroke.
 const windowStart = (cursor: number, length: number): number => {
   const half = Math.floor(VISIBLE_ROWS / 2);
   const last = Math.max(0, length - VISIBLE_ROWS);
@@ -107,8 +103,6 @@ const FileBrowser = ({
     return parent === null ? entries : [parent, ...entries];
   }, [directory, entries]);
 
-  // The cursor is reset when a folder is opened, but a listing that shrinks under it
-  // would otherwise leave it pointing past the end.
   const row = Math.min(cursor, Math.max(0, rows.length - 1));
 
   const openDirectory = (next: string) => {
@@ -116,8 +110,6 @@ const FileBrowser = ({
     setCursor(0);
   };
 
-  // Held keys arrive faster than Ink redraws, so the step is taken against the value
-  // React holds rather than the one this render happens to be showing.
   const moveCursor = (step: number) => {
     const last = Math.max(0, rows.length - 1);
 
@@ -130,8 +122,6 @@ const FileBrowser = ({
       return;
     }
 
-    // Ctrl chords belong to the app above, which owns quitting, so they must not
-    // fall through to the single letter shortcuts below.
     if (key.ctrl) {
       return;
     }

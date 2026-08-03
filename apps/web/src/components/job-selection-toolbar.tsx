@@ -14,9 +14,6 @@ type JobSelectionToolbarProps = {
   onToggleAll: (selected: boolean) => void;
 };
 
-// The picker shows "auto" rather than the selection's current language on purpose: with
-// more than one row selected there may be several, and picking one to display would
-// claim the others agree with it.
 const JobSelectionToolbar = ({
   all,
   count,
@@ -48,8 +45,6 @@ const JobSelectionToolbar = ({
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <DocumentLanguagePicker onChange={onLanguageChange} value="auto" />
 
-        {/* The label drops away on a narrow screen rather than wrapping the row onto a
-            second line, which would move the file list every time a row is picked. */}
         <Button
           aria-label={t("files.removeSelected")}
           className="relative"
@@ -60,8 +55,6 @@ const JobSelectionToolbar = ({
 
           <span className="max-sm:hidden">{t("files.removeSelected")}</span>
 
-          {/* Widens the tap area to the 48px minimum on touch without moving anything a
-              pointer user can see. */}
           <span
             aria-hidden
             className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"

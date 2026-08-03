@@ -1,8 +1,5 @@
 import { cva } from "class-variance-authority";
 
-// The focus ring is a box-shadow and is left out of the transition on purpose: a ring
-// that fades in is a ring that arrives after the key has already been pressed. What
-// remains is compositable, on an ease-out so the release is the fast half of a press.
 const buttonVariants = cva(
   "group/button focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-[color,opacity,transform] duration-150 ease-out outline-none select-none focus-visible:ring-3 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:ring-3 motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4",
   {

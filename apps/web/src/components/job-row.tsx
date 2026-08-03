@@ -37,7 +37,6 @@ const ATTACHMENT_STATES = {
   running: "processing",
 } as const;
 
-// The dot repeats the word beside it, so colour is never the only cue.
 const STATUS_TONES: Record<JobStatus, string> = {
   done: "text-success",
   error: "text-destructive",
@@ -63,13 +62,8 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
   const warnings = result?.warnings ?? [];
   const failure = status === "error" && error !== undefined;
 
-  // No toggle when the panel behind it would be empty. A text file that redacted
-  // cleanly has no language to set and nothing to warn about.
   const hasDetails = languageMatters || failure || warnings.length > 0;
 
-  // Controlled, and undefined until the reader touches it, so a row that fails long
-  // after it mounted still opens itself. A `defaultOpen` is read once at mount, when
-  // every row is still queued and none of them has anything to show yet.
   const [chosen, setChosen] = useState<boolean | undefined>(undefined);
   const open = chosen ?? failure;
 
@@ -95,12 +89,8 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
       : t("files.redactions", { count: result.redactionCount });
   };
 
-  // What the row is doing now, or what it produced. One line either way, so the
-  // collapsed height never depends on which.
   const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
 
-  // The delay rides on the entrance alone: rows should arrive one after another, but a
-  // row being removed has no reason to wait its turn.
   return (
     <motion.li
       animate={{ opacity: 1, transform: "translateY(0px)", transition: staggered(index) }}
@@ -109,12 +99,6 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
       layout="position"
       transition={APPEAR}
     >
-      {/* A failure opens by itself: the reason it failed is the whole point of the row,
-          and one click away is one click too many for it. */}
-      {/* gap-0 because the panel below is a flex child whose height animates from zero:
-          a gap would be reserved around it in full the moment it mounts, stepping the
-          rows below down before the panel has opened at all. The spacing rides inside
-          the panel instead. */}
       <Collapsible onOpenChange={setChosen} open={open}>
         <Attachment className="flex-col gap-0" state={ATTACHMENT_STATES[status]}>
           <div className="flex w-full gap-3">
@@ -174,8 +158,6 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
             </AttachmentActions>
           </div>
 
-          {/* Padding on a wrapper rather than a margin on the panel's first child, for
-              the same reason: a margin there would also sit outside the animated box. */}
           <CollapsiblePanel className="w-full">
             <div className="pt-3">
               <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">

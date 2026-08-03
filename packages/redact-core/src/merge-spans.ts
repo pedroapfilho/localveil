@@ -19,7 +19,6 @@ const mergeChunkSpans = (parts: Array<ChunkSpans>): Array<Span> => {
       const key = spanKey(shifted);
       const existing = byKey.get(key);
 
-      // The overlap region is scanned twice; keep the more confident verdict.
       if (!existing || existing.score < shifted.score) {
         byKey.set(key, shifted);
       }

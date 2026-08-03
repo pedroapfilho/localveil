@@ -22,8 +22,6 @@ const readInitialLocale = (): Locale => {
     return stored;
   }
 
-  // Reading languages off `window` rather than as a bare global keeps Node's own
-  // experimental `navigator` out of the way in tests.
   return resolveLocale(window.navigator.languages);
 };
 

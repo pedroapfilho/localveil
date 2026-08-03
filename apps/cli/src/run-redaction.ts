@@ -18,9 +18,6 @@ import workerpool from "workerpool";
 
 const ZIP_NAME = "localveil.zip";
 
-// onnxruntime-node already spreads one inference across every core, so threads doing
-// OCR here are competing with the model rather than filling idle time. Half the cores
-// leaves it room; the cap is the same memory argument as the browser's.
 const MAX_JOBS = 4;
 
 const defaultJobs = () => {
@@ -76,9 +73,6 @@ const availableName = async (directory: string): Promise<string> => {
   return uniqueFilename(ZIP_NAME, taken);
 };
 
-// The archive lands under a temporary name and is renamed into place, so a Ctrl+C
-// halfway through the write leaves nothing that looks like a finished result. The
-// rename itself is atomic within a directory, which is why both names live there.
 const writeArchive = async (
   blob: Blob,
   directory: string,
@@ -109,15 +103,11 @@ const runRedaction = async ({
   outputDirectory,
   signal,
 }: RunOptions): Promise<RunResult> => {
-  // The weights are one resident copy on this thread. Every worker reaches them over a
-  // port rather than loading its own, which is what makes running files side by side
-  // affordable at all.
   const detect = await createNodeDetector({ onModelProgress });
 
   const pool = workerpool.pool(WORKER_SCRIPT, {
     maxWorkers: jobs ?? defaultJobs(),
     minWorkers: "max",
-    // Fires for a respawned thread too, so a replacement never comes back portless.
     onCreateWorker: () => {
       const channel = new MessageChannel();
 
@@ -135,8 +125,6 @@ const runRedaction = async ({
   const warnings: Array<FileWarnings> = [];
   const counts: Array<number> = [];
 
-  // Between files the old loop checked `signal.aborted`, which could not interrupt one
-  // already running. Terminating the pool reaches into the file itself.
   const stop = () => {
     void pool.terminate(true);
   };
@@ -168,7 +156,6 @@ const runRedaction = async ({
     const name = basename(files[index]);
 
     if (outcome.status === "rejected") {
-      // An aborted run has no failures to report, only a cancellation.
       if (!signal.aborted) {
         failures.push({ name, reason: describeError(outcome.reason) });
       }

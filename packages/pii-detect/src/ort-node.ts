@@ -12,7 +12,6 @@ import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime.t
 
 const CACHE_DIR = path.join(homedir(), ".cache", "localveil", "models");
 
-// Node has no WebGPU; the CPU provider is this runtime's slow tier.
 const pickDevice = (): Promise<ModelDevice> => Promise.resolve("wasm");
 
 const cachePathFor = (url: string) => {
@@ -24,8 +23,6 @@ const cachePathFor = (url: string) => {
 const isMissingFile = (error: unknown) =>
   error instanceof Error && Reflect.get(error, "code") === "ENOENT";
 
-// The download already succeeded and is being returned, so a failed write is not
-// the reader's problem, but silence would hide a full disk from whoever debugs it.
 const warnNotKept = (file: string, error: unknown) => {
   // oxlint-disable-next-line eslint/no-console
   console.warn(`Could not keep the model at ${file}`, error);
@@ -35,8 +32,6 @@ const keepOnDisk = async (file: string, bytes: Uint8Array) => {
   try {
     await mkdir(path.dirname(file), { recursive: true });
 
-    // Written whole and renamed into place so a crash mid-write cannot leave a
-    // truncated file that every later run would feed to the session.
     const part = `${file}.part-${globalThis.crypto.randomUUID()}`;
 
     await writeFile(part, bytes);

@@ -3,14 +3,10 @@ import { CACHE_KEY } from "./resumable-cache.ts";
 const MODEL_HOST = "huggingface.co";
 
 type PurgeOptions = {
-  // Weight file names still in use; anything else heavy goes.
   keepFiles: Array<string>;
   revision: string;
 };
 
-// A model swap, revision bump, or tier change orphans the previous weights in the
-// browser cache, and nothing else ever deletes them, so each one would cost readers
-// hundreds of MB of storage forever.
 const isStale = (url: string, { keepFiles, revision }: PurgeOptions) => {
   if (!url.includes(MODEL_HOST)) {
     return false;

@@ -2,9 +2,6 @@ import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The whole document is faked: pdf.js needs a DOM and real bytes, tesseract needs a
-// wasm build, and neither is what this file is about. What it is about is the order
-// the pages are read and painted in, which is where every bug in this path has been.
 const events: Array<string> = [];
 
 type FakePage = { layer: string; words: Array<string> };
@@ -23,7 +20,6 @@ const state = {
 const WORD_WIDTH = 40;
 const LINE_HEIGHT = 20;
 
-// Word `i` sits between x = 40i and x = 40i + 40.
 const boxFor = (index: number): Bbox => ({
   x0: index * WORD_WIDTH,
   x1: index * WORD_WIDTH + WORD_WIDTH,
@@ -93,8 +89,6 @@ vi.mock("pdf-lib", () => ({
   StandardFonts: { Helvetica: "Helvetica" },
 }));
 
-// Only the two functions that reach outside are stubbed. The word filter under test
-// is the real one, so these tests measure the rule rather than a copy of it.
 vi.mock("@repo/ocr", async (importOriginal) => ({
   ...(await importOriginal<typeof Ocr>()),
   detectLanguage: () => ({ confidence: 0.9, language: state.language }),
@@ -192,8 +186,6 @@ describe("pdfRedactor", () => {
     expect(blob.size).toBeGreaterThan(0);
   });
 
-  // A name the model only tags on the last page still has to be covered on the first,
-  // so no page may be painted until every page has been read.
   it("reads every page before it paints any of them", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima")];
 
@@ -233,8 +225,6 @@ describe("pdfRedactor", () => {
     expect(redactionCount).toBe(0);
   });
 
-  // A wall of .notdef boxes recognises as gibberish, which the model tags as one long
-  // name and paints over end to end. Every word on such a page scores low.
   it("finds nothing to search in a page the recogniser could not read", async () => {
     state.confidenceOf = () => 28;
 
@@ -253,8 +243,6 @@ describe("pdfRedactor", () => {
     expect(state.painted).toEqual([]);
   });
 
-  // The case this floor exists for: a driving licence whose fields read at 90-plus
-  // while the background averaged the page down to 46.
   it("covers the words it could read on a page the average would have condemned", async () => {
     state.confidence = 46;
     state.confidenceOf = (text) => (text === "Ana" || text === "Lima" ? 95 : 20);
@@ -274,7 +262,6 @@ describe("pdfRedactor", () => {
     expect(warnings).toContain("warning.lowConfidence");
   });
 
-  // Every real scan has a stray mark under the floor.
   it("says nothing about the odd word it could not make out", async () => {
     state.pages = [page("Invoice for Ana Lima on the fourteenth of March")];
     state.confidenceOf = (text) => (text === "fourteenth" ? 20 : 95);
@@ -331,8 +318,6 @@ describe("pdfRedactor", () => {
     expect(state.recognisedIn).toEqual([undefined]);
   });
 
-  // An identity card carries almost no prose to guess from, and the reader holding
-  // one already knows the answer.
   it("recognises every page in the language the caller forced", async () => {
     state.pages = [{ layer: "", words: ["Ana", "Lima"] }, page("Signed by Ana Lima")];
 

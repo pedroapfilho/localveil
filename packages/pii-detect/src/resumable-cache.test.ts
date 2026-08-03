@@ -142,8 +142,6 @@ describe("createResumableCache", () => {
     expect(await bytesOf(response as Response)).toEqual(BODY);
   });
 
-  // Reading one response must not consume the other. They used to be a response and
-  // its clone, which tees the body and buffers a second copy of the whole file.
   it("leaves the cached copy readable after the caller has read theirs", async () => {
     const { entries } = memoryCaches();
 
@@ -189,8 +187,6 @@ describe("createResumableCache", () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  // The second tab waits on the lock, and by the time it runs the first tab has put
-  // the file in the cache. Downloading it again would clear the chunks from under it.
   it("takes the file another tab finished while it waited for the lock", async () => {
     const { entries } = memoryCaches();
     const fetchRange = rangeServer();
@@ -231,9 +227,6 @@ describe("createResumableCache", () => {
     });
   });
 
-  // The cache is handed one URL at a time and never learns how many are coming, so a
-  // total added up across them would be the total so far: a small file finishing would
-  // read as the whole job being done. Each file is reported on its own instead.
   it("reports each file against its own size, not against the ones before it", async () => {
     memoryCaches();
 

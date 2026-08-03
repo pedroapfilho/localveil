@@ -45,9 +45,7 @@ const useRedactionRun = ({ jobs, language, onSettled, outputDirectory }: Redacti
               files,
               jobs,
               language,
-              // Dropping the model fraction here is what makes the download show once:
-              // the first sign of real work retires the bar rather than leaving it
-              // parked at 100% for the rest of the run.
+
               onFileProgress: ({ fraction, index, stage }) => {
                 setProgress({ fileIndex: index, fraction, modelFraction: null, stage });
               },

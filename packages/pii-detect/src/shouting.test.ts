@@ -33,8 +33,6 @@ describe("collectShouting", () => {
     expect(collectShouting("PEDRO AFONSO PEDROSA").text).toBe("Pedro Afonso Pedrosa");
   });
 
-  // The reason this gate exists: every log line carries a level, and reading the
-  // whole file twice to reach one was the entire cost of the second pass.
   it("leaves a line whose only capitals are one acronym", () => {
     expect(collectShouting("2026-01-01 INFO user signed in").text).toBe("");
   });
@@ -65,8 +63,6 @@ describe("collectShouting", () => {
     expect(collectShouting("")).toEqual({ segments: [], text: "" });
   });
 
-  // Case is length-preserving for almost every letter. U+0130 lowercases to two code
-  // units, and a line that changed length would shift every later offset.
   it("skips a line whose length case folding would change", () => {
     expect(collectShouting("MAİL ANKARA").text).toBe("");
   });

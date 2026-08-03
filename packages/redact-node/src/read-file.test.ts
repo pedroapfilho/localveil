@@ -38,8 +38,6 @@ describe("readFileAsFile", () => {
     await expect(file.text()).resolves.toContain("John Smith");
   });
 
-  // tesseract's node loader ends in `new Uint8Array(image)`, which is why the file has
-  // to be able to spell itself out as bytes.
   it("spells itself out as bytes for a recogniser that reads nothing else", async () => {
     const file = await readFileAsFile(`${FIXTURES}sample.png`);
     const bytes = new Uint8Array(file);

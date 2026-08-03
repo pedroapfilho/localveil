@@ -7,11 +7,6 @@ type ResumableCache = {
   put: (name: string, response: Response) => Promise<void>;
 };
 
-// Bytes for one file at a time rather than a fraction across all of them. The cache is
-// handed one URL at a time and never learns how many more are coming, so any total it
-// added up would be the total so far: every small file that finished would read as the
-// whole job being done, and the next one to register would undo it. What counts as the
-// download is a question for whoever knows which files matter.
 type CacheProgress = { loaded: number; name: string; total: number };
 
 type ResumableCacheOptions = {
@@ -27,24 +22,17 @@ const CACHE_KEY = "transformers-cache";
 
 const isHttpUrl = (name: string) => name.startsWith("https://") || name.startsWith("http://");
 
-// The download already succeeded and is being returned, so this is not the reader's
-// problem, but silence would hide a full disk from whoever is debugging it.
 const warnStorageFailed = (name: string, error: unknown) => {
   // oxlint-disable-next-line eslint/no-console
   console.warn(`Could not keep ${name} in the browser cache`, error);
 };
 
-// Two tabs write chunks under the same key, and whichever finishes first clears the
-// store from under the other, which then assembles a file of the wrong size. A browser
-// without the Locks API behaves as it did before.
 const underLock = (name: string, run: () => Promise<Response>) => {
   const { locks } = globalThis.navigator;
 
   return locks === undefined ? run() : locks.request(`localveil-model:${name}`, run);
 };
 
-// The cache is asked for a local path first and only then for the remote URL, so a
-// non-URL key is a miss rather than something to go and fetch.
 const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCache => {
   const {
     cacheKey = CACHE_KEY,
@@ -68,8 +56,6 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
       }
 
       return underLock(name, async () => {
-        // Asked again on the other side of the lock: waiting for it means another tab
-        // was downloading this, and it has finished by now.
         const arrived = await cache.match(name);
 
         if (arrived !== undefined) {
@@ -87,8 +73,6 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
 
         const headers = { "content-length": String(blob.size) };
 
-        // Two responses over the one blob rather than `clone()`, which tees the body
-        // and buffers a second copy of it while the cache write drains.
         await cache.put(name, new Response(blob, { headers })).catch((error: unknown) => {
           warnStorageFailed(name, error);
         });

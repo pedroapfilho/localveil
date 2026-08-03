@@ -14,9 +14,6 @@ import { useRedaction } from "./use-redaction";
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
 
-// The same shapes as favicon.svg, inline rather than fetched: it is three rectangles,
-// and an image request for them would cost a round trip and a frame of empty box. The
-// h1 beside it carries the name, so there is nothing here to announce.
 const BrandMark = () => (
   <svg aria-hidden className="size-12 shrink-0" viewBox="0 0 32 32">
     <rect className="fill-primary" height="32" rx="7" width="32" />
@@ -70,9 +67,6 @@ const App = () => {
         {t("app.skipToContent")}
       </a>
 
-      {/* min-w-0 because a grid item sizes to its own min-content by default, and the
-          progress bar on a file's row would otherwise widen the page past the viewport
-          on a narrow screen. */}
       <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
         <div className="flex justify-end">
           <LanguagePicker />
@@ -101,8 +95,6 @@ const App = () => {
             onFilesSelected={handleFilesSelected}
           />
 
-          {/* Both arrive with the first file and leave with the last, so they slide in
-              rather than appearing under the reader's cursor. */}
           <AnimatePresence initial={false}>
             {queued ? (
               <motion.div
