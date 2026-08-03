@@ -62,6 +62,7 @@ const reported = {
   done: [] as Array<string>,
   errors: [] as Array<{ id: string; message: string; unsupported: boolean }>,
   model: [] as Array<string>,
+  modelLost: [] as Array<string>,
   progress: [] as Array<{ fraction: number; id: string }>,
 };
 
@@ -112,6 +113,9 @@ const poolOptions = (maxWorkers: number) => ({
   onError: (id: string, message: string, unsupported: boolean) => {
     reported.errors.push({ id, message, unsupported });
   },
+  onModelLost: (reason: string) => {
+    reported.modelLost.push(reason);
+  },
   onModelProgress: (_fraction: number, stage: string) => {
     reported.model.push(stage);
   },
@@ -130,6 +134,7 @@ const resetFixture = () => {
   reported.done.length = 0;
   reported.errors.length = 0;
   reported.model.length = 0;
+  reported.modelLost.length = 0;
   reported.progress.length = 0;
   vi.restoreAllMocks();
 };

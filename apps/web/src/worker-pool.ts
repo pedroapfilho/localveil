@@ -27,6 +27,7 @@ type RedactionPoolOptions = {
   maxWorkers: number;
   onDone: (id: string, result: RedactionResult) => void;
   onError: (id: string, message: string, unsupported: boolean) => void;
+  onModelLost: (reason: string) => void;
   onModelProgress: (fraction: number, stage: ModelStageKey) => void;
   onProgress: (id: string, fraction: number, stage: FileStageKey) => void;
 };
@@ -97,7 +98,7 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
 };
 
 const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
-  const { maxWorkers, onDone, onError, onModelProgress, onProgress } = options;
+  const { maxWorkers, onDone, onError, onModelLost, onModelProgress, onProgress } = options;
 
   const jobs = new Map<string, LiveJob>();
 
@@ -158,7 +159,13 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
         }
       }
 
+      // Passed on only once the model is past recovering, and after the files it took
+      // down with it, so it reads as the reason for their failures rather than as one
+      // more of them. A loss the host respawns from stays quiet: the weights come back
+      // from cache and the files behind them go back through the queue.
       if (fatal) {
+        onModelLost(reason);
+
         return;
       }
 

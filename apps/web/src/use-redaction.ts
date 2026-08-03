@@ -1,8 +1,8 @@
 import { useTranslations } from "@repo/i18n";
-import type { DocumentLanguage, ModelStageKey } from "@repo/redact-core";
+import type { DocumentLanguage } from "@repo/redact-core";
 import { buildZip } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
@@ -12,9 +12,28 @@ import { createRedactionPool } from "./worker-pool";
 
 const ZIP_NAME = "localveil.zip";
 
-type ModelState = { fraction: number; stage?: ModelStageKey };
+type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
-const INITIAL_MODEL: ModelState = { fraction: 0 };
+// The weights arrive as a stream of progress messages rather than as a promise, and
+// sonner wants a promise to hang a spinner on, so one is made to stand for the download
+// and settled by hand when it lands. The executor runs before the constructor returns,
+// which is what leaves both handles set here; checked rather than asserted, the way the
+// pool checks what workerpool hands it.
+const deferred = (): Deferred => {
+  let resolve: Deferred["resolve"] | undefined;
+  let reject: Deferred["reject"] | undefined;
+
+  const promise = new Promise<void>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+
+  if (resolve === undefined || reject === undefined) {
+    throw new TypeError("The promise executor did not run");
+  }
+
+  return { promise, reject, resolve };
+};
 
 const triggerDownload = (blob: Blob) => {
   const url = URL.createObjectURL(blob);
@@ -33,13 +52,17 @@ const triggerDownload = (blob: Blob) => {
 
 const useRedaction = () => {
   const { t } = useTranslations();
-  const [model, setModel] = useState<ModelState>(INITIAL_MODEL);
   const poolRef = useRef<RedactionPool | null>(null);
   const translateRef = useRef(t);
 
   // The detector raises this twice on the fallback path, and it is the same news both
   // times.
   const saidSlowRef = useRef(false);
+
+  // Null between downloads. Holding the pair is what keeps one download to one toast:
+  // the weights report their way up in hundreds of messages, and each of them would
+  // otherwise raise a spinner of its own.
+  const modelRef = useRef<Deferred | null>(null);
 
   useEffect(() => {
     translateRef.current = t;
@@ -80,12 +103,19 @@ const useRedaction = () => {
             : translateRef.current("toast.failed", { name }),
         );
       },
-      // A slow device is a notice about the machine, not a measurement of the download,
-      // and it is reported with a fraction of zero. Taking it as progress sent the bar
-      // back to empty on the wasm fallback, which is raised after a whole download
-      // attempt has already finished. It is said once, in a toast, because the bar it
-      // would otherwise sit beside has no words to spare.
-      onModelProgress: (fraction, stage) => {
+      // Raised only for a model past recovering, so the spinner this settles is never
+      // one the next respawn was about to make good on.
+      onModelLost: (reason) => {
+        const lost = modelRef.current;
+
+        modelRef.current = null;
+        lost?.reject(new Error(reason));
+      },
+      // The fraction goes unread: sonner's spinner has no percentage to put it in, and
+      // the file rows have their own bars for the work behind this one.
+      onModelProgress: (_fraction, stage) => {
+        // A slow device is a notice about the machine rather than a step of the
+        // download, so it neither opens the download's notice nor settles it.
         if (stage === "model.slowDevice") {
           if (!saidSlowRef.current) {
             saidSlowRef.current = true;
@@ -95,7 +125,28 @@ const useRedaction = () => {
           return;
         }
 
-        setModel({ fraction, stage });
+        const pending = modelRef.current;
+
+        if (stage === "model.ready") {
+          modelRef.current = null;
+          pending?.resolve();
+
+          return;
+        }
+
+        if (pending !== null) {
+          return;
+        }
+
+        const started = deferred();
+
+        modelRef.current = started;
+
+        toast.promise(started.promise, {
+          error: translateRef.current("model.failed"),
+          loading: translateRef.current("model.downloading"),
+          success: translateRef.current("model.ready"),
+        });
       },
       onProgress: (id, fraction, stage) => {
         useJobStore.getState().updateJob(id, { progress: fraction, stage, status: "running" });
@@ -216,8 +267,7 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { clear, downloadZip, model, remove, removeMany, setLanguage, submit };
+  return { clear, downloadZip, remove, removeMany, setLanguage, submit };
 };
 
 export { useRedaction };
-export type { ModelState };
