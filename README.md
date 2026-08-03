@@ -16,7 +16,7 @@ There is no account and no server. Once the model is cached, the page works offl
 - **What it is:** an app that redacts personal data from files locally, in the browser or the terminal.
 - **What it takes:** plain text, Markdown, CSV, JSON, logs, PDFs, and images, in English, Portuguese or Spanish.
 - **What it gives back:** the same files with the personal data covered, in a ZIP.
-- **Where it runs:** entirely in the tab or in your shell. Nothing is uploaded, and the only network traffic is the one-time model download.
+- **Where it runs:** entirely in the tab or in your shell. Nothing is uploaded. The only network traffic is the detection weights, fetched once, and a Tesseract language file the first time something scanned is read in a given language.
 
 ## Quickstart
 
@@ -32,12 +32,13 @@ The first run downloads the detection model, which is large and takes a while. I
 For the terminal:
 
 ```bash
-pnpm --filter cli start            # browse and pick files
-pnpm --filter cli start scan.pdf   # or name them up front
-pnpm --filter cli start --lang pt scan.pdf
+pnpm --filter cli start                    # browse and pick files
+pnpm --filter cli start scan.pdf           # or name them up front
+pnpm --filter cli start --lang pt scan.pdf # skip the language guessing
+pnpm --filter cli start --jobs 2 *.pdf     # cap how many files run at once
 ```
 
-The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`.
+The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`. Without `--jobs` it runs half the core count, up to four files at once.
 
 ## What gets covered
 
@@ -54,11 +55,70 @@ The model tags eight kinds of personal data.
 | `account_number`  | an IBAN or a card number   |
 | `secret`          | an API key or password     |
 
-Detection runs on `gliner_multi_pii-v1`, a GLiNER model whose training languages include Portuguese and whose label set was built for exactly this: CPF, CNPJ and driver's licence numbers are things it was trained to recognise, not things it has to guess at.
-
-Below the model sits a pattern layer for numbers that carry their own arithmetic. CPF, CNPJ, IBAN and card numbers are matched and then verified by their check digits, so an invoice number that merely looks right is left alone. RG, CNH and CEP are matched beside the labels a Brazilian document prints next to them, with only the number covered and the label left readable. Dates in `dd/mm/yyyy` form are range-checked, phone shapes cover US and Brazilian conventions, and a span of years like 2019-2024 is recognised as not being a telephone.
+Three things put a box on the page: a named-entity model, a pattern layer beneath it for numbers that carry their own arithmetic, and a repeat pass over the whole document. All three are described in [Models](#models).
 
 A name the model tags once gets covered everywhere else it appears in the same document, including on pages it was never tagged on. A model that catches a full name in one sentence will often walk past the bare first name two lines down.
+
+## Models
+
+Two models run here, and neither is bundled. Both are downloaded on first use and cached from then on.
+
+### Detection
+
+Spans come from `gliner_multi_pii-v1`, a GLiNER model whose training languages include Portuguese and whose label set was built for exactly this: CPF, CNPJ and driver's licence numbers are things it was trained to recognise, not things it has to guess at.
+
+The weights are the ONNX export of that model, [`onnx-community/gliner_multi_pii-v1`](https://huggingface.co/onnx-community/gliner_multi_pii-v1), pinned to one commit rather than tracked on `main`. Unpinned, a download resumed across an update splices bytes from two revisions into a single file, and the cache key never moves when the model does. The tokenizer beside it loads through `@huggingface/transformers` at the same commit.
+
+One export, `model_q4.onnx`, is used in both the browser and the CLI: 4-bit weights with activations left in fp32. The dynamic-int8 export is a third of the size and scores correctly on native CPU, but it collapses on the browser's wasm integer kernels, where a name scoring 0.999 natively came back at 0.17. The fp16-activation exports either cannot create a session at all, because the model's LSTM has no fp16 CPU kernel, or crush the person head on WebGPU. Carrying one file also means the terminal and the tab cannot disagree about a document, and it makes the WebGPU-to-wasm fallback a cache hit rather than a second download.
+
+### Where the model runs
+
+In the browser, `onnxruntime-web` takes WebGPU when `navigator.gpu` yields an adapter and wasm when it does not. In the CLI, `onnxruntime-node` runs on native CPU and already spreads one inference across every core.
+
+Either way there is exactly one session. The browser keeps it in a worker of its own, the CLI on its main thread, and the workers redacting files reach it over a `MessagePort` instead of loading their own copy. Nearly a gigabyte of weights per worker is not affordable; a port is.
+
+### How text reaches it
+
+GLiNER classifies against label strings handed to it at inference time, so the eight labels above are asked for as 24 prompts: `person`, `username`, `cpf`, `iban`, `driver's license number`, `password` and the rest. The wording is the model card's own, because an in-distribution string scores higher than a synonym, and the list is capped at 25 because that is how many types the model was trained to take in one pass.
+
+| Setting      | Value     | Why                                                                             |
+| ------------ | --------- | ------------------------------------------------------------------------------- |
+| Chunk size   | 280 words | Trained at 384 words per example; the rest is headroom for the label prompts    |
+| Overlap      | 24 words  | An entity split across a boundary is still seen whole by one chunk or the other |
+| Longest span | 12 words  | The model's own `gliner_config.json` says so                                    |
+| Score floor  | 0.35      | A false span costs an unneeded box, a missed one leaks an identity              |
+
+Chunks are measured in words rather than characters because the model's context is a word count. A character budget silently overshoots it on short-word text, and whatever falls off the end is personal data nobody scanned. Each chunk comes back with its own spans, overlapping ones are suppressed, and the rest are merged into a single set of ranges over the original text.
+
+Lines in capitals go through twice. Named-entity models lean on capitalisation so heavily that recall collapses without it: a shouted invoice header went undetected at every threshold, while the same text in title case was tagged at once. Only lines carrying two runs of capitals in a row are retried, since one alone is an acronym far more often than a name, and `INFO` on every line of a log would send the whole file through again.
+
+### The pattern layer
+
+Beneath the model, a pattern pass catches the numbers that can be checked rather than guessed at. It runs on every document.
+
+| Matched            | Kept only if                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| CPF, CNPJ          | the check digits agree                                                                             |
+| IBAN               | mod-97 agrees                                                                                      |
+| Card numbers       | Luhn agrees                                                                                        |
+| RG, CNH, CEP       | the number sits beside the label a Brazilian document prints, and only the number is covered       |
+| `dd/mm/yyyy` dates | the day and the month are in range                                                                 |
+| Phone numbers      | a country code, brackets or a hyphen is there, and the match is not a span of years like 2019-2024 |
+| Email addresses    | it has the shape of an address                                                                     |
+
+So an invoice number that merely looks like a CPF is left alone, and a licence keeps the word `RG` readable next to the blacked-out number.
+
+### Recognition
+
+Anything scanned goes through `tesseract.js`, whose `eng`, `por` and `spa` language files are fetched the first time each is needed and whose worker per language is then kept and reused.
+
+Confidence is read per word rather than per page, because a page average on anything security-printed is a mean over two populations: a driving licence measured 244 words with 56 of them above 90, and a page average of 46 that would have vetoed all of it. Words scoring under 60 are dropped, and a page that loses more than a quarter of its words that way comes back untouched with a warning rather than covered in guesses.
+
+Language detection is not a model. It scores stopword frequency across the three supported languages, written without accents because the English pass drops most of them, and the lists include the field labels identity documents print.
+
+### Reading documents
+
+`pdfjs-dist` renders the pages, `pdf-lib` writes the redacted document back out, and `fflate` packs the result. A PDF's own text layer is read only to sample a language; the word boxes that decide where the paint lands come from recognition instead, for the reasons under [How a file is redacted](#how-a-file-is-redacted).
 
 ## Formats
 
@@ -73,7 +133,7 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 ## Privacy
 
 - **Files stay in the tab:** the app reads them with `FileReader`, processes them in a Web Worker, and writes them back through `Blob`. No `fetch` anywhere touches them.
-- **The only request is the model:** weights come from Hugging Face on first use and stay cached. After that the page works with the network off. When a release changes the model, the superseded weights are deleted from the cache rather than left to sit there.
+- **The only requests are the models:** the detection weights come from Hugging Face on first use, pinned to one revision, and the Tesseract language file for `eng`, `por` or `spa` is fetched the first time something scanned is read in that language. Both stay cached, and after that the page works with the network off. When a release changes the model, the superseded weights are deleted from the cache rather than left to sit there.
 - **Nothing is stored server-side** because there is no server. The app is a static bundle.
 - **Language starts from the browser:** the interface follows `navigator.languages` across English, Portuguese and Spanish, and a picker in the corner overrides it. That choice is the only thing the app keeps in `localStorage`, and it is a language tag, not your data.
 
@@ -83,10 +143,11 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 
 ```mermaid
 flowchart LR
-  web["<b>web</b><br/>dropzone · job list"] --> worker["<b>redact-worker</b><br/>one file at a time"]
-  cli["<b>cli</b><br/>Ink terminal app"] --> node["<b>@repo/redact-node</b><br/>canvas shims for Node"]
+  web["<b>web</b><br/>dropzone · job list"] --> pool["<b>worker pool</b><br/>one file per worker"]
+  cli["<b>cli</b><br/>Ink terminal app"] --> threads["<b>worker pool</b><br/>one file per thread"]
+  threads --> node["<b>@repo/redact-node</b><br/>canvas shims for Node"]
 
-  worker --> redactors
+  pool --> redactors
   node --> redactors
 
   subgraph redactors["one redactor per format"]
@@ -95,8 +156,8 @@ flowchart LR
     image["<b>@repo/redact-image</b>"]
   end
 
-  worker --> detect["<b>@repo/pii-detect</b><br/>GLiNER spans · model cache"]
-  node --> detect
+  pool -. port .-> detect["<b>@repo/pii-detect</b><br/>one GLiNER session · model cache"]
+  threads -. port .-> detect
 
   pdf --> ocr["<b>@repo/ocr</b><br/>Tesseract · language detection"]
   image --> ocr
@@ -108,19 +169,21 @@ flowchart LR
 
 `@repo/redact-core` owns the shared vocabulary: what a span is, the checksum patterns, how spans become rectangles, and how the ZIP is built. Every redactor implements the same `Redactor` shape, so the worker resolves one from the file and knows nothing else about it. Adding a format means adding a package, not editing the worker. The CLI reuses the same redactors through `@repo/redact-node`, which supplies the canvas globals a browser would have provided.
 
+Files run side by side, four at most. Each worker holds pdf.js, a Tesseract worker per language and page-sized canvases, so a pool of one worker per core, which is what `workerpool` does left alone, runs a laptop out of memory. The browser sizes its pool from `hardwareConcurrency` and `deviceMemory`, holding two cores back for the model and the page itself; the CLI takes half the core count, since `onnxruntime-node` already spreads a single inference across all of them. The weights are not part of that arithmetic: one session is loaded once and served to every worker over a port, which is what makes running files in parallel affordable at all.
+
 ## Packages
 
-| Package              | Purpose                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `@repo/redact-core`  | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.    |
-| `@repo/pii-detect`   | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache. |
-| `@repo/ocr`          | Tesseract wrapper returning word boxes, plus stopword language detection across en / pt / es.        |
-| `@repo/redact-text`  | Redactor for text formats. Masks with `█` and keeps line breaks intact.                              |
-| `@repo/redact-pdf`   | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                           |
-| `@repo/redact-image` | Redactor for images. Recognises, paints, and re-encodes.                                             |
-| `@repo/redact-node`  | Runs the redactors under Node: skia-backed canvas globals and file reading for the CLI.              |
-| `@repo/i18n`         | Typed message catalogues for English, Portuguese and Spanish.                                        |
-| `@repo/ui`           | Shared components: dropzone, progress, select, scroll area, button, card, toaster.                   |
+| Package              | Purpose                                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `@repo/redact-core`  | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.                               |
+| `@repo/pii-detect`   | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache.                            |
+| `@repo/ocr`          | Tesseract wrapper returning word boxes, plus stopword language detection across en / pt / es.                                   |
+| `@repo/redact-text`  | Redactor for text formats. Masks with `█` and keeps line breaks intact.                                                         |
+| `@repo/redact-pdf`   | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                                                      |
+| `@repo/redact-image` | Redactor for images. Recognises, paints, and re-encodes.                                                                        |
+| `@repo/redact-node`  | Runs the redactors under Node: skia-backed canvas globals and file reading for the CLI.                                         |
+| `@repo/i18n`         | Typed message catalogues for English, Portuguese and Spanish.                                                                   |
+| `@repo/ui`           | Shared components: dropzone, attachment, progress, select, checkbox, collapsible, scroll area, skeleton, button, card, toaster. |
 
 The apps are `web`, the browser app, and `cli`, the Ink terminal app. `@repo/typescript-config` and `@repo/config-vitest` hold the shared tooling config.
 
@@ -175,13 +238,14 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 
 ## Stack
 
-- **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI, motion for the few animations, zustand for job state, sonner for toasts.
-- **CLI:** Ink 7 with `@napi-rs/canvas` standing in for the browser's drawing surfaces.
-- **Detection:** GLiNER (`gliner_multi_pii-v1`, ONNX) on ONNX Runtime: WebGPU with a wasm fallback in the browser, native CPU in the CLI. The tokenizer loads through `@huggingface/transformers`.
+- **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI with `class-variance-authority` and `cnfast` behind the variants, `lucide-react` for icons, motion and `tw-animate-css` for the few animations, zustand for job state, sonner for toasts.
+- **CLI:** Ink 7 run through `tsx`, with `@napi-rs/canvas` standing in for the browser's drawing surfaces.
+- **Parallelism:** `workerpool` in both apps, one file per worker, with the detection session shared over a `MessagePort`.
+- **Detection:** GLiNER (`gliner_multi_pii-v1`, ONNX, `model_q4.onnx`) on ONNX Runtime: `onnxruntime-web` with WebGPU and a wasm fallback in the browser, `onnxruntime-node` on native CPU in the CLI. The tokenizer loads through `@huggingface/transformers`.
 - **Documents:** `pdfjs-dist` for rendering, `pdf-lib` for rebuilding, `tesseract.js` for recognition, `fflate` for the ZIP.
-- **Build:** Turborepo + pnpm workspaces.
-- **Linting / formatting:** oxlint + oxfmt.
-- **Testing:** Vitest, about 500 unit and component tests.
+- **Build:** Turborepo + pnpm workspaces, PostCSS for the UI package's stylesheet.
+- **Linting / formatting:** oxlint + oxfmt, run over staged files by husky and lint-staged, with `fallow` for dead exports and duplication.
+- **Testing:** Vitest on jsdom, Testing Library for components, `ink-testing-library` for the terminal app, `@vitest/coverage-v8` for coverage. About 500 unit and component tests.
 
 ## Setup
 
@@ -228,4 +292,4 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.
 - **Recognition sets the ceiling on scanned input.** A blurry photo or a PDF with broken fonts yields text nothing can redact, and the app says so rather than guessing.
 - **A redacted PDF is images.** The text layer is rebuilt from recognised words, so it is searchable but not identical to the original, and the file is larger.
-- **The first run is a large download.** Once, resumable, and fetched several ranges at a time. The browser and the terminal run the same 4-bit weights, so they redact a document the same way. The smaller 8-bit export is a third of the size but browser runtimes score it wrongly, which is why nothing here uses it.
+- **The first run is a large download.** Once, resumable, and fetched several ranges at a time. The browser and the terminal run the same 4-bit weights, so they redact a document the same way, and the smaller exports are unusable for the reasons under [Models](#models).
