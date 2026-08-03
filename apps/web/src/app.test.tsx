@@ -1,34 +1,18 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./app";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
-import type { RedactionPoolOptions } from "./worker-pool";
 
-let options: RedactionPoolOptions | undefined;
-
-// The pool has its own tests, and workers cannot run here. This keeps the shell
-// mountable and hands back the callbacks, so a test can answer the way the pool would.
+// The pool has its own tests, and workers cannot run here. What is left is the shell,
+// which only has to mount for these.
 vi.mock("./worker-pool", () => ({
-  createRedactionPool: (given: RedactionPoolOptions) => {
-    options = given;
-
-    return { cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() };
-  },
+  createRedactionPool: () => ({ cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() }),
 }));
-
-const pool = () => {
-  if (options === undefined) {
-    throw new Error("The page never built a pool");
-  }
-
-  return options;
-};
 
 describe("App", () => {
   beforeEach(() => {
-    options = undefined;
     useJobStore.getState().reset();
     // The picker remembers the choice, so a test that switches language would
     // otherwise decide the language of every test that follows it.
@@ -82,47 +66,17 @@ describe("App", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     expect(screen.getByText("notes.txt")).toBeInTheDocument();
-    // Scoped to the file list: the status panel reports the same state at the same
-    // time, which is the point of having it.
+
     const files = within(screen.getByRole("main")).getByRole("list");
 
     expect(within(files).getByText("Queued")).toBeInTheDocument();
   });
 
-  // Last in the column, under the files it reports on. Above the dropzone it was the
-  // one thing on the page that changed height by itself, so everything the reader was
-  // aiming at moved with it.
-  it("puts the status panel below the files", () => {
-    renderWithI18n(<App />);
-
-    const main = screen.getByRole("main");
-    const panel = main.querySelector('[data-slot="progress"]')?.closest("main > *");
-
-    expect(panel).toBe(main.lastElementChild);
-  });
-
+  // Every bar on the page belongs to a file, so an empty page has none.
   it("shows no progress bar before anything has happened", () => {
     renderWithI18n(<App />);
 
     expect(screen.queryByRole("progressbar")).toBeNull();
-  });
-
-  it("reports the model download in the panel it already has", () => {
-    renderWithI18n(<App />);
-
-    fireEvent.change(screen.getByLabelText(/choose files/iv), {
-      target: { files: [new File(["hello"], "notes.txt", { type: "text/plain" })] },
-    });
-
-    act(() => {
-      pool().onModelProgress(0.5, "model.downloading");
-    });
-
-    // The download shares one bar with the file waiting behind it, so a half-finished
-    // download is a quarter of the whole job rather than half of a bar that restarts.
-    const bar = screen.getByRole("progressbar", { name: "Redaction progress" });
-
-    expect(bar.getAttribute("aria-valuenow")).toBe("25");
   });
 
   it("drops a file from the list when it is removed", async () => {

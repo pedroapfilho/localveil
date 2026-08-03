@@ -7,7 +7,6 @@ import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
 import { LanguagePicker } from "./components/language-picker";
 import { SiteFooter } from "./components/site-footer";
-import { StatusPanel } from "./components/status-panel";
 import { APPEAR, SLIDE } from "./motion";
 import { useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
@@ -39,7 +38,7 @@ const BrandMark = () => (
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const { clear, downloadZip, model, remove, removeMany, setLanguage, submit } = useRedaction();
+  const { clear, downloadZip, remove, removeMany, setLanguage, submit } = useRedaction();
 
   useDocumentLocale();
 
@@ -72,7 +71,7 @@ const App = () => {
       </a>
 
       {/* min-w-0 because a grid item sizes to its own min-content by default, and the
-          status panel's progress bar would otherwise widen the page past the viewport
+          progress bar on a file's row would otherwise widen the page past the viewport
           on a narrow screen. */}
       <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
         <div className="flex justify-end">
@@ -124,12 +123,6 @@ const App = () => {
               </motion.div>
             ) : null}
           </AnimatePresence>
-
-          {/* Last, under the files it reports on. Above the dropzone it was the one
-              thing on the page that changed height on its own, so everything the reader
-              was aiming at moved with it. Down here it has only the footer beneath it,
-              and it holds its height anyway. */}
-          <StatusPanel jobs={jobs} model={model} />
         </main>
       </div>
 

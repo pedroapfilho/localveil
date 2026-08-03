@@ -301,6 +301,26 @@ describe("when the model is lost", () => {
     expect(reported.errors.map((entry) => entry.id)).toEqual(["a", "b"]);
     expect(pooled.tasks.length).toBe(2);
   });
+
+  it("says why, once the model is beyond recovery", () => {
+    const pool = build();
+
+    pool.submit(job("a"));
+    modelHost().onLost("The detection model stopped answering", true);
+
+    expect(reported.modelLost).toEqual(["The detection model stopped answering"]);
+  });
+
+  // The host respawns and the files it was holding go back through the queue, so the
+  // page has nothing to tell anyone about.
+  it("stays quiet about a loss it recovers from", () => {
+    const pool = build();
+
+    pool.submit(job("a"));
+    modelHost().onLost("The detection model stopped answering", false);
+
+    expect(reported.modelLost).toEqual([]);
+  });
 });
 
 describe("destroying the pool", () => {

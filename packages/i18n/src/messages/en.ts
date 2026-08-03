@@ -28,9 +28,9 @@ const en = {
   "footer.summary":
     "localveil finds names, emails, phone numbers, addresses, dates and account numbers in your files and paints over them. Detection runs in this tab on your own machine, so nothing you drop here is uploaded.",
   "model.downloading": "Downloading the detection model",
+  "model.failed": "The detection model could not be loaded. Reload the page to try again.",
   "model.ready": "Detection model ready",
   "model.slowDevice": "Running without GPU acceleration, this will be slow.",
-  "panel.label": "Redaction progress",
   "stage.assembling": "Rebuilding the file",
   "stage.detecting": "Looking for personal data",
   "stage.extracting": "Reading the document",

@@ -30,9 +30,10 @@ const es: Messages = {
   "footer.summary":
     "localveil encuentra nombres, correos, teléfonos, direcciones, fechas y números de cuenta en tus archivos y los tapa. La detección se ejecuta en esta pestaña, en tu propia máquina, así que nada de lo que sueltas aquí se envía.",
   "model.downloading": "Descargando el modelo de detección",
+  "model.failed":
+    "No se pudo cargar el modelo de detección. Vuelve a cargar la página para intentarlo de nuevo.",
   "model.ready": "Modelo de detección listo",
   "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",
-  "panel.label": "Progreso de la ocultación",
   "stage.assembling": "Rearmando el archivo",
   "stage.detecting": "Buscando datos personales",
   "stage.extracting": "Leyendo el documento",

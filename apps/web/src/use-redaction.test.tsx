@@ -46,7 +46,7 @@ const pool = () => {
 const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
 
 const Harness = () => {
-  const { clear, model, remove, removeMany, setLanguage, submit } = useRedaction();
+  const { clear, remove, removeMany, setLanguage, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -119,13 +119,23 @@ const Harness = () => {
       <button onClick={clear} type="button">
         clear
       </button>
-
-      <output>{model.fraction}</output>
     </>
   );
 };
 
 const jobsNow = () => useJobStore.getState().jobs;
+
+// sonner takes either a promise or a function returning one, and only the first of
+// those can be settled from here.
+const modelNotice = () => {
+  const [given] = vi.mocked(toast.promise).mock.calls[0];
+
+  if (!(given instanceof Promise)) {
+    throw new Error("The hook never handed sonner a promise");
+  }
+
+  return given;
+};
 
 const submitTwo = () => {
   renderWithI18n(<Harness />);
@@ -150,6 +160,9 @@ beforeEach(() => {
   useJobStore.getState().reset();
   vi.spyOn(toast, "error").mockImplementation(() => "");
   vi.spyOn(toast, "warning").mockImplementation(() => "");
+  // Stubbed rather than left real: sonner attaches the handlers that keep a rejection
+  // from surfacing as an unhandled one, and each test that rejects attaches its own.
+  vi.spyOn(toast, "promise").mockImplementation(() => ({ unwrap: () => Promise.resolve() }));
 });
 
 afterEach(() => {
@@ -254,7 +267,8 @@ describe("what the pool reports", () => {
     expect(unsupported).not.toEqual(failed);
   });
 
-  // The bar this used to sit beside has no words to spare, so it is said in a toast.
+  // Its own notice rather than a line inside the download's: it is news about the
+  // machine, and it outlives the download it arrives during.
   it("warns once about a device without GPU acceleration", () => {
     renderWithI18n(<Harness />);
 
@@ -279,17 +293,89 @@ describe("what the pool reports", () => {
     expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
   });
 
-  // It carries a fraction of zero, and the fallback raises it after a whole download
-  // attempt has already finished.
-  it("does not let that warning send the bar back to empty", () => {
+  it("does not take that warning for a download", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.8, "model.downloading");
       pool().onModelProgress(0, "model.slowDevice");
     });
 
-    expect(screen.getByRole("status").textContent).toBe("0.8");
+    expect(vi.mocked(toast.promise)).not.toHaveBeenCalled();
+  });
+});
+
+describe("the model download", () => {
+  it("is announced once, however many times the weights report in", () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(0.1, "model.downloading");
+      pool().onModelProgress(0.4, "model.downloading");
+      pool().onModelProgress(0.9, "model.downloading");
+    });
+
+    expect(vi.mocked(toast.promise)).toHaveBeenCalledTimes(1);
+
+    const [, copy] = vi.mocked(toast.promise).mock.calls[0];
+
+    expect(copy?.loading).toBe("Downloading the detection model");
+    expect(copy?.success).toBe("Detection model ready");
+  });
+
+  it("settles when the model is ready", async () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(0.4, "model.downloading");
+    });
+
+    const notice = modelNotice();
+
+    act(() => {
+      pool().onModelProgress(1, "model.ready");
+    });
+
+    await expect(notice).resolves.toBeUndefined();
+  });
+
+  it("fails when the model is beyond recovery", async () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(0.4, "model.downloading");
+    });
+
+    const notice = modelNotice();
+
+    act(() => {
+      pool().onModelLost("The detection model stopped answering");
+    });
+
+    await expect(notice).rejects.toThrow("The detection model stopped answering");
+  });
+
+  // A host that dies and respawns fetches the weights again, from cache this time. The
+  // first notice is over by then, so the second fetch needs one of its own.
+  it("is announced again when the weights are fetched a second time", () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(0.4, "model.downloading");
+      pool().onModelProgress(1, "model.ready");
+      pool().onModelProgress(0.2, "model.downloading");
+    });
+
+    expect(vi.mocked(toast.promise)).toHaveBeenCalledTimes(2);
+  });
+
+  it("says nothing for a model that was ready before anyone asked", () => {
+    renderWithI18n(<Harness />);
+
+    act(() => {
+      pool().onModelProgress(1, "model.ready");
+    });
+
+    expect(vi.mocked(toast.promise)).not.toHaveBeenCalled();
   });
 });
 
