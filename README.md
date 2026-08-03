@@ -238,12 +238,12 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 
 ## Stack
 
-- **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI with `class-variance-authority` and `cnfast` behind the variants, `lucide-react` for icons, motion and `tw-animate-css` for the few animations, zustand for job state, sonner for toasts.
+- **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI, motion for the few animations, zustand for job state, sonner for toasts.
 - **CLI:** Ink 7 run through `tsx`, with `@napi-rs/canvas` standing in for the browser's drawing surfaces.
 - **Parallelism:** `workerpool` in both apps, one file per worker, with the detection session shared over a `MessagePort`.
 - **Detection:** GLiNER (`gliner_multi_pii-v1`, ONNX, `model_q4.onnx`) on ONNX Runtime: `onnxruntime-web` with WebGPU and a wasm fallback in the browser, `onnxruntime-node` on native CPU in the CLI. The tokenizer loads through `@huggingface/transformers`.
 - **Documents:** `pdfjs-dist` for rendering, `pdf-lib` for rebuilding, `tesseract.js` for recognition, `fflate` for the ZIP.
-- **Build:** Turborepo + pnpm workspaces, PostCSS for the UI package's stylesheet.
+- **Build:** Turborepo + pnpm workspaces.
 - **Linting / formatting:** oxlint + oxfmt, run over staged files by husky and lint-staged, with `fallow` for dead exports and duplication.
 - **Testing:** Vitest on jsdom, Testing Library for components, `ink-testing-library` for the terminal app, `@vitest/coverage-v8` for coverage. About 500 unit and component tests.
 
