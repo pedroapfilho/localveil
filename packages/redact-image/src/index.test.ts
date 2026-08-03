@@ -99,9 +99,9 @@ describe("image OCR retry", () => {
     expect(contexts).toHaveLength(1);
   });
 
-  it("retries an empty result and paints the original bitmap", async () => {
+  it("redetects language when an automatic reading is retried", async () => {
     mocks.readImageText.mockResolvedValueOnce(reading("en", 0, [])).mockResolvedValueOnce(
-      reading("en", 70, [
+      reading("pt", 70, [
         ["Maria", 92],
         ["Silva", 88],
       ]),
@@ -112,10 +112,78 @@ describe("image OCR retry", () => {
     await redact(detect);
 
     expect(mocks.readImageText).toHaveBeenCalledTimes(2);
-    expect(mocks.readImageText.mock.calls[1]?.[1]).toEqual({ known: "en" });
-    expect(detect).toHaveBeenCalledWith("Maria Silva");
+    expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([{}, {}]);
+    expect(detect.mock.calls.map(([text]) => text)).toEqual(["Maria Silva"]);
     expect(contexts).toHaveLength(2);
     expect(contexts.at(-1)?.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
+  });
+
+  it("redacts PII found only by the original low-confidence reading", async () => {
+    mocks.readImageText
+      .mockResolvedValueOnce(
+        reading("pt", 40, [
+          ["CPF", 95],
+          ["108.467.036-45", 92],
+          ["ruido", 10],
+          ["texto", 15],
+        ]),
+      )
+      .mockResolvedValueOnce(
+        reading("pt", 80, [
+          ["NOME", 95],
+          ["JOSE", 94],
+          ["DA", 93],
+          ["SILVA", 92],
+          ["VALIDADE", 91],
+        ]),
+      );
+
+    const detect = vi.fn<Detect>((text) =>
+      Promise.resolve(
+        text === "CPF 108.467.036-45"
+          ? [{ end: 18, label: "account_number", score: 1, start: 4 }]
+          : [],
+      ),
+    );
+
+    const result = await redact(detect);
+
+    expect(detect.mock.calls.map(([text]) => text)).toEqual([
+      "CPF 108.467.036-45",
+      "NOME JOSE DA SILVA VALIDADE",
+    ]);
+    expect(contexts.at(-1)?.fillRect).toHaveBeenCalledWith(12, 0, 10, 10);
+    expect(result.redactionCount).toBe(1);
+  });
+
+  it("does not count the same PII twice when both readings find it", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 15],
+    ]);
+    const retry = reading("pt", 80, [
+      ["CPF", 96],
+      ["10846703645", 94],
+      ["NOME", 93],
+      ["JOSE", 92],
+      ["SILVA", 91],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const detect = vi.fn<Detect>((text) => {
+      const start = text.indexOf("108");
+
+      return Promise.resolve([
+        { end: start + (text.includes(".") ? 14 : 11), label: "account_number", score: 1, start },
+      ]);
+    });
+
+    const result = await redact(detect);
+
+    expect(result.redactionCount).toBe(1);
   });
 
   it("uses an improved Portuguese retry", async () => {
