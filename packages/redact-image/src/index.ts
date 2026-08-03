@@ -1,5 +1,6 @@
+import type { ImageReading } from "@repo/ocr";
 import { legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
-import type { Rect, Redactor, WarningKey } from "@repo/redact-core";
+import type { Detect, Rect, Redactor, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
   mergeOverlappingRanges,
@@ -46,6 +47,47 @@ const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>)
   }
 };
 
+const findRedactions = async (reading: ImageReading, detect: Detect) => {
+  const { text, words } = buildWordIndex(legibleWords(reading));
+
+  if (text.length === 0) {
+    return { keys: [], rects: [] };
+  }
+
+  const detected = await detect(text);
+  const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
+  const ranges = mergeOverlappingRanges(spans);
+
+  return {
+    keys: ranges.map((range) =>
+      text
+        .slice(range.start, range.end)
+        .normalize("NFD")
+        .replaceAll(/[^\p{Letter}\p{Number}]/gv, "")
+        .toLowerCase(),
+    ),
+    rects: spansToRects(spans, words),
+  };
+};
+
+const redactionCount = (results: Array<Awaited<ReturnType<typeof findRedactions>>>) => {
+  const maximums = new Map<string, number>();
+
+  for (const result of results) {
+    const occurrences = new Map<string, number>();
+
+    for (const key of result.keys) {
+      occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+    }
+
+    for (const [key, count] of occurrences) {
+      maximums.set(key, Math.max(maximums.get(key) ?? 0, count));
+    }
+  }
+
+  return [...maximums.values()].reduce((total, count) => total + count, 0);
+};
+
 const imageRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),
   redact: async (file, detect, onProgress, options) => {
@@ -55,19 +97,23 @@ const imageRedactor: Redactor = {
 
     onProgress(0.1, "stage.recognising");
 
-    let reading = await readImageText(
+    const first = await readImageText(
       file,
       options?.language === undefined ? {} : { known: options.language },
     );
+    const readings = [first];
 
-    if (shouldRetryOcr(reading)) {
+    if (shouldRetryOcr(first)) {
       const prepared = binarizeForOcr(bitmap);
-      const retried = await readImageText(prepared, {
-        known: options?.language ?? reading.language,
-      });
+      const retried = await readImageText(
+        prepared,
+        options?.language === undefined ? {} : { known: options.language },
+      );
 
-      reading = betterReading(reading, retried);
+      readings.push(retried);
     }
+
+    const reading = readings.reduce((best, candidate) => betterReading(best, candidate));
 
     const warnings: Array<WarningKey> = [];
 
@@ -79,13 +125,13 @@ const imageRedactor: Redactor = {
 
     onProgress(0.6, "stage.detecting");
 
-    const { text, words } = buildWordIndex(legibleWords(reading));
-    const detected = await detect(text);
-    const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
+    const redactions = await Promise.all(
+      readings.map((candidate) => findRedactions(candidate, detect)),
+    );
 
     onProgress(0.85, "stage.redacting");
 
-    const rects = spansToRects(spans, words);
+    const rects = redactions.flatMap((result) => result.rects);
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
 
     paint(canvas, bitmap, rects);
@@ -96,7 +142,11 @@ const imageRedactor: Redactor = {
 
     onProgress(1, "stage.finished");
 
-    return { blob, redactionCount: mergeOverlappingRanges(spans).length, warnings };
+    return {
+      blob,
+      redactionCount: redactionCount(redactions),
+      warnings,
+    };
   },
 };
 
