@@ -42,10 +42,6 @@ const GlossaryTerm = ({ label, name }: GlossaryTermProps) => {
   );
 };
 
-/**
- * Terms are matched against the copy rather than marked up inside it, so a
- * translator can move or reword the sentence around them without touching JSX.
- */
 const GlossaryText = ({ children }: { children: string }) => {
   const { t } = useTranslations();
 
