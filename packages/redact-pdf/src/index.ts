@@ -9,6 +9,7 @@ import {
   toArrayBuffer,
   tokensFromSpans,
 } from "@repo/redact-core";
+import type { PDFDocument } from "pdf-lib";
 
 import { OffscreenCanvasFactory } from "./canvas-factory.ts";
 import { isCovered } from "./covered.ts";
@@ -83,6 +84,33 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
 
   let language: OcrLanguage | undefined = options?.language;
   let anyText = false;
+
+  let original: Promise<PDFDocument> | undefined;
+  let copying = true;
+
+  const copyPage = async (number: number) => {
+    if (!copying) {
+      return false;
+    }
+
+    try {
+      const from = await (original ??= file
+        .arrayBuffer()
+        .then((bytes) => pdfLib.PDFDocument.load(bytes)));
+      const [copied] = await out.copyPages(from, [number - 1]);
+
+      out.addPage(copied);
+
+      return true;
+    } catch (error) {
+      copying = false;
+
+      // oxlint-disable-next-line eslint/no-console
+      console.warn("Could not copy an untouched page, so it is painted instead", error);
+
+      return false;
+    }
+  };
 
   const renderPage = async (number: number) => {
     const page = await pdf.getPage(number);
@@ -163,11 +191,17 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
 
     onProgress(progress, "stage.redacting");
 
-    const { canvas, viewport } = await renderPage(number);
     const spans = [...page.spans, ...spansForTokens(page.text, everyToken)];
     const rects = spansToRects(spans, page.words);
 
     redactionCount += mergeOverlappingRanges(spans).length;
+
+    if (rects.length === 0 && (await copyPage(number))) {
+      continue;
+    }
+
+    const { canvas, viewport } = await renderPage(number);
+
     paint(canvas, rects);
 
     onProgress(progress, "stage.assembling");
