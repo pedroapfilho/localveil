@@ -6,7 +6,7 @@
 > status row for this plan in `plans/README.md`.
 >
 > **Drift check (run first)**:
-> `git diff --stat 7fdfa30..HEAD -- packages/redact-core packages/redact-text packages/redact-image packages/redact-pdf apps/web apps/cli`
+> `git diff --stat 370cb57..HEAD -- packages/redact-core packages/redact-text packages/redact-image packages/redact-pdf apps/web apps/cli`
 > If any in-scope file changed since this plan was written, compare the "Current state"
 > excerpts against the live code before proceeding; on a mismatch, treat it as a STOP
 > condition.
@@ -18,7 +18,7 @@
 - **Risk**: MED
 - **Depends on**: none
 - **Category**: direction
-- **Planned at**: commit `7fdfa30`, 2026-08-10
+- **Planned at**: commit `7fdfa30`, 2026-08-10; revised against `370cb57` after plans 001, 004, 005, 006 and 007 landed
 
 ## Why this matters
 
@@ -122,6 +122,61 @@ and `apps/web/src/store.ts` holds one `Job` per file with `progress`, `stage`, `
 optional `result: { blob, redactionCount, warnings }`. `apps/web/src/components/job-row.tsx`
 renders a job as an `Attachment` with a `Collapsible` details panel already wired for
 language choice and warnings; that panel is where review lives.
+
+### Two constraints found while starting this plan, which change its shape
+
+Both were discovered by reading `apps/web/src/worker-pool.ts` and `redact-worker.ts` after the
+plan was first written. Neither is optional, and neither was in the original step list.
+
+**1. `apply` needs a detect port of its own.** The plan assumed only `analyse` talks to the
+model. It does not: since `feat(redact-core): warn when detections survive into the output`,
+every redactor re-reads its own result through `detect` to raise `warning.notFullyRedacted`.
+That call now lives in `apply`. Meanwhile `apps/web/src/redact-worker.ts` closes the port in a
+`finally`:
+
+```ts
+  } finally {
+    unwind();
+    port.close();
+  }
+```
+
+and `apps/web/src/worker-pool.ts` tears the channel down when the task settles, in `release`:
+
+```ts
+clearTimeout(job.watchdog);
+jobs.delete(id);
+host.disconnect(job.channel);
+```
+
+So the port from `analyse` is gone by the time review ends. Give `applyTask` a fresh
+`MessageChannel` and a fresh `host.connect(channel, …)`, exactly as `submit` does today, rather
+than trying to hold the first one open across a human-length pause. Holding it open would also
+pin a worker for the duration of the review, which is worse: the pool is sized to
+`probeCapacity().maxWorkers` and a reviewer reading forty pages would starve every other file.
+
+**2. The watchdog will kill a job while somebody is reading it.** `SILENCE_LIMIT` is 120 000 ms
+and `arm` re-arms it only on a progress event:
+
+```ts
+const SILENCE_LIMIT = 120_000;
+...
+    job.watchdog = setTimeout(() => {
+      give(job.request.id, "The redaction worker stopped answering");
+    }, SILENCE_LIMIT);
+```
+
+A job sitting in `reviewing` emits no progress, so after two minutes the pool cancels it and
+reports "The redaction worker stopped answering" over a perfectly healthy review. Disarm the
+watchdog when a job enters `reviewing` and arm it again when `applyTask` is submitted. Do not
+simply raise `SILENCE_LIMIT`: it exists to catch a wedged worker, and a review has no upper
+bound.
+
+A consequence worth stating: because the worker is released between phases, `Analysis.handle`
+crosses the boundary twice, out of `analyse` and back into `apply`. It must therefore be
+structured-cloneable **and** small. For the PDF path that means the per-page
+`{ spans, text, words }` array and nothing else; re-open the file from the `File` handle in
+`apply` rather than carrying its bytes.
 
 ### Repo conventions to match
 
