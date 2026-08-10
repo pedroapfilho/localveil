@@ -175,6 +175,41 @@
     calc(100% - var(--scroll-fade-reveal)) 100%;
 }
 
+@keyframes shimmer-sweep {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+@utility shimmer {
+  --shimmer-color: color-mix(in oklch, currentColor 35%, var(--color-background));
+  --shimmer-duration: 2s;
+  --shimmer-angle: 20deg;
+  --shimmer-spread: calc(3ch + 40px);
+
+  background-image: linear-gradient(
+    var(--shimmer-angle),
+    currentColor calc(50% - var(--shimmer-spread)),
+    var(--shimmer-color) 50%,
+    currentColor calc(50% + var(--shimmer-spread))
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-sweep var(--shimmer-duration) linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    animation: none;
+  }
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
 

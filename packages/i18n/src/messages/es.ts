@@ -29,6 +29,12 @@ const es: Messages = {
   "footer.offline": "Funciona sin conexión una vez descargado el modelo.",
   "footer.summary":
     "localveil encuentra nombres, correos, teléfonos, direcciones, fechas y números de cuenta en tus archivos y los tapa. La detección se ejecuta en esta pestaña, en tu propia máquina, así que nada de lo que sueltas aquí se envía.",
+  "glossary.ocr.description":
+    "Reconocimiento óptico de caracteres: leer las letras de una imagen de la página, para que un archivo escaneado se pueda buscar y ocultar como texto escrito.",
+  "glossary.ocr.label": "OCR",
+  "glossary.searchable.description":
+    "Un PDF guarda una capa de texto invisible detrás de la imagen de la página, y esa capa es la que leen la búsqueda y el copiar y pegar. Donde un carácter no se pudo escribir de vuelta, la capa queda con un hueco.",
+  "glossary.searchable.label": "se pueden buscar",
   "model.downloading": "Descargando el modelo de detección",
   "model.failed":
     "No se pudo cargar el modelo de detección. Vuelve a cargar la página para intentarlo de nuevo.",
