@@ -18,6 +18,7 @@
   "dependencies": {
     "@repo/pii-detect": "workspace:*",
     "@repo/redact-core": "workspace:*",
+    "@repo/redact-text": "workspace:*",
     "tsx": "^4.23.1"
   },
   "devDependencies": {

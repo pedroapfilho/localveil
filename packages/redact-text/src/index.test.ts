@@ -59,6 +59,36 @@ describe("textRedactor.redact", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("covers a CSV column the model walked past", async () => {
+    const result = await textRedactor.redact(
+      file("people.csv", "text/csv", "nome,sku\nAna Lima,X-1"),
+      detecting([]),
+      noProgress,
+    );
+
+    await expect(result.blob.text()).resolves.toBe("nome,sku\n████████,X-1");
+  });
+
+  it("covers a JSON value the model walked past", async () => {
+    const result = await textRedactor.redact(
+      file("payload.json", "application/json", '{"senha": "hunter2"}'),
+      detecting([]),
+      noProgress,
+    );
+
+    await expect(result.blob.text()).resolves.toBe('{"senha": "███████"}');
+  });
+
+  it("leaves a log file on the prose path", async () => {
+    const result = await textRedactor.redact(
+      file("app.log", "", "nome,sku\nAna Lima,X-1"),
+      detecting([]),
+      noProgress,
+    );
+
+    await expect(result.blob.text()).resolves.toBe("nome,sku\nAna Lima,X-1");
+  });
+
   it("warns when personal data is still readable in the masked output", async () => {
     const result = await textRedactor.redact(
       file("a.txt", "text/plain"),

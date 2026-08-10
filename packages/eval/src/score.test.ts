@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LabelledSpan } from "./corpus.ts";
 import type { Counts } from "./score.ts";
-import { addCounts, countMatches, emptyCounts, scoreOf, totalCounts } from "./score.ts";
+import { addCounts, countMatches, emptyCounts, mergeSpans, scoreOf, totalCounts } from "./score.ts";
 
 const want = (start: number, end: number, label: PiiLabel = "private_person"): LabelledSpan => ({
   end,
@@ -55,18 +55,37 @@ describe("countMatches", () => {
   });
 
   it("pairs one to one, so a second prediction over the same span is a false positive", () => {
-    expect(counted([want(0, 12)], [got(0, 6), got(6, 12)])).toEqual({
+    expect(counted([want(0, 12)], [got(0, 5), got(6, 12)])).toEqual({
       falseNegative: 0,
       falsePositive: 1,
       truePositive: 1,
     });
   });
 
-  it("keeps the larger overlap when two predictions compete", () => {
-    const byLabel = countMatches([want(0, 12)], [got(0, 2), got(0, 11)]);
-    const counts = byLabel.get("private_person");
+  it("counts two detectors finding the same value once, because one box is painted", () => {
+    expect(counted([want(0, 8)], [got(0, 8), got(0, 8)])).toEqual({
+      falseNegative: 0,
+      falsePositive: 0,
+      truePositive: 1,
+    });
+  });
 
-    expect(counts).toEqual({ falseNegative: 0, falsePositive: 1, truePositive: 1 });
+  it("still counts an overlapping prediction of a different label separately", () => {
+    expect(counted([want(0, 8)], [got(0, 8), got(0, 8, "private_email")])).toEqual({
+      falseNegative: 0,
+      falsePositive: 1,
+      truePositive: 1,
+    });
+  });
+
+  it("keeps the larger overlap when two separate predictions compete", () => {
+    const byLabel = countMatches([want(0, 12)], [got(0, 2), got(3, 11)]);
+
+    expect(byLabel.get("private_person")).toEqual({
+      falseNegative: 0,
+      falsePositive: 1,
+      truePositive: 1,
+    });
   });
 
   it("counts every expected span as missed when nothing was predicted", () => {
@@ -112,6 +131,35 @@ describe("countMatches", () => {
     expect(byLabel.get("private_person")?.truePositive).toBe(1);
     expect(byLabel.get("private_email")?.falseNegative).toBe(1);
     expect(byLabel.get("private_phone")?.falsePositive).toBe(1);
+  });
+});
+
+describe("mergeSpans", () => {
+  it("joins two overlapping spans of the same label", () => {
+    expect(mergeSpans([got(0, 8), got(4, 12)])).toEqual([
+      { end: 12, label: "private_person", score: 0.9, start: 0 },
+    ]);
+  });
+
+  it("keeps the higher score when it joins", () => {
+    const merged = mergeSpans([
+      { end: 8, label: "private_person", score: 0.4, start: 0 },
+      { end: 8, label: "private_person", score: 1, start: 0 },
+    ]);
+
+    expect(merged[0].score).toBe(1);
+  });
+
+  it("leaves spans of different labels apart", () => {
+    expect(mergeSpans([got(0, 8), got(0, 8, "private_email")])).toHaveLength(2);
+  });
+
+  it("leaves spans that only touch apart", () => {
+    expect(mergeSpans([got(0, 8), got(8, 12)])).toHaveLength(2);
+  });
+
+  it("returns them in order", () => {
+    expect(mergeSpans([got(20, 24), got(0, 4)]).map((span) => span.start)).toEqual([0, 20]);
   });
 });
 

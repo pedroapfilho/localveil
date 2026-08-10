@@ -196,6 +196,10 @@ The file is read as a string, chunked by words with an overlap so an entity spli
 
 Line breaks inside a covered range survive. A span that runs off the end of one line would otherwise weld two rows of a log or a CSV together.
 
+A `.csv` or a `.json` gets a second layer beneath the model, in the same spirit as the pattern layer: a column headed `email` guarantees every cell under it is an email, and a key named `cpf` guarantees the same about its value. The model still reads the whole file, and the structural layer only adds to what it found. Field names are matched with case, separators and accents folded away, so `Nome_Completo`, `nome completo` and `nomeCompleto` are one name. Generic names like `id`, `date` and `data` map to nothing, and so does a bare `city`, which the model does not cover in prose either.
+
+The output is still the original string with runs replaced, never a reserialised document. A reserialised JSON is not your file.
+
 </details>
 
 <details>

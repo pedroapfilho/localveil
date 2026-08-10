@@ -15,7 +15,7 @@ plan fully before starting, honor its STOP conditions, and update your row when 
 | 004  | Stop rasterising PDF pages that carry no redaction | P1       | S      | none       | DONE   |
 | 005  | Batch chunk inference into one session run         | P2       | M      | 001        | TODO   |
 | 006  | Verify the redacted output before handing it back  | P2       | S      | none       | DONE   |
-| 007  | Redact CSV and JSON by structure, not by prose     | P2       | M      | 001        | TODO   |
+| 007  | Redact CSV and JSON by structure, not by prose     | P2       | M      | 001        | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

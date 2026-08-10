@@ -11,6 +11,26 @@ type Match = { expected: number; overlap: number; predicted: number };
 const overlapOf = (left: LabelledSpan, right: Span) =>
   Math.max(0, Math.min(left.end, right.end) - Math.max(left.start, right.start));
 
+const mergeSpans = (spans: Array<Span>): Array<Span> => {
+  const merged: Array<Span> = [];
+
+  for (const span of spans.toSorted((left, right) => left.start - right.start)) {
+    const previous = merged.findLast(
+      (kept) => kept.label === span.label && kept.end > span.start && kept.start < span.end,
+    );
+
+    if (previous === undefined) {
+      merged.push({ ...span });
+      continue;
+    }
+
+    previous.end = Math.max(previous.end, span.end);
+    previous.score = Math.max(previous.score, span.score);
+  }
+
+  return merged.toSorted((left, right) => left.start - right.start);
+};
+
 const emptyCounts = (): Counts => ({ falseNegative: 0, falsePositive: 0, truePositive: 0 });
 
 const pairUp = (expected: Array<LabelledSpan>, predicted: Array<Span>, exact: boolean) => {
@@ -49,9 +69,10 @@ const pairUp = (expected: Array<LabelledSpan>, predicted: Array<Span>, exact: bo
 
 const countMatches = (
   expected: Array<LabelledSpan>,
-  predicted: Array<Span>,
+  found: Array<Span>,
   exact = false,
 ): Map<PiiLabel, Counts> => {
+  const predicted = mergeSpans(found);
   const { takenExpected, takenPredicted } = pairUp(expected, predicted, exact);
   const byLabel = new Map<PiiLabel, Counts>();
 
@@ -123,5 +144,5 @@ const scoreOf = (counts: Counts): LabelScore => {
   return { ...counts, f1, precision, recall };
 };
 
-export { addCounts, countMatches, emptyCounts, scoreOf, totalCounts };
+export { addCounts, countMatches, emptyCounts, mergeSpans, scoreOf, totalCounts };
 export type { Counts, LabelScore };

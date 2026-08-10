@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { createDetector } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
 import { patternSpans } from "@repo/redact-core";
+import { structuralSpans } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus.ts";
 import { loadCorpus } from "./corpus.ts";
@@ -14,6 +15,7 @@ import type { Counts } from "./score.ts";
 import { addCounts, countMatches, totalCounts } from "./score.ts";
 
 type DocumentResult = {
+  everything: Map<PiiLabel, Counts>;
   exact: Map<PiiLabel, Counts>;
   id: string;
   language: EvalDocument["language"];
@@ -21,6 +23,11 @@ type DocumentResult = {
   patterns: Map<PiiLabel, Counts>;
   predicted: Array<Span>;
 };
+
+const FORMATS = [".csv", ".json"] as const;
+
+const filenameOf = (id: string) =>
+  `${id}${FORMATS.find((format) => id.endsWith(format.slice(1))) ?? ".txt"}`;
 
 const RESULTS_DIR = path.join(import.meta.dirname, "..", "results");
 
@@ -59,14 +66,19 @@ const rowsByLanguage = (results: Array<DocumentResult>) => {
     .map(([language, counts]) => ({ counts: totalCounts(counts), name: language }));
 };
 
-const scoreDocument = (document: EvalDocument, predicted: Array<Span>): DocumentResult => ({
-  exact: countMatches(document.spans, predicted, true),
-  id: document.id,
-  language: document.language,
-  overlap: countMatches(document.spans, predicted),
-  patterns: countMatches(document.spans, patternSpans(document.text)),
-  predicted,
-});
+const scoreDocument = (document: EvalDocument, predicted: Array<Span>): DocumentResult => {
+  const structural = structuralSpans(filenameOf(document.id), document.text);
+
+  return {
+    everything: countMatches(document.spans, [...predicted, ...structural]),
+    exact: countMatches(document.spans, predicted, true),
+    id: document.id,
+    language: document.language,
+    overlap: countMatches(document.spans, predicted),
+    patterns: countMatches(document.spans, patternSpans(document.text)),
+    predicted,
+  };
+};
 
 const run = async () => {
   const { values } = parseArgs({
@@ -119,6 +131,10 @@ const run = async () => {
     table(
       "Pattern layer alone, overlap matching",
       rowsByLabel(results, (result) => result.patterns),
+    ),
+    table(
+      "Detection plus the structural layer, overlap matching",
+      rowsByLabel(results, (result) => result.everything),
     ),
   ].join("\n\n");
 

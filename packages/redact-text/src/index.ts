@@ -7,13 +7,27 @@ import {
 } from "@repo/redact-core";
 
 import { maskSpans } from "./mask.ts";
+import { csvFieldSpans } from "./structured-csv.ts";
+import { jsonFieldSpans } from "./structured-json.ts";
 
 const TEXT_EXTENSIONS = new Set([".csv", ".json", ".log", ".md", ".txt"]);
 
-const hasTextExtension = (name: string) => {
+const extensionOf = (name: string) => {
   const dot = name.lastIndexOf(".");
 
-  return dot > 0 && TEXT_EXTENSIONS.has(name.slice(dot).toLowerCase());
+  return dot > 0 ? name.slice(dot).toLowerCase() : "";
+};
+
+const hasTextExtension = (name: string) => TEXT_EXTENSIONS.has(extensionOf(name));
+
+const structuralSpans = (name: string, text: string) => {
+  const extension = extensionOf(name);
+
+  if (extension === ".csv") {
+    return csvFieldSpans(text);
+  }
+
+  return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
 const textRedactor: Redactor = {
@@ -35,7 +49,7 @@ const textRedactor: Redactor = {
 
     onProgress(0.2, "stage.detecting");
 
-    const detected = await detect(text);
+    const detected = [...(await detect(text)), ...structuralSpans(file.name, text)];
 
     const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
 
@@ -55,4 +69,4 @@ const textRedactor: Redactor = {
   },
 };
 
-export { textRedactor };
+export { structuralSpans, textRedactor };
