@@ -3,16 +3,17 @@ import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
+  isCovered,
   mergeOverlappingRanges,
   spansForTokens,
   spansToRects,
+  survivingSpans,
   toArrayBuffer,
   tokensFromSpans,
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
 import { OffscreenCanvasFactory } from "./canvas-factory.ts";
-import { isCovered } from "./covered.ts";
 import { NoFilterFactory } from "./filter-factory.ts";
 
 const SCALE = 2;
@@ -183,6 +184,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
   }
 
   const everyToken = [...tokens.values()];
+  const survived: Array<string> = [];
   let redactionCount = 0;
 
   for (let number = 1; number <= pdf.numPages; number += 1) {
@@ -193,8 +195,10 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
 
     const spans = [...page.spans, ...spansForTokens(page.text, everyToken)];
     const rects = spansToRects(spans, page.words);
+    const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
 
     redactionCount += mergeOverlappingRanges(spans).length;
+    survived.push(...showing.map((word) => word.text));
 
     if (rects.length === 0 && (await copyPage(number))) {
       continue;
@@ -217,11 +221,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
       y: 0,
     });
 
-    for (const word of page.words) {
-      if (isCovered(word.bbox, rects)) {
-        continue;
-      }
-
+    for (const word of showing) {
       try {
         sheet.drawText(word.text, {
           font,
@@ -240,6 +240,12 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
 
   if (!anyText) {
     warnings.add("warning.noText");
+  }
+
+  const survivors = await survivingSpans(survived.join(" "), detect);
+
+  if (survivors.length > 0) {
+    warnings.add("warning.notFullyRedacted");
   }
 
   onProgress(1, "stage.finished");

@@ -99,6 +99,23 @@ describe("image OCR retry", () => {
     expect(contexts).toHaveLength(1);
   });
 
+  it("warns when the detector still finds personal data in what stayed visible", async () => {
+    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Alice", 95]]));
+
+    const answers = [[], [{ end: 5, label: "private_person" as const, score: 0.9, start: 0 }]];
+    const { warnings } = await redact(() => Promise.resolve(answers.shift() ?? []));
+
+    expect(warnings).toContain("warning.notFullyRedacted");
+  });
+
+  it("says nothing when the words left showing carry no personal data", async () => {
+    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Alice", 95]]));
+
+    const { warnings } = await redact();
+
+    expect(warnings).not.toContain("warning.notFullyRedacted");
+  });
+
   it("redetects language when an automatic reading is retried", async () => {
     mocks.readImageText.mockResolvedValueOnce(reading("en", 0, [])).mockResolvedValueOnce(
       reading("pt", 70, [
@@ -113,7 +130,7 @@ describe("image OCR retry", () => {
 
     expect(mocks.readImageText).toHaveBeenCalledTimes(2);
     expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([{}, {}]);
-    expect(detect.mock.calls.map(([text]) => text)).toEqual(["Maria Silva"]);
+    expect(detect.mock.calls.map(([text]) => text)).toEqual(["Maria Silva", "Maria Silva"]);
     expect(contexts).toHaveLength(2);
     expect(contexts.at(-1)?.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
   });
@@ -151,6 +168,7 @@ describe("image OCR retry", () => {
     expect(detect.mock.calls.map(([text]) => text)).toEqual([
       "CPF 108.467.036-45",
       "NOME JOSE DA SILVA VALIDADE",
+      "NOME DA SILVA VALIDADE",
     ]);
     expect(contexts.at(-1)?.fillRect).toHaveBeenCalledWith(12, 0, 10, 10);
     expect(result.redactionCount).toBe(1);

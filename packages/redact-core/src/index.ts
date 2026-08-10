@@ -1,4 +1,5 @@
 export { chunkText } from "./chunk.ts";
+export { isCovered } from "./covered.ts";
 export { describeError } from "./describe-error.ts";
 export type { TextChunk } from "./chunk.ts";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
@@ -30,6 +31,8 @@ export type {
   WarningKey,
 } from "./types.ts";
 export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error.ts";
+export { survivingSpans } from "./verify.ts";
+export type { Survivor } from "./verify.ts";
 export { spansToRects } from "./rects.ts";
 export { buildWordIndex } from "./word-index.ts";
 export type { WordIndex, WordInput } from "./word-index.ts";

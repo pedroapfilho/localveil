@@ -15,6 +15,12 @@ const detecting =
   () =>
     Promise.resolve(spans);
 
+const answering = (...replies: Array<Array<Span>>): Detect => {
+  const queue = [...replies];
+
+  return () => Promise.resolve(queue.shift() ?? []);
+};
+
 const noProgress = () => undefined;
 
 const file = (name: string, type: string, content = "Hi Ana!") =>
@@ -50,6 +56,28 @@ describe("textRedactor.redact", () => {
 
     await expect(result.blob.text()).resolves.toBe("Hi ███!");
     expect(result.redactionCount).toBe(1);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("warns when personal data is still readable in the masked output", async () => {
+    const result = await textRedactor.redact(
+      file("a.txt", "text/plain"),
+      answering([span(0, 2)], [span(3, 6)]),
+      noProgress,
+    );
+
+    await expect(result.blob.text()).resolves.toBe("██ Ana!");
+    expect(result.warnings).toEqual(["warning.notFullyRedacted"]);
+  });
+
+  it("says nothing when the mask covered what the detector goes on to find", async () => {
+    const result = await textRedactor.redact(
+      file("a.txt", "text/plain"),
+      answering([span(3, 6)], [span(3, 6)]),
+      noProgress,
+    );
+
+    await expect(result.blob.text()).resolves.toBe("Hi ███!");
     expect(result.warnings).toEqual([]);
   });
 

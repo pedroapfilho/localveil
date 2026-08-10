@@ -35,6 +35,7 @@ type WarningKey =
   | "warning.droppedCharacters"
   | "warning.lowConfidence"
   | "warning.noText"
+  | "warning.notFullyRedacted"
   | "warning.scannedPages";
 
 type FileProgress = (fraction: number, stage: FileStageKey) => void;

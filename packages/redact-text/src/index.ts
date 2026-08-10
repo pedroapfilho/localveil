@@ -1,5 +1,10 @@
-import type { Redactor } from "@repo/redact-core";
-import { mergeOverlappingRanges, spansForTokens, tokensFromSpans } from "@repo/redact-core";
+import type { Redactor, WarningKey } from "@repo/redact-core";
+import {
+  mergeOverlappingRanges,
+  spansForTokens,
+  survivingSpans,
+  tokensFromSpans,
+} from "@repo/redact-core";
 
 import { maskSpans } from "./mask.ts";
 
@@ -37,13 +42,15 @@ const textRedactor: Redactor = {
     onProgress(0.8, "stage.redacting");
 
     const masked = maskSpans(text, spans);
+    const survivors = await survivingSpans(masked, detect);
+    const warnings: Array<WarningKey> = survivors.length > 0 ? ["warning.notFullyRedacted"] : [];
 
     onProgress(1, "stage.finished");
 
     return {
       blob: new Blob([masked], { type: file.type }),
       redactionCount: mergeOverlappingRanges(spans).length,
-      warnings: [],
+      warnings,
     };
   },
 };

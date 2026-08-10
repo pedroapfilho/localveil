@@ -52,6 +52,8 @@ const en = {
   "warning.lowConfidence":
     "Some text was hard to read, so a little personal data may have been missed.",
   "warning.noText": "No readable text was found in this file.",
+  "warning.notFullyRedacted":
+    "Reading the result back still turned up personal data, so check this file by hand before sending it anywhere.",
   "warning.scannedPages": "This file was scanned rather than typed, so it was read with OCR.",
 } as const;
 

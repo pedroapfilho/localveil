@@ -413,6 +413,29 @@ describe("pdfRedactor", () => {
     expect(redactionCount).toBe(1);
   });
 
+  it("warns when the detector still finds personal data in what stayed visible", async () => {
+    const answers = [[], [{ end: 20, label: "private_person" as const, score: 0.9, start: 12 }]];
+    const { warnings } = await run(() => Promise.resolve(answers.shift() ?? []));
+
+    expect(warnings).toContain("warning.notFullyRedacted");
+  });
+
+  it("says nothing when the words left showing carry no personal data", async () => {
+    const { warnings } = await run(detecting(["Ana Lima"]));
+
+    expect(warnings).not.toContain("warning.notFullyRedacted");
+  });
+
+  it("checks what stayed visible on a copied page too", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    const detect = detecting(["Ana Lima"]);
+
+    await run(detect);
+
+    expect(detect).toHaveBeenCalledWith("Invoice total due Signed by");
+  });
+
   it("paints an untouched page when the source cannot be reopened", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
     state.sourceOpens = false;

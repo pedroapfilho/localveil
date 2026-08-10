@@ -236,6 +236,15 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 
 </details>
 
+<details>
+<summary><b>The result</b>: read back and checked</summary>
+
+Every finished file goes back through the detector once more, over what is left showing: the masked string for text, and the words no rectangle covers for a PDF or an image. Anything the model still recognises there raises a warning.
+
+This catches painting and plumbing, not detection. A rectangle that lands a few pixels short, a word written back into a PDF's searchable layer that should have been dropped, a span whose coordinates came out reversed: those produce a file that looks redacted and is not, and nothing else in the pipeline would notice. What it cannot catch is a name the model walked past on the way in, because the same model reads the output.
+
+</details>
+
 ## Stack
 
 - **App:** React 19 + Vite 8, Tailwind CSS 4, shadcn-style components over Base UI, motion for the few animations, zustand for job state, sonner for toasts.

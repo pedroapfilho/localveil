@@ -55,6 +55,8 @@ const es: Messages = {
   "warning.lowConfidence":
     "Parte del texto era difícil de leer, así que puede haberse escapado algún dato personal.",
   "warning.noText": "No se encontró texto legible en este archivo.",
+  "warning.notFullyRedacted":
+    "Al releer el resultado aún aparecieron datos personales, así que revisa este archivo a mano antes de enviarlo.",
   "warning.scannedPages":
     "Este archivo fue escaneado en lugar de escrito, así que se leyó con OCR.",
 };

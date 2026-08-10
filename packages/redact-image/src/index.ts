@@ -3,9 +3,11 @@ import { legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { Detect, Rect, Redactor, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
+  isCovered,
   mergeOverlappingRanges,
   spansForTokens,
   spansToRects,
+  survivingSpans,
   tokensFromSpans,
 } from "@repo/redact-core";
 
@@ -136,6 +138,14 @@ const imageRedactor: Redactor = {
 
     paint(canvas, bitmap, rects);
     bitmap.close();
+
+    const { words } = buildWordIndex(legibleWords(reading));
+    const showing = words.filter((word) => !isCovered(word.bbox, rects));
+    const survivors = await survivingSpans(showing.map((word) => word.text).join(" "), detect);
+
+    if (survivors.length > 0) {
+      warnings.push("warning.notFullyRedacted");
+    }
 
     const type = ENCODABLE.has(file.type) ? file.type : "image/png";
     const blob = await canvas.convertToBlob({ type });
