@@ -12,7 +12,13 @@ import {
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@repo/ui/components/collapsible";
 import { Progress } from "@repo/ui/components/progress";
-import { ChevronDownIcon, FileTextIcon, TriangleAlertIcon, XIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  FileTextIcon,
+  LoaderCircleIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 
@@ -22,6 +28,7 @@ import { usesLanguage } from "../uses-language";
 
 import type { DocumentLanguageChoice } from "./document-language-picker";
 import { asChoice, DocumentLanguagePicker } from "./document-language-picker";
+import { GlossaryText } from "./glossary-text";
 
 const STATUS_KEYS: Record<JobStatus, MessageKey> = {
   done: "status.done",
@@ -57,7 +64,8 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
   const { t } = useTranslations();
   const { error, file, id, language, progress, result, stage, status } = job;
 
-  const inFlight = status === "queued" || status === "running";
+  const busy = status === "running";
+  const inFlight = status === "queued" || busy;
   const languageMatters = usesLanguage(file);
   const warnings = result?.warnings ?? [];
   const failure = status === "error" && error !== undefined;
@@ -120,15 +128,23 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
               <AttachmentDescription
                 className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}
               >
-                <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+                {busy ? (
+                  <LoaderCircleIcon aria-hidden className="size-3 shrink-0 animate-spin" />
+                ) : (
+                  <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+                )}
 
-                {t(STATUS_KEYS[status])}
+                <span className={busy ? "shimmer" : undefined}>{t(STATUS_KEYS[status])}</span>
 
                 {detail === undefined ? null : (
                   <>
                     <span aria-hidden>·</span>
 
-                    <span className="text-muted-foreground truncate">{detail}</span>
+                    <span
+                      className={`text-muted-foreground truncate ${busy ? "shimmer" : ""}`.trim()}
+                    >
+                      {detail}
+                    </span>
                   </>
                 )}
               </AttachmentDescription>
@@ -187,7 +203,7 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
                   >
                     <TriangleAlertIcon aria-hidden className="size-4 h-lh shrink-0" />
 
-                    {t(warning)}
+                    <GlossaryText>{t(warning)}</GlossaryText>
                   </p>
                 ))}
               </div>
