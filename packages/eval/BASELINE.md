@@ -131,3 +131,69 @@ something the model covers in prose either, so those field names were dropped.
 
 **Exact-boundary scoring costs 4.5 points of F1 overall and 22 on `secret`.** The model finds
 an API key but disagrees about where it ends, which matters more for a key than for a name.
+
+## The score floor is the biggest lever, and it is mistuned
+
+Measured 2026-08-10 while testing whether the 894 MB download could be cut. The floor is
+`MIN_SCORE` in `packages/pii-detect/src/detector.ts`, and the harness now takes an
+`EVAL_MIN_SCORE` override so it can be swept.
+
+On the shipped weights, overlap matching, whole corpus:
+
+```
+floor    prec    rec     f1     tp     fp     fn
+------------------------------------------------
+0.35     89.1   96.1   92.5    123     15      5
+0.50     92.5   96.1   94.3    123     10      5
+0.65     95.3   95.3   95.3    122      6      6
+0.80     96.0   94.5   95.3    121      5      7
+0.90     97.4   88.3   92.6    113      3     15
+```
+
+Portuguese alone, which is the language the project exists for:
+
+```
+floor    prec    rec     f1     tp     fp     fn
+------------------------------------------------
+0.35     87.3   96.5   91.7     55      8      2
+0.50     91.7   96.5   94.0     55      5      2
+0.65     93.2   96.5   94.8     55      4      2
+0.80     93.1   94.7   93.9     54      4      3
+0.90     96.2   87.7   91.7     50      2      7
+```
+
+Moving the floor from 0.35 to 0.65 is worth **2.8 F1 points** on the whole corpus and **3.1 on
+Portuguese**, and it costs one true positive out of 128. Nothing else measured here comes close
+to that for the effort, and it changes no download.
+
+It is left at 0.35 deliberately, because the trade is a product decision rather than a tuning
+one. A redaction tool's asymmetry is that a false positive costs an unneeded box while a false
+negative leaks an identity, which is the reasoning already recorded in the README's own table.
+What changed is that the review step now exists, so an over-eager box is cheap to dismiss and
+the argument for a low floor is weaker than it was. Portuguese is the strongest case for
+moving: at 0.65 its recall is unchanged at 96.5 and its precision gains six points.
+
+## What a fixed floor does to a model comparison
+
+Quantization shifts the score distribution, so two exports compared at one threshold are being
+compared on calibration, not accuracy. The same fp32 export of `urchade/gliner_multi_pii-v1`
+scores 87.4 F1 at 0.35 and 94.6 at 0.80. Plan 002's step-1 gate assumed threshold invariance
+and is wrong as written; compare candidates at each one's best floor instead.
+
+Best-floor comparison, native CPU (`onnxruntime-node`):
+
+```
+export                       size     best floor   f1     pt f1
+---------------------------------------------------------------
+model_q4.onnx (shipped)      853 MB   0.65         95.3   94.8
+self-exported int8, per-ch   333 MB   0.80         94.9   93.8
+self-exported fp32           1157 MB  0.80         94.6   n/m
+```
+
+The per-channel int8 export is **39% of the size for 0.4 F1**, which would clear the bar in
+`tools/model-export/README.md` if native CPU were the only runtime. It is not, and this does
+**not** refute the README's account of the int8 collapse: that collapse is specifically about
+the browser's wasm integer kernels, and the README already records that the old int8 export
+"scores correctly on native CPU". So this measurement confirms on node what was already known
+and leaves the real question open. Whether per-channel quantization survives wasm has to be
+measured in a browser, and until it is, no download change is justified.
