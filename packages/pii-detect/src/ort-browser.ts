@@ -51,9 +51,9 @@ const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promis
     throw new TypeError("The model session reports no outputs");
   }
 
-  return async (input) => {
+  return async (inputs) => {
     const results = await session.run(
-      toFeeds(input, (type, data, dims) => new ort.Tensor(type, data, dims)),
+      toFeeds(inputs, (type, data, dims) => new ort.Tensor(type, data, dims)),
     );
 
     return toLogits(results[output]);
