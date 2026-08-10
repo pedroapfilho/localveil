@@ -1,0 +1,6 @@
+{
+  "id": "es-04-registro-log",
+  "language": "es",
+  "source": "synthetic",
+  "marked": "INFO  2024-03-14T09:12:04Z proceso iniciado region=eu-south-2\nINFO  2024-03-14T09:12:05Z cache HIT clave=CFG-2211 ttl=300\nAVISO 2024-03-14T09:13:41Z fallo de acceso repetido para [[private_email|c.duran@ejemplo.es]]\nERROR 2024-03-14T09:13:52Z cuota superada por [[private_person|Cristina Duran]]\nINFO  2024-03-14T09:14:00Z reanudando cola TAREA-4410 pendientes=12\nINFO  2024-03-14T09:14:03Z informe 2019-2024 exportado"
+}

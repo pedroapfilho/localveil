@@ -1,0 +1,6 @@
+{
+  "id": "en-06-bank-letter",
+  "language": "en",
+  "source": "synthetic",
+  "marked": "Dear [[private_person|Harold Nkemelu]],\n\nYour account was opened on [[private_date|21 February 2024]].\n\nInternational transfers should quote IBAN [[account_number|PT50000201231234567890154]].\n\nStatements will be posted to [[private_address|27 Ashcombe Road, Sheffield S10 2AL]].\n\nYours sincerely,\nCustomer Services"
+}

@@ -9,7 +9,7 @@ plan fully before starting, honor its STOP conditions, and update your row when 
 
 | Plan | Title                                              | Priority | Effort | Depends on | Status |
 | ---- | -------------------------------------------------- | -------- | ------ | ---------- | ------ |
-| 001  | Build a PT-BR/EN/ES detection eval harness         | P1       | M      | none       | TODO   |
+| 001  | Build a PT-BR/EN/ES detection eval harness         | P1       | M      | none       | DONE   |
 | 002  | Cut the model download by re-exporting the weights | P1       | L      | 001        | TODO   |
 | 003  | Add a review-before-export step                    | P1       | L      | none       | TODO   |
 | 004  | Stop rasterising PDF pages that carry no redaction | P1       | S      | none       | DONE   |

@@ -1,0 +1,6 @@
+{
+  "id": "pt-01-fatura-servicos",
+  "language": "pt",
+  "source": "synthetic",
+  "marked": "Fatura 2024/0817\n\nPrestador: Oficina Aurora Servicos Digitais Ltda, CNPJ [[account_number|11.222.333/0001-81]].\nCliente: [[private_person|Mariana Duarte Rocha]], residente na [[private_address|Rua das Acacias, 214, apartamento 32, Sao Paulo]].\nContato: [[private_email|mariana.rocha@exemplo.com.br]] ou [[private_phone|(11) 98812-4407]].\nEmitida em [[private_date|14/03/2024]] e paga no cartao final [[account_number|4532015112830036]].\n\nOs valores acima referem-se ao periodo de 2023-2024 e ja incluem os impostos retidos."
+}

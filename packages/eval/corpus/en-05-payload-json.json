@@ -1,0 +1,6 @@
+{
+  "id": "en-05-payload-json",
+  "language": "en",
+  "source": "synthetic",
+  "marked": "{\n  \"accountHolder\": \"[[private_person|Gwen Marchetti]]\",\n  \"email\": \"[[private_email|gwen.marchetti@example.com]]\",\n  \"iban\": \"[[account_number|ES9121000418450200051332]]\",\n  \"apiKey\": \"[[secret|sk_test_4b81cc09fe23a7d5]]\",\n  \"tier\": \"business\",\n  \"createdAt\": \"2024-01-08\"\n}"
+}

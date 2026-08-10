@@ -1,0 +1,6 @@
+{
+  "id": "pt-05-cadastro-csv",
+  "language": "pt",
+  "source": "synthetic",
+  "marked": "nome,email,telefone,cpf,cidade\n[[private_person|Carla Nogueira Pinto]],[[private_email|carla.pinto@exemplo.com.br]],[[private_phone|(21) 98123-4455]],[[account_number|111.444.777-35]],Niteroi\n[[private_person|Diego Moraes]],[[private_email|diego.moraes@exemplo.org]],[[private_phone|(31) 99711-2038]],[[account_number|390.533.447-05]],Belo Horizonte\n[[private_person|Helena Barros Cruz]],[[private_email|helena.cruz@exemplo.net]],[[private_phone|(41) 98450-9912]],[[account_number|648.295.712-92]],Curitiba"
+}
