@@ -48,14 +48,44 @@ type RedactionResult = {
   warnings: Array<WarningKey>;
 };
 
+type DetectionSource = "model" | "pattern" | "repeat" | "structure";
+
+type Detection = {
+  confidence: number;
+  end: number;
+  id: string;
+  label: PiiLabel;
+  page?: number;
+  preview: string;
+  source: DetectionSource;
+  start: number;
+};
+
+type Analysis = {
+  detections: Array<Detection>;
+  handle: unknown;
+  warnings: Array<WarningKey>;
+};
+
+type Decisions = { dismissed: ReadonlyArray<string> };
+
+type ApplyRequest = {
+  analysis: Analysis;
+  decisions: Decisions;
+  detect: Detect;
+  file: File;
+  onProgress: FileProgress;
+};
+
 type Redactor = {
   accepts: (file: File) => boolean;
-  redact: (
+  analyse: (
     file: File,
     detect: Detect,
     onProgress: FileProgress,
     options?: RedactOptions,
-  ) => Promise<RedactionResult>;
+  ) => Promise<Analysis>;
+  apply: (request: ApplyRequest) => Promise<RedactionResult>;
 };
 
 type Bbox = { x0: number; x1: number; y0: number; y1: number };
@@ -65,8 +95,13 @@ type PositionedWord = { bbox: Bbox; charEnd: number; charStart: number; text: st
 type Rect = { height: number; width: number; x: number; y: number };
 
 export type {
+  Analysis,
+  ApplyRequest,
   Bbox,
+  Decisions,
   Detect,
+  Detection,
+  DetectionSource,
   DocumentLanguage,
   FileProgress,
   FileStageKey,

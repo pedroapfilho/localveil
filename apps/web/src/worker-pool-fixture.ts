@@ -1,4 +1,4 @@
-import type { RedactionResult } from "@repo/redact-core";
+import type { Analysis, RedactionResult } from "@repo/redact-core";
 import { vi } from "vitest";
 
 import type { ModelHostOptions } from "./model-host";
@@ -9,7 +9,7 @@ type ExecOptions = { on: (payload: unknown) => void; transfer: Array<unknown> };
 class FakeTask {
   cancelled = false;
 
-  private onDone?: (result: RedactionResult) => void;
+  private onDone?: (result: Analysis | RedactionResult) => void;
   private onFail?: (error: unknown) => void;
 
   constructor(
@@ -18,7 +18,7 @@ class FakeTask {
   ) {}
 
   // oxlint-disable-next-line unicorn/no-thenable
-  then(onDone: (result: RedactionResult) => void, onFail: (error: unknown) => void) {
+  then(onDone: (result: Analysis | RedactionResult) => void, onFail: (error: unknown) => void) {
     this.onDone = onDone;
     this.onFail = onFail;
   }
@@ -35,7 +35,7 @@ class FakeTask {
     this.emit({ fraction, stage: "stage.rendering", type: "progress" } satisfies ProgressEvent);
   }
 
-  finish(result: RedactionResult) {
+  finish(result: Analysis | RedactionResult) {
     this.onDone?.(result);
   }
 
@@ -54,6 +54,7 @@ const pooled = {
 };
 
 const reported = {
+  analysed: [] as Array<string>,
   done: [] as Array<string>,
   errors: [] as Array<{ id: string; message: string; unsupported: boolean }>,
   model: [] as Array<string>,
@@ -102,6 +103,9 @@ const workerpoolDouble = {
 
 const poolOptions = (maxWorkers: number) => ({
   maxWorkers,
+  onAnalysed: (id: string) => {
+    reported.analysed.push(id);
+  },
   onDone: (id: string) => {
     reported.done.push(id);
   },
@@ -120,6 +124,7 @@ const poolOptions = (maxWorkers: number) => ({
 });
 
 const resetFixture = () => {
+  reported.analysed.length = 0;
   pooled.tasks.length = 0;
   pooled.connected.length = 0;
   pooled.disconnected.length = 0;

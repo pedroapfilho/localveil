@@ -1,4 +1,4 @@
-import type { Detect, RedactionResult, Redactor } from "@repo/redact-core";
+import type { Analysis, Detect, RedactionResult, Redactor } from "@repo/redact-core";
 import { UnsupportedFileError } from "@repo/redact-core";
 import type * as RedactImage from "@repo/redact-image";
 import type * as RedactPdf from "@repo/redact-pdf";
@@ -13,13 +13,23 @@ const stubResult = (): Promise<RedactionResult> =>
     warnings: ["warning.scannedPages"],
   });
 
-const redactPdf = vi.fn<Redactor["redact"]>(stubResult);
-const redactImage = vi.fn<Redactor["redact"]>(stubResult);
+const stubAnalysis = (): Promise<Analysis> =>
+  Promise.resolve({ detections: [], handle: undefined, warnings: [] });
+
+const redactPdf = vi.fn<Redactor["apply"]>(stubResult);
+const redactImage = vi.fn<Redactor["apply"]>(stubResult);
 
 vi.mock("@repo/redact-pdf", async (importOriginal) => {
   const actual = await importOriginal<typeof RedactPdf>();
 
-  return { ...actual, pdfRedactor: { accepts: actual.pdfRedactor.accepts, redact: redactPdf } };
+  return {
+    ...actual,
+    pdfRedactor: {
+      accepts: actual.pdfRedactor.accepts,
+      analyse: stubAnalysis,
+      apply: redactPdf,
+    },
+  };
 });
 
 vi.mock("@repo/redact-image", async (importOriginal) => {
@@ -27,7 +37,11 @@ vi.mock("@repo/redact-image", async (importOriginal) => {
 
   return {
     ...actual,
-    imageRedactor: { accepts: actual.imageRedactor.accepts, redact: redactImage },
+    imageRedactor: {
+      accepts: actual.imageRedactor.accepts,
+      analyse: stubAnalysis,
+      apply: redactImage,
+    },
   };
 });
 
@@ -90,7 +104,7 @@ describe("redactPath", () => {
   it("hands the redactor a file named and typed after the path", async () => {
     await run("sample.pdf");
 
-    const [file] = redactPdf.mock.calls[0];
+    const [{ file }] = redactPdf.mock.calls[0];
 
     expect(file.name).toBe("sample.pdf");
     expect(file.type).toBe("application/pdf");

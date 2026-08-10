@@ -7,6 +7,7 @@ import { renderWithI18n } from "../test-utils";
 import { JobRow } from "./job-row";
 
 const text = (patch: Partial<Job> = {}): Job => ({
+  dismissed: [],
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
   progress: 0,
@@ -18,6 +19,8 @@ const pdf = (patch: Partial<Job> = {}): Job =>
   text({ file: new File(["%PDF"], "card.pdf", { type: "application/pdf" }), ...patch });
 
 const setup = (job: Job, selected = false) => {
+  const onApply = vi.fn<(id: string) => void>();
+  const onDismissedChange = vi.fn<(id: string, dismissed: ReadonlyArray<string>) => void>();
   const onLanguageChange = vi.fn<(id: string, choice: "auto" | "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onSelect = vi.fn<(id: string, next: boolean) => void>();
@@ -27,6 +30,8 @@ const setup = (job: Job, selected = false) => {
       <JobRow
         index={0}
         job={job}
+        onApply={onApply}
+        onDismissedChange={onDismissedChange}
         onLanguageChange={onLanguageChange}
         onRemove={onRemove}
         onSelect={onSelect}
@@ -41,6 +46,8 @@ const setup = (job: Job, selected = false) => {
         <JobRow
           index={0}
           job={next}
+          onApply={onApply}
+          onDismissedChange={onDismissedChange}
           onLanguageChange={onLanguageChange}
           onRemove={onRemove}
           onSelect={onSelect}

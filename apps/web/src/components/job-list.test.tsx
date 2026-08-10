@@ -7,6 +7,7 @@ import { renderWithI18n } from "../test-utils";
 import { JobList } from "./job-list";
 
 const job = (patch: Partial<Job> = {}): Job => ({
+  dismissed: [],
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
   progress: 0,
@@ -22,7 +23,9 @@ const pdf = (patch: Partial<Job> = {}): Job =>
   });
 
 const setup = (jobs: Array<Job>) => {
+  const onApply = vi.fn<(id: string) => void>();
   const onClear = vi.fn<() => void>();
+  const onDismissedChange = vi.fn<(id: string, dismissed: ReadonlyArray<string>) => void>();
   const onLanguage = vi.fn<(ids: ReadonlyArray<string>, language?: "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onRemoveMany = vi.fn<(ids: ReadonlyArray<string>) => void>();
@@ -30,7 +33,9 @@ const setup = (jobs: Array<Job>) => {
   const view = renderWithI18n(
     <JobList
       jobs={jobs}
+      onApply={onApply}
       onClear={onClear}
+      onDismissedChange={onDismissedChange}
       onLanguage={onLanguage}
       onRemove={onRemove}
       onRemoveMany={onRemoveMany}
@@ -41,7 +46,9 @@ const setup = (jobs: Array<Job>) => {
     view.rerender(
       <JobList
         jobs={next}
+        onApply={onApply}
         onClear={onClear}
+        onDismissedChange={onDismissedChange}
         onLanguage={onLanguage}
         onRemove={onRemove}
         onRemoveMany={onRemoveMany}

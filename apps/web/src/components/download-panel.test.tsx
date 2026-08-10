@@ -9,6 +9,7 @@ import { DownloadPanel } from "./download-panel";
 const result = { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] };
 
 const job = (patch: Partial<Job> = {}): Job => ({
+  dismissed: [],
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
   progress: 0,

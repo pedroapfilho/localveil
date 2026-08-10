@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import type { Detect, Span } from "@repo/redact-core";
+import { redactFile } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
 import { textRedactor } from "./index.ts";
@@ -75,7 +76,12 @@ describe.each(FIXTURES)("$name", (entry) => {
   });
 
   it("comes back with none of it", async () => {
-    const result = await textRedactor.redact(file, detectKnown, noProgress);
+    const result = await redactFile({
+      detect: detectKnown,
+      file,
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
     const redacted = await result.blob.text();
 
     for (const needle of PII) {
@@ -84,7 +90,12 @@ describe.each(FIXTURES)("$name", (entry) => {
   });
 
   it("reports what it covered and keeps the rest of the file", async () => {
-    const result = await textRedactor.redact(file, detectKnown, noProgress);
+    const result = await redactFile({
+      detect: detectKnown,
+      file,
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
     const redacted = await result.blob.text();
 
     expect(result.redactionCount).toBeGreaterThan(0);

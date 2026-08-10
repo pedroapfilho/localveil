@@ -2,7 +2,7 @@ import { useTranslations } from "@repo/i18n";
 import type { DocumentLanguage } from "@repo/redact-core";
 import { buildZip } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
@@ -11,6 +11,25 @@ import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
 
 const ZIP_NAME = "localveil.zip";
+
+const REVIEW_KEY = "localveil.review";
+
+const readReviewPreference = () => {
+  try {
+    return globalThis.localStorage.getItem(REVIEW_KEY) !== "off";
+  } catch {
+    return true;
+  }
+};
+
+const writeReviewPreference = (on: boolean) => {
+  try {
+    globalThis.localStorage.setItem(REVIEW_KEY, on ? "on" : "off");
+  } catch {
+    // oxlint-disable-next-line eslint/no-console
+    console.warn("Could not remember the review preference");
+  }
+};
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
@@ -49,6 +68,8 @@ const useRedaction = () => {
   const translateRef = useRef(t);
 
   const saidSlowRef = useRef(false);
+  const [reviewing, setReviewingState] = useState(readReviewPreference);
+  const reviewingRef = useRef(reviewing);
 
   const modelRef = useRef<Deferred | null>(null);
 
@@ -68,8 +89,25 @@ const useRedaction = () => {
 
     const pool = createRedactionPool({
       maxWorkers: probeCapacity().maxWorkers,
+      onAnalysed: (id, analysis) => {
+        const { jobs, updateJob } = useJobStore.getState();
+        const job = jobs.find((entry) => entry.id === id);
+
+        if (job === undefined) {
+          return;
+        }
+
+        if (!reviewingRef.current) {
+          poolRef.current?.apply({ analysis, decisions: { dismissed: [] }, file: job.file, id });
+
+          return;
+        }
+
+        updateJob(id, { analysis, dismissed: [], progress: 0.5, status: "reviewing" });
+      },
       onDone: (id, result) => {
         useJobStore.getState().updateJob(id, {
+          analysis: undefined,
           progress: 1,
           result: {
             blob: result.blob,
@@ -220,6 +258,33 @@ const useRedaction = () => {
     [ensurePool],
   );
 
+  const applyDecisions = useCallback((id: string) => {
+    const { jobs, updateJob } = useJobStore.getState();
+    const job = jobs.find((entry) => entry.id === id);
+
+    if (job === undefined || job.analysis === undefined) {
+      return;
+    }
+
+    updateJob(id, { progress: 0.6, status: "running" });
+    poolRef.current?.apply({
+      analysis: job.analysis,
+      decisions: { dismissed: job.dismissed },
+      file: job.file,
+      id,
+    });
+  }, []);
+
+  const setDismissed = useCallback((id: string, dismissed: ReadonlyArray<string>) => {
+    useJobStore.getState().updateJob(id, { dismissed });
+  }, []);
+
+  const setReviewing = useCallback((on: boolean) => {
+    reviewingRef.current = on;
+    setReviewingState(on);
+    writeReviewPreference(on);
+  }, []);
+
   const clear = useCallback(() => {
     const pool = poolRef.current;
     const { jobs, reset } = useJobStore.getState();
@@ -243,7 +308,18 @@ const useRedaction = () => {
     triggerDownload(blob);
   }, []);
 
-  return { clear, downloadZip, remove, removeMany, setLanguage, submit };
+  return {
+    applyDecisions,
+    clear,
+    downloadZip,
+    remove,
+    removeMany,
+    reviewing,
+    setDismissed,
+    setLanguage,
+    setReviewing,
+    submit,
+  };
 };
 
 export { useRedaction };

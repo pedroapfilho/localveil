@@ -1,11 +1,13 @@
-import type { DocumentLanguage, FileStageKey, WarningKey } from "@repo/redact-core";
+import type { Analysis, DocumentLanguage, FileStageKey, WarningKey } from "@repo/redact-core";
 import { create } from "zustand";
 
-type JobStatus = "done" | "error" | "queued" | "running";
+type JobStatus = "done" | "error" | "queued" | "reviewing" | "running";
 
 type JobResult = { blob: Blob; redactionCount: number; warnings: Array<WarningKey> };
 
 type Job = {
+  analysis?: Analysis;
+  dismissed: ReadonlyArray<string>;
   error?: string;
   file: File;
   id: string;
@@ -30,6 +32,8 @@ type JobStore = {
 };
 
 const REQUEUED = {
+  analysis: undefined,
+  dismissed: [],
   error: undefined,
   progress: 0,
   result: undefined,
@@ -40,6 +44,7 @@ const REQUEUED = {
 const useJobStore = create<JobStore>((set) => ({
   addFiles: (files, language) => {
     const created = files.map((file) => ({
+      dismissed: [] as ReadonlyArray<string>,
       file,
       id: crypto.randomUUID(),
       language,
@@ -95,6 +100,8 @@ type CompletedJob = Job & { result: JobResult };
 
 const isFinished = (job: Job) => job.status === "done" || job.status === "error";
 
+const isReviewing = (job: Job) => job.status === "reviewing";
+
 const completedJobs = (jobs: Array<Job>): Array<CompletedJob> =>
   jobs.filter((job): job is CompletedJob => job.status === "done" && job.result !== undefined);
 
@@ -103,5 +110,5 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
-export { completedJobs, failedJobs, hasCompletedJobs, isFinished, useJobStore };
+export { completedJobs, failedJobs, hasCompletedJobs, isFinished, isReviewing, useJobStore };
 export type { CompletedJob, Job, JobResult, JobStatus };

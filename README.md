@@ -241,6 +241,17 @@ Under a confidence floor localveil looks for nothing. The page comes back untouc
 </details>
 
 <details>
+<summary><b>Review</b>: see it before it is written</summary>
+
+Detection and writing are two steps, not one. The first reads the file and hands back what it found: every span with its label, its confidence, the page it sits on, and the text it would cover. Nothing is painted yet.
+
+The list groups by label, lowest confidence first, because those are the ones worth a human's eye. Uncheck anything that is not personal data and press apply; the file is written from what survives. A toggle beside the dropzone turns the step off, and the terminal never asks.
+
+The pause is free. The worker is released while you read, so a long review does not hold a slot the other files in the queue are waiting for.
+
+</details>
+
+<details>
 <summary><b>The result</b>: read back and checked</summary>
 
 Every finished file goes back through the detector once more, over what is left showing: the masked string for text, and the words no rectangle covers for a PDF or an image. Anything the model still recognises there raises a warning.

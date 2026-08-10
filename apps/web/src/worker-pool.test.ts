@@ -84,13 +84,38 @@ describe("createRedactionPool", () => {
     expect(reported.progress).toEqual([]);
   });
 
-  it("finishes the file the task belonged to and hangs up its channel", () => {
+  it("hands back an analysis for the file the task belonged to and hangs up its channel", () => {
+    const pool = build();
+
+    pool.submit(job("a"));
+    taskAt(0).finish({ detections: [], handle: undefined, warnings: [] });
+
+    expect(reported.analysed).toEqual(["a"]);
+    expect(pooled.disconnected).toEqual(pooled.connected);
+  });
+
+  it("refuses a payload that is not the shape the phase asked for", () => {
     const pool = build();
 
     pool.submit(job("a"));
     taskAt(0).finish(redacted);
 
+    expect(reported.analysed).toEqual([]);
+    expect(reported.errors[0]?.message).toMatch(/not an analysis/v);
+  });
+
+  it("finishes the file once its decisions are applied, on a channel of its own", () => {
+    const pool = build();
+    const analysis = { detections: [], handle: undefined, warnings: [] };
+
+    pool.submit(job("a"));
+    taskAt(0).finish(analysis);
+
+    pool.apply({ analysis, decisions: { dismissed: [] }, file: new File([], "a.txt"), id: "a" });
+    taskAt(1).finish(redacted);
+
     expect(reported.done).toEqual(["a"]);
+    expect(pooled.connected).toHaveLength(2);
     expect(pooled.disconnected).toEqual(pooled.connected);
   });
 
@@ -246,7 +271,7 @@ describe("when a worker goes quiet", () => {
 
     pool.submit(job("a"));
     taskAt(0).progress();
-    taskAt(0).finish(redacted);
+    taskAt(0).finish({ detections: [], handle: undefined, warnings: [] });
     waitOutTheSilence();
 
     expect(reported.errors).toEqual([]);

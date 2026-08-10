@@ -9,6 +9,43 @@ const doneResult = { blob: new Blob(["hello"]), redactionCount: 1, warnings: [] 
 
 const jobsOf = () => useJobStore.getState().jobs;
 
+describe("useJobStore review state", () => {
+  it("starts a job with nothing dismissed", () => {
+    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+
+    expect(job.dismissed).toEqual([]);
+    expect(job.analysis).toBeUndefined();
+  });
+
+  it("holds an analysis and dismissals while a job waits for review", () => {
+    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    const analysis = { detections: [], handle: undefined, warnings: [] };
+
+    useJobStore.getState().updateJob(job.id, { analysis, dismissed: ["a"], status: "reviewing" });
+
+    const updated = useJobStore.getState().jobs.find((entry) => entry.id === job.id);
+
+    expect(updated?.status).toBe("reviewing");
+    expect(updated?.dismissed).toEqual(["a"]);
+  });
+
+  it("forgets the analysis and the dismissals when a job is requeued", () => {
+    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+
+    useJobStore.getState().updateJob(job.id, {
+      analysis: { detections: [], handle: undefined, warnings: [] },
+      dismissed: ["a"],
+      status: "reviewing",
+    });
+
+    const [requeued] = useJobStore.getState().requeue([job.id]);
+
+    expect(requeued.analysis).toBeUndefined();
+    expect(requeued.dismissed).toEqual([]);
+    expect(requeued.status).toBe("queued");
+  });
+});
+
 describe("useJobStore", () => {
   beforeEach(() => {
     useJobStore.getState().reset();
@@ -149,6 +186,7 @@ describe("requeueing", () => {
 
 describe("job selectors", () => {
   const job = (patch: Partial<Job>): Job => ({
+    dismissed: [],
     file: textFile("a.txt"),
     id: "id",
     progress: 0,

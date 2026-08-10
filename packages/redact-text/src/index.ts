@@ -1,5 +1,8 @@
-import type { Redactor, WarningKey } from "@repo/redact-core";
+import type { Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
+  dedupeDetections,
+  describeSpans,
+  keptSpans,
   mergeOverlappingRanges,
   spansForTokens,
   survivingSpans,
@@ -30,9 +33,11 @@ const structuralSpans = (name: string, text: string) => {
   return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
+const isPattern = (span: Span) => span.score === 1;
+
 const textRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("text/") || hasTextExtension(file.name),
-  redact: async (file, detect, onProgress) => {
+  analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
 
     const text = await file.text();
@@ -40,24 +45,45 @@ const textRedactor: Redactor = {
     if (text.length === 0) {
       onProgress(1, "stage.finished");
 
-      return {
-        blob: new Blob([text], { type: file.type }),
-        redactionCount: 0,
-        warnings: ["warning.noText"],
-      };
+      return { detections: [], handle: text, warnings: ["warning.noText"] };
     }
 
     onProgress(0.2, "stage.detecting");
 
-    const detected = [...(await detect(text)), ...structuralSpans(file.name, text)];
+    const found = await detect(text);
+    const structural = structuralSpans(file.name, text);
+    const detected = [...found, ...structural];
+    const repeated = spansForTokens(text, tokensFromSpans(text, detected));
 
-    const spans = [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))];
+    onProgress(1, "stage.finished");
 
+    return {
+      detections: dedupeDetections([
+        ...describeSpans({
+          source: "model",
+          spans: found.filter((span) => !isPattern(span)),
+          text,
+        }),
+        ...describeSpans({ source: "pattern", spans: found.filter(isPattern), text }),
+        ...describeSpans({ source: "structure", spans: structural, text }),
+        ...describeSpans({ source: "repeat", spans: repeated, text }),
+      ]),
+      handle: text,
+      warnings: [],
+    };
+  },
+  apply: async ({ analysis, decisions, detect, file, onProgress }) => {
     onProgress(0.8, "stage.redacting");
 
+    const text = typeof analysis.handle === "string" ? analysis.handle : await file.text();
+    const spans = keptSpans(analysis.detections, decisions);
     const masked = maskSpans(text, spans);
     const survivors = await survivingSpans(masked, detect);
-    const warnings: Array<WarningKey> = survivors.length > 0 ? ["warning.notFullyRedacted"] : [];
+    const warnings: Array<WarningKey> = [...analysis.warnings];
+
+    if (survivors.length > 0) {
+      warnings.push("warning.notFullyRedacted");
+    }
 
     onProgress(1, "stage.finished");
 

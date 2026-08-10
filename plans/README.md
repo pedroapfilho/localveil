@@ -11,7 +11,7 @@ plan fully before starting, honor its STOP conditions, and update your row when 
 | ---- | -------------------------------------------------- | -------- | ------ | ---------- | -------------------------------------- |
 | 001  | Build a PT-BR/EN/ES detection eval harness         | P1       | M      | none       | DONE                                   |
 | 002  | Cut the model download by re-exporting the weights | P1       | L      | 001        | BLOCKED: needs Python + an HF repo     |
-| 003  | Add a review-before-export step                    | P1       | L      | none       | TODO: plan revised, not started        |
+| 003  | Add a review-before-export step                    | P1       | L      | none       | DONE                                   |
 | 004  | Stop rasterising PDF pages that carry no redaction | P1       | S      | none       | DONE                                   |
 | 005  | Batch chunk inference into one session run         | P2       | M      | 001        | DONE (negative result: off by default) |
 | 006  | Verify the redacted output before handing it back  | P2       | S      | none       | DONE                                   |

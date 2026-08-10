@@ -1,5 +1,6 @@
 import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
+import { redactFile } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const events: Array<string> = [];
@@ -164,11 +165,14 @@ const detecting = (targets: Array<string>): Detect =>
 const run = (detect: Detect = detecting([])) => {
   const stages: Array<FileStageKey> = [];
 
-  return pdfRedactor
-    .redact(file(), detect, (_fraction, stage) => {
+  return redactFile({
+    detect,
+    file: file(),
+    onProgress: (_fraction, stage) => {
       stages.push(stage);
-    })
-    .then((result) => ({ ...result, stages }));
+    },
+    redactor: pdfRedactor,
+  }).then((result) => ({ ...result, stages }));
 };
 
 const page = (layer: string, words = layer.split(" ")): FakePage => ({ layer, words });
@@ -340,14 +344,15 @@ describe("pdfRedactor", () => {
 
     const stages: Array<FileStageKey> = [];
 
-    await pdfRedactor.redact(
-      file(),
-      detecting([]),
-      (_fraction, stage) => {
+    await redactFile({
+      detect: detecting([]),
+      file: file(),
+      onProgress: (_fraction, stage) => {
         stages.push(stage);
       },
-      { language: "pt" },
-    );
+      options: { language: "pt" },
+      redactor: pdfRedactor,
+    });
 
     expect(state.recognisedIn).toEqual(["pt", "pt"]);
   });

@@ -21,13 +21,23 @@ const BLEED = 4;
 
 type JobListProps = {
   jobs: Array<Job>;
+  onApply: (id: string) => void;
   onClear: () => void;
+  onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
   onLanguage: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => void;
   onRemove: (id: string) => void;
   onRemoveMany: (ids: ReadonlyArray<string>) => void;
 };
 
-const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListProps) => {
+const JobList = ({
+  jobs,
+  onApply,
+  onClear,
+  onDismissedChange,
+  onLanguage,
+  onRemove,
+  onRemoveMany,
+}: JobListProps) => {
   const { t } = useTranslations();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
@@ -119,6 +129,8 @@ const JobList = ({ jobs, onClear, onLanguage, onRemove, onRemoveMany }: JobListP
                 index={index}
                 job={job}
                 key={job.id}
+                onApply={onApply}
+                onDismissedChange={onDismissedChange}
                 onLanguageChange={handleRowLanguage}
                 onRemove={onRemove}
                 onSelect={handleSelect}

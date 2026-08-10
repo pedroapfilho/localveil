@@ -1,6 +1,7 @@
 import type * as OcrModule from "@repo/ocr";
 import type { ImageReading } from "@repo/ocr";
 import type { Detect, FileProgress } from "@repo/redact-core";
+import { redactFile } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ readImageText: vi.fn() }));
@@ -69,7 +70,8 @@ const file = () => new File(["image"], "identity.jpg", { type: "image/jpeg" });
 const noSpans: Detect = () => Promise.resolve([]);
 const onProgress: FileProgress = () => undefined;
 
-const redact = (detect: Detect = noSpans) => imageRedactor.redact(file(), detect, onProgress);
+const redact = (detect: Detect = noSpans) =>
+  redactFile({ detect, file: file(), onProgress, redactor: imageRedactor });
 
 beforeEach(() => {
   contexts.length = 0;
@@ -223,7 +225,13 @@ describe("image OCR retry", () => {
 
     const detect = vi.fn<Detect>(() => Promise.resolve([]));
 
-    await imageRedactor.redact(file(), detect, onProgress, { language: "pt" });
+    await redactFile({
+      detect,
+      file: file(),
+      onProgress,
+      options: { language: "pt" },
+      redactor: imageRedactor,
+    });
 
     expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([
       { known: "pt" },

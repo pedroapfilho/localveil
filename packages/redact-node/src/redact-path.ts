@@ -1,5 +1,5 @@
 import type { Detect, RedactOptions } from "@repo/redact-core";
-import { createRedactorRegistry } from "@repo/redact-core";
+import { createRedactorRegistry, redactFile } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
@@ -27,12 +27,13 @@ const redactPath = async (
 
   const file = await readFileAsFile(path);
   const redactor = registry.resolve(file);
-  const { blob, redactionCount, warnings } = await redactor.redact(
-    file,
+  const { blob, redactionCount, warnings } = await redactFile({
     detect,
+    file,
     onProgress,
     options,
-  );
+    redactor,
+  });
 
   return { bytes: new Uint8Array(await blob.arrayBuffer()), redactionCount, warnings };
 };

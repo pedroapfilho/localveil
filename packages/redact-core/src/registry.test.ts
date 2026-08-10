@@ -6,7 +6,8 @@ import { UnsupportedFileError } from "./unsupported-file-error.ts";
 
 const stub = (accepts: (file: File) => boolean): Redactor => ({
   accepts,
-  redact: () => Promise.resolve({ blob: new Blob(), redactionCount: 0, warnings: [] }),
+  analyse: () => Promise.resolve({ detections: [], handle: undefined, warnings: [] }),
+  apply: () => Promise.resolve({ blob: new Blob(), redactionCount: 0, warnings: [] }),
 });
 
 const file = (name: string, type: string) => new File(["x"], name, { type });
