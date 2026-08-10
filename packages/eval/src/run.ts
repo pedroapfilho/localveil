@@ -100,7 +100,10 @@ const run = async () => {
 
   note(`Scoring ${String(chosen.length)} documents. The first run downloads the model.`);
 
+  const floor = process.env.EVAL_MIN_SCORE;
+
   const detect = await createDetector({
+    ...(floor === undefined ? {} : { minScore: Number(floor) }),
     onProgress: (fraction, stage) => {
       if (stage === "model.downloading") {
         note(`  ${stage} ${(fraction * 100).toFixed(0)}%`);
@@ -108,6 +111,10 @@ const run = async () => {
     },
     resumableCache: false,
   });
+
+  if (floor !== undefined) {
+    note(`  score floor overridden to ${floor}`);
+  }
 
   const results: Array<DocumentResult> = [];
 
