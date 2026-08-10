@@ -134,17 +134,13 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
                   <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
                 )}
 
-                <span className={busy ? "shimmer" : undefined}>{t(STATUS_KEYS[status])}</span>
+                <span>{t(STATUS_KEYS[status])}</span>
 
                 {detail === undefined ? null : (
                   <>
                     <span aria-hidden>·</span>
 
-                    <span
-                      className={`text-muted-foreground truncate ${busy ? "shimmer" : ""}`.trim()}
-                    >
-                      {detail}
-                    </span>
+                    <span className="text-muted-foreground truncate">{detail}</span>
                   </>
                 )}
               </AttachmentDescription>
