@@ -46,7 +46,11 @@ const BATCH_SIZE = 1;
 
 const BATCH_TOKENS = 4096;
 
-const MIN_SCORE = 0.35;
+// Swept against the labelled corpus in packages/eval: 0.35 scores 92.5 F1 and 0.65 scores
+// 95.3, with Portuguese going 91.7 to 94.8 and its recall unchanged at 96.5. The floor sat at
+// 0.35 while the only options were cover or miss; the review step means an unwanted box is now
+// one click to dismiss, so the six points of precision are worth the one true positive in 128.
+const MIN_SCORE = 0.65;
 
 type DetectorOptions = {
   batchSize?: number;
