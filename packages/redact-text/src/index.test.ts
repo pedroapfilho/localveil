@@ -94,6 +94,28 @@ describe("textRedactor", () => {
     await expect(result.blob.text()).resolves.toBe("nome,sku\nAna Lima,X-1");
   });
 
+  it("does not report a CSV column name as a surviving detection", async () => {
+    const result = await redactFile({
+      detect: answering([span(9, 17)], [span(0, 4)]),
+      file: file("people.csv", "text/csv", "sku,city\nAna Lima,Recife"),
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
+
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("still reports something that survives in a CSV row", async () => {
+    const result = await redactFile({
+      detect: answering([span(9, 12)], [span(4, 8)]),
+      file: file("people.csv", "text/csv", "sku,city\nAna Lima,Recife"),
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
+
+    expect(result.warnings).toEqual(["warning.notFullyRedacted"]);
+  });
+
   it("warns when personal data is still readable in the masked output", async () => {
     const result = await redactFile({
       detect: answering([span(0, 2)], [span(3, 6)]),

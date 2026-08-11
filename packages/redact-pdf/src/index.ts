@@ -1,4 +1,4 @@
-import type { OcrLanguage } from "@repo/ocr";
+import type { ImageReading, OcrLanguage } from "@repo/ocr";
 import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
@@ -19,10 +19,16 @@ import type { PDFDocument } from "pdf-lib";
 
 import { OffscreenCanvasFactory } from "./canvas-factory.ts";
 import { NoFilterFactory } from "./filter-factory.ts";
+import { textLayerWords } from "./text-layer.ts";
 
 const SCALE = 2;
 
 const MIN_TEXT_WORDS = 4;
+
+// A page whose own text layer carries at least this many words is read from that layer instead
+// of being recognised. Recognition is the dominant cost of a PDF and it is pure loss on a page
+// that was typed rather than scanned: it re-derives, worse, text the file already holds.
+const MIN_LAYER_WORDS = 12;
 
 const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
@@ -123,12 +129,10 @@ const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options
   for (let number = 1; number <= pdf.numPages; number += 1) {
     const progress = ((number - 1) / pdf.numPages) * 0.9;
 
-    onProgress(progress, "stage.rendering");
-
-    const { canvas, page } = await renderPage(number);
-
     onProgress(progress, "stage.extracting");
 
+    const page = await pdf.getPage(number);
+    const viewport = page.getViewport({ scale: SCALE });
     const content = await page.getTextContent();
     const layerText = content.items
       .map((item) => ("str" in item ? item.str : ""))
@@ -145,14 +149,30 @@ const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options
       warnings.add("warning.scannedPages");
     }
 
-    onProgress(progress, "stage.recognising");
+    const typed = textLayerWords({ items: content.items, viewport });
+    const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
 
-    const reading = await readImageText(canvas, language === undefined ? {} : { known: language });
+    let reading: ImageReading;
 
-    language ??= reading.language;
+    if (readable === undefined) {
+      onProgress(progress, "stage.rendering");
 
-    if (muchWasUnreadable(reading)) {
-      warnings.add("warning.lowConfidence");
+      const { canvas } = await renderPage(number);
+
+      onProgress(progress, "stage.recognising");
+
+      reading = await readImageText(canvas, language === undefined ? {} : { known: language });
+      language ??= reading.language;
+
+      if (muchWasUnreadable(reading)) {
+        warnings.add("warning.lowConfidence");
+      }
+    } else {
+      reading = {
+        confidence: 100,
+        language: language ?? "en",
+        words: readable.map((word) => ({ bbox: word.bbox, confidence: 100, text: word.text })),
+      };
     }
 
     anyText ||= reading.words.length > 0;

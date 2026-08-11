@@ -9,6 +9,9 @@ const TOKENIZER_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISI
 
 const TEXT = "Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.";
 
+// Long enough to chunk, so a batch size above one has something to batch.
+const LONG = `${TEXT} `.repeat(120);
+
 const out = document.querySelector("#out");
 
 const say = (line: string) => {
@@ -28,8 +31,11 @@ const seedFrom = async (local: string, url: string, label: string) => {
   }
 
   const response = await fetch(local);
+  const type = response.headers.get("content-type") ?? "";
 
-  if (!response.ok) {
+  // A dev server answers a missing path with index.html rather than a 404, so a 200 is not
+  // enough: caching that as weights or a tokenizer fails much later and much more confusingly.
+  if (!response.ok || type.includes("text/html")) {
     say(`no ${local} to seed, so ${label} comes from Hugging Face`);
 
     return;
@@ -68,7 +74,10 @@ const run = async () => {
 
   await seed();
 
+  const batchSize = Number(new URLSearchParams(location.search).get("batch") ?? "1");
+
   const detect = await createDetector({
+    batchSize,
     minScore: 0.05,
     onProgress: (fraction, stage) => {
       if (stage !== "model.downloading") {
@@ -77,7 +86,20 @@ const run = async () => {
     },
   });
 
-  say("session created");
+  say(`session created, batchSize ${String(batchSize)}`);
+
+  if (new URLSearchParams(location.search).get("bench") === "1") {
+    await detect(TEXT);
+
+    const started = performance.now();
+
+    await detect(LONG);
+    await detect(LONG);
+
+    say(
+      `bench: ${((performance.now() - started) / 2).toFixed(0)} ms per pass over ${String(LONG.length)} chars`,
+    );
+  }
 
   const spans = await detect(TEXT);
 

@@ -14,6 +14,7 @@ const state = {
   drawn: [] as Array<Array<string>>,
   drawTextThrowsOn: undefined as string | undefined,
   language: "en" as "en" | "es" | "pt",
+  layerTransform: undefined as Array<number> | undefined,
   pages: [] as Array<FakePage>,
   painted: [] as Array<string>,
   recognisedIn: [] as Array<string | undefined>,
@@ -45,11 +46,22 @@ vi.mock("pdfjs-dist", () => ({
           getTextContent: () => {
             events.push(`text:${String(number)}`);
 
+            const page = state.pages[number - 1];
+
             return Promise.resolve({
-              items: state.pages[number - 1].layer.split(" ").map((str) => ({ str })),
+              items: page.layer.split(" ").map((str, at) => ({
+                height: 10,
+                str,
+                transform: [10, 0, 0, 10, at * 40, 100],
+                width: str.length * 5,
+              })),
             });
           },
-          getViewport: () => ({ height: 200, width: 400 }),
+          getViewport: () => ({
+            height: 200,
+            transform: state.layerTransform,
+            width: 400,
+          }),
           render: () => {
             events.push(`render:${String(number)}`);
 
@@ -187,6 +199,7 @@ beforeEach(() => {
   state.pages = [page("Invoice for Ana Lima")];
   state.confidenceOf = () => 95;
   state.painted = [];
+  state.layerTransform = undefined;
   state.recognisedIn = [];
   state.sourceOpens = true;
 
@@ -439,6 +452,57 @@ describe("pdfRedactor", () => {
     await run(detect);
 
     expect(detect).toHaveBeenCalledWith("Invoice total due Signed by");
+  });
+
+  it("reads a typed page from its own text layer instead of recognising it", async () => {
+    state.layerTransform = [2, 0, 0, -2, 0, 400];
+    state.pages = [
+      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais palavras"),
+    ];
+
+    const seen: Array<string> = [];
+    const detect = (text: string) => {
+      seen.push(text);
+
+      return detecting(["Ana Lima"])(text);
+    };
+
+    await run(detect);
+
+    expect(state.recognisedIn).toEqual([]);
+    expect(seen.at(0)).toContain("Ana Lima");
+  });
+
+  it("still recognises a typed page when its layer is too thin to trust", async () => {
+    state.layerTransform = [2, 0, 0, -2, 0, 400];
+    state.pages = [page("Invoice for Ana Lima")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.recognisedIn).toHaveLength(1);
+  });
+
+  it("recognises a page whose viewport gives no transform to place words with", async () => {
+    state.layerTransform = undefined;
+    state.pages = [
+      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais"),
+    ];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.recognisedIn).toHaveLength(1);
+  });
+
+  it("covers a name it read out of the text layer", async () => {
+    state.layerTransform = [2, 0, 0, -2, 0, 400];
+    state.pages = [
+      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais palavras"),
+    ];
+
+    const { redactionCount } = await run(detecting(["Ana"]));
+
+    expect(redactionCount).toBeGreaterThan(0);
+    expect(state.painted.length).toBeGreaterThan(0);
   });
 
   it("paints an untouched page when the source cannot be reopened", async () => {

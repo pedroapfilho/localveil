@@ -37,12 +37,15 @@ const MAX_WIDTH = 12;
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
 
-// Batching costs time on native CPU rather than saving it, because onnxruntime-node already
-// spreads one inference across every core. Measured on the eval corpus, darwin arm64:
-// 2030 ms at 1, 2913 ms at 2, 3151 ms at 4, and the same ordering on uniform chunks with no
-// shouting retries, so it is not padding waste. Raise it only against a measurement on a
-// runtime that leaves cores idle between submissions.
-const BATCH_SIZE = 1;
+// Batching pays on a GPU and costs on a CPU, so the size follows the device.
+//
+// onnxruntime-node already spreads one inference across every core, and batching only adds
+// padded work: measured on the eval corpus, darwin arm64, 2030 ms at 1, 2913 ms at 2 and
+// 3151 ms at 4. WebGPU is the opposite case, because tiny submissions leave it idle between
+// dispatches: measured in Chrome over 8280 characters, about 3200 ms at 1 against 2920 ms at
+// 4, with 8 no better than 4. Spans are identical either way.
+const CPU_BATCH = 1;
+const GPU_BATCH = 4;
 
 const BATCH_TOKENS = 4096;
 
@@ -97,7 +100,7 @@ const frameOf = (tokenizer: Tokenizer): TokenFrame => {
 
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
-    batchSize = BATCH_SIZE,
+    batchSize,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
     onProgress,
@@ -144,6 +147,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   const device = await pickDevice();
+  const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
   if (device !== "webgpu") {
     report(0, "model.slowDevice");
@@ -247,7 +251,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const jobs = jobsFor(text);
     const batches = batchInputs(
       jobs.map((job) => job.encoded),
-      batchSize,
+      batching,
       BATCH_TOKENS,
     );
     const parts: Array<ChunkSpans> = [];

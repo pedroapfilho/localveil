@@ -319,3 +319,73 @@ to sit at one pinned revision in a repo the project controls, because `detector.
 tokenizer by `MODEL_ID` and revision and a trimmed model with the original tokenizer fails
 loudly (`idx=250103 must be within the inclusive range [-134676,134675]`). Then three constants
 change and the first run gets 314 MB shorter.
+
+## An "api key" prompt looked right and measured wrong
+
+`secret` reads 60% recall from the model alone, and the obvious move was the one free entity
+prompt slot: the model is asked for `password` and never for a key, while the corpus holds
+`sk_live_9f2b7c41ae55d0836b1e` and friends. Adding `api key` did what it was supposed to, in
+isolation: the model's own `secret` recall went 60% to 80%.
+
+End to end it was a loss. The structural layer already reads `apiKey` and `senha` as field names
+and had `secret` at 100 precision and 100 recall; the extra prompt could only add
+disagreement, and it did.
+
+```
+                       secret prec/rec/f1        overall prec/rec/f1
+without the prompt     100.0 / 100.0 / 100.0     95.5 / 99.2 / 97.3
+with the prompt         83.3 / 100.0 /  90.9     94.8 / 98.4 / 96.6
+```
+
+It also moved a detection from Portuguese to English: pt recall 100.0 to 98.2, en 89.7 to 92.3.
+Reverted.
+
+The lesson is about which number to read. `secret` at 60% is the model-alone column, and no user
+ever sees that column, because the structural layer runs underneath every document. Tuning
+against it optimises a component instead of the product.
+
+## Viterbi decoding has nothing left to fix
+
+The greedy score-ordered suppression in `packages/pii-detect/src/gliner-decode.ts` was flagged
+early for replacement with constrained Viterbi decoding, on the model card's own advice, because
+sub-threshold mid-token splits can leak the middle of a name.
+
+There is no headroom for it. `private_person` reads 97.4 precision and 100 recall under overlap
+matching, and **the same 97.4 / 100 under exact boundaries**: not one name span is off by a
+character. Where boundaries do drift is `account_number`, 94.4 to 88.9 F1 between the two rules,
+and `secret`, 75.0 to 50.0. Neither is a name, so neither is what Viterbi was proposed for, and
+`secret` is already 100/100 once field names are read.
+
+Rejected on the measurement rather than on effort. If boundary drift ever matters enough to
+chase, the label to chase is `account_number`.
+
+## A partial date survives the fixtures, and the verify pass caught it
+
+Running `fixtures/sample.csv` end to end leaves `2 April ████` in the output: the year is
+covered and the day and month are not. `warning.notFullyRedacted` fires, which is the pass doing
+its job on real data for the first time rather than in a test.
+
+The cause is not the verify pass. `private_date` spans can come back covering only part of a
+written date, and nothing downstream widens them. It is a real gap, left open here because it
+belongs to detection rather than to verification, and because the warning means a user is told.
+
+The same run showed the pass crying wolf on structured files. A CSV header is never redacted, by
+design, so a column called `email` came back as a surviving email on every CSV. Verification now
+skips the header row for `.csv`, which drops two false alarms out of three on that fixture and
+leaves the one that matters.
+
+## Reading the PDF text layer instead of recognising it
+
+A typed PDF used to pay full OCR: `readImageText` ran on every page and the file's own text
+layer was only sampled to guess a language. That is the dominant cost of a PDF, spent to
+re-derive, worse, text the file already holds.
+
+A page whose text layer yields at least 12 words is now read from that layer. `fixtures/sample.pdf`
+goes end to end in **550 ms** and never calls the recogniser; both target names are absent from
+the output, checked with `strings`.
+
+Word boxes come from splitting each run by character count and growing every box by one
+character width on each side. That is the drift the README warned about, and the bleed is the
+answer to it: over-covering by a character is a wider black rectangle, under-covering leaves the
+first letter of a name showing. A page with a thin layer, or a viewport with no usable transform,
+still goes to OCR, so the fallback is the safe direction.
