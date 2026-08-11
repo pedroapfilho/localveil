@@ -35,11 +35,28 @@ const pt: Messages = {
   "glossary.searchable.description":
     "Um PDF guarda uma camada de texto invisível atrás da imagem da página, e é essa camada que a busca e o copiar e colar leem. Onde um caractere não pôde ser gravado de volta, a camada fica com uma falha.",
   "glossary.searchable.label": "pesquisáveis",
+  "label.account_number": "Número de conta",
+  "label.private_address": "Endereço",
+  "label.private_date": "Data",
+  "label.private_email": "E-mail",
+  "label.private_person": "Nome",
+  "label.private_phone": "Telefone",
+  "label.private_url": "Link",
+  "label.secret": "Segredo",
   "model.downloading": "Baixando o modelo de detecção",
   "model.failed":
     "Não foi possível carregar o modelo de detecção. Recarregue a página para tentar de novo.",
   "model.ready": "Modelo de detecção pronto",
   "model.slowDevice": "Rodando sem aceleração de GPU, isso vai demorar.",
+  "review.apply": "Aplicar",
+  "review.before": "Revisar antes de exportar",
+  "review.dismissGroup": "Manter tudo de {label} legível",
+  "review.heading": "{count} encontrados. Desmarque o que não for dado pessoal.",
+  "review.keepAll": "Cobrir tudo",
+  "review.kept": "{count} de {total} serão cobertos",
+  "review.nothing": "Nada foi encontrado neste arquivo.",
+  "review.page": "Página {number}",
+  "review.toggle": "Cobrir {preview}",
   "stage.assembling": "Remontando o arquivo",
   "stage.detecting": "Procurando dados pessoais",
   "stage.extracting": "Lendo o documento",
@@ -52,6 +69,7 @@ const pt: Messages = {
   "status.done": "Pronto",
   "status.error": "Falhou",
   "status.queued": "Na fila",
+  "status.reviewing": "Pronto para revisar",
   "status.running": "Processando",
   "toast.downloaded": "Seu ZIP está sendo baixado.",
   "toast.failed": "Não foi possível ocultar os dados de {name}.",
@@ -61,6 +79,8 @@ const pt: Messages = {
   "warning.lowConfidence":
     "Parte do texto estava difícil de ler, então algum dado pessoal pode ter passado.",
   "warning.noText": "Nenhum texto legível foi encontrado neste arquivo.",
+  "warning.notFullyRedacted":
+    "Ao reler o resultado ainda apareceram dados pessoais, então confira este arquivo à mão antes de enviá-lo.",
   "warning.scannedPages":
     "Este arquivo foi digitalizado em vez de digitado, então foi lido com OCR.",
 };

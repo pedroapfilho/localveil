@@ -1,0 +1,6 @@
+{
+  "id": "es-03-clientes-csv",
+  "language": "es",
+  "source": "synthetic",
+  "marked": "nombre,correo,telefono,ciudad\n[[private_person|Nuria Castells Puig]],[[private_email|nuria.castells@ejemplo.es]],[[private_phone|+34 933 010 227]],Barcelona\n[[private_person|Ignacio Del Valle]],[[private_email|ignacio.delvalle@ejemplo.com]],[[private_phone|+34 954 118 366]],Sevilla\n[[private_person|Rosario Aguilar Nieto]],[[private_email|rosario.aguilar@ejemplo.net]],[[private_phone|+34 963 442 019]],Valencia"
+}

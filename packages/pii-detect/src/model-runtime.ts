@@ -6,7 +6,7 @@ type ModelDevice = "wasm" | "webgpu";
 
 const MODEL_FILE = "model_q4.onnx";
 
-type RunModel = (input: GlinerInput) => Promise<Logits>;
+type RunModel = (inputs: Array<GlinerInput>) => Promise<Logits>;
 
 type FetchModelOptions = {
   cache?: ResumableCache;

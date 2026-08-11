@@ -4,9 +4,11 @@ import { describeError, mergeChunkSpans, patternSpans, serialiseDetect } from "@
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
+import { batchInputs } from "./batch-inputs.ts";
 import { chunkWords } from "./chunk-words.ts";
+import type { Logits } from "./gliner-decode.ts";
 import { decodeSpans, suppressOverlaps } from "./gliner-decode.ts";
-import type { TokenFrame } from "./gliner-encode.ts";
+import type { GlinerInput, TokenFrame } from "./gliner-encode.ts";
 import { encodeGlinerInput } from "./gliner-encode.ts";
 import { ENTITY_PROMPTS } from "./gliner-labels.ts";
 import { MODEL_FILE } from "./model-runtime.ts";
@@ -14,9 +16,17 @@ import type { ModelDevice } from "./model-runtime.ts";
 import { purgeStaleModels } from "./purge-stale-models.ts";
 import type { ResumableCache } from "./resumable-cache.ts";
 import { createResumableCache } from "./resumable-cache.ts";
+import type { Segment } from "./shouting.ts";
 import { collectShouting, toSourceSpans } from "./shouting.ts";
 import type { SourceWord } from "./split-words.ts";
 import { splitWords } from "./split-words.ts";
+
+type Job = {
+  encoded: GlinerInput;
+  offset: number;
+  segments?: Array<Segment>;
+  words: Array<SourceWord>;
+};
 
 const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
 
@@ -27,9 +37,23 @@ const MAX_WIDTH = 12;
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
 
-const MIN_SCORE = 0.35;
+// Batching costs time on native CPU rather than saving it, because onnxruntime-node already
+// spreads one inference across every core. Measured on the eval corpus, darwin arm64:
+// 2030 ms at 1, 2913 ms at 2, 3151 ms at 4, and the same ordering on uniform chunks with no
+// shouting retries, so it is not padding waste. Raise it only against a measurement on a
+// runtime that leaves cores idle between submissions.
+const BATCH_SIZE = 1;
+
+const BATCH_TOKENS = 4096;
+
+// Swept against the labelled corpus in packages/eval: 0.35 scores 92.5 F1 and 0.65 scores
+// 95.3, with Portuguese going 91.7 to 94.8 and its recall unchanged at 96.5. The floor sat at
+// 0.35 while the only options were cover or miss; the review step means an unwanted box is now
+// one click to dismiss, so the six points of precision are worth the one true positive in 128.
+const MIN_SCORE = 0.65;
 
 type DetectorOptions = {
+  batchSize?: number;
   maxWords?: number;
   minScore?: number;
   onProgress?: ModelProgress;
@@ -73,6 +97,7 @@ const frameOf = (tokenizer: Tokenizer): TokenFrame => {
 
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
+    batchSize = BATCH_SIZE,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
     onProgress,
@@ -155,7 +180,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   const prompts = ENTITY_PROMPTS.map((entity) => entity.prompt);
 
-  const inferSpans = async (sourceWords: Array<SourceWord>): Promise<Array<Span>> => {
+  const encodeChunk = (sourceWords: Array<SourceWord>) => {
     const encoded = encodeGlinerInput({
       encodeWord,
       frame,
@@ -164,46 +189,84 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
       words: sourceWords.map((word) => word.text),
     });
 
-    if (encoded.keptWords.length === 0) {
-      return [];
-    }
+    return encoded.keptWords.length === 0 ? undefined : encoded;
+  };
 
-    const logits = await run(encoded);
+  const spansOf = (job: Job, logits: Logits, item: number): Array<Span> => {
     const found = suppressOverlaps(
-      decodeSpans(logits, encoded.keptWords.length, prompts.length, minScore),
+      decodeSpans({
+        entityCount: prompts.length,
+        item,
+        logits,
+        threshold: minScore,
+        wordCount: job.encoded.keptWords.length,
+      }),
     );
 
     return found.map((candidate) => ({
-      end: sourceWords[encoded.keptWords[candidate.end]].end,
+      end: job.words[job.encoded.keptWords[candidate.end]].end,
       label: ENTITY_PROMPTS[candidate.entity].label,
       score: candidate.score,
-      start: sourceWords[encoded.keptWords[candidate.start]].start,
+      start: job.words[job.encoded.keptWords[candidate.start]].start,
     }));
   };
 
-  return serialiseDetect(async (text) => {
-    const chunks = chunkWords(splitWords(text), maxWords, overlapWords);
+  const jobsFor = (text: string): Array<Job> => {
+    const jobs: Array<Job> = [];
 
-    /* oxlint-disable react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
-    const parts = await chunks.reduce<Promise<Array<ChunkSpans>>>(async (pending, chunk) => {
-      const collected = await pending;
+    for (const chunk of chunkWords(splitWords(text), maxWords, overlapWords)) {
+      const encoded = encodeChunk(chunk.words);
 
-      collected.push({ offset: 0, spans: await inferSpans(chunk.words) });
+      if (encoded !== undefined) {
+        jobs.push({ encoded, offset: 0, words: chunk.words });
+      }
 
       const shouting = collectShouting(text.slice(chunk.start, chunk.end));
 
-      if (shouting.text.length > 0) {
-        const found = await inferSpans(splitWords(shouting.text));
-
-        collected.push({
-          offset: chunk.start,
-          spans: toSourceSpans(found, shouting.segments),
-        });
+      if (shouting.text.length === 0) {
+        continue;
       }
 
-      return collected;
-    }, Promise.resolve([]));
-    /* oxlint-enable react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+      const words = splitWords(shouting.text);
+      const shouted = encodeChunk(words);
+
+      if (shouted !== undefined) {
+        jobs.push({
+          encoded: shouted,
+          offset: chunk.start,
+          segments: shouting.segments,
+          words,
+        });
+      }
+    }
+
+    return jobs;
+  };
+
+  return serialiseDetect(async (text) => {
+    const jobs = jobsFor(text);
+    const batches = batchInputs(
+      jobs.map((job) => job.encoded),
+      batchSize,
+      BATCH_TOKENS,
+    );
+    const parts: Array<ChunkSpans> = [];
+
+    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+    for (const batch of batches) {
+      const logits = await run(batch.map((at) => jobs[at].encoded));
+
+      batch.forEach((at, item) => {
+        const job = jobs[at];
+        const spans = spansOf(job, logits, item);
+
+        parts.push({
+          offset: job.offset,
+          spans: job.segments === undefined ? spans : toSourceSpans(spans, job.segments),
+        });
+      });
+    }
+    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
     return [...mergeChunkSpans(parts), ...patternSpans(text)];
   });

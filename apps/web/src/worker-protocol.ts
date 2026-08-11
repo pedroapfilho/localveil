@@ -1,15 +1,21 @@
 import type {
+  Analysis,
+  Decisions,
   DocumentLanguage,
   FileStageKey,
   ModelStageKey,
   RedactionResult,
 } from "@repo/redact-core";
 
-type RedactTask = (
+type AnalyseTask = (
   file: File,
   language: DocumentLanguage | undefined,
   port: MessagePort,
-) => RedactionResult;
+) => Analysis;
+
+type ApplyWork = { analysis: Analysis; decisions: Decisions };
+
+type ApplyTask = (file: File, work: ApplyWork, port: MessagePort) => RedactionResult;
 
 type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
 
@@ -22,10 +28,12 @@ type ModelRequest = ConnectRequest | DisconnectRequest;
 type ModelResponse = { fraction: number; stage: ModelStageKey; type: "model-progress" };
 
 export type {
+  AnalyseTask,
+  ApplyTask,
+  ApplyWork,
   ConnectRequest,
   DisconnectRequest,
   ModelRequest,
   ModelResponse,
   ProgressEvent,
-  RedactTask,
 };

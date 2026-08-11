@@ -26,6 +26,7 @@ import { APPEAR, staggered } from "../motion";
 import type { Job, JobStatus } from "../store";
 import { usesLanguage } from "../uses-language";
 
+import { DetectionReview } from "./detection-review";
 import type { DocumentLanguageChoice } from "./document-language-picker";
 import { asChoice, DocumentLanguagePicker } from "./document-language-picker";
 import { GlossaryText } from "./glossary-text";
@@ -34,6 +35,7 @@ const STATUS_KEYS: Record<JobStatus, MessageKey> = {
   done: "status.done",
   error: "status.error",
   queued: "status.queued",
+  reviewing: "status.reviewing",
   running: "status.running",
 };
 
@@ -41,6 +43,7 @@ const ATTACHMENT_STATES = {
   done: "done",
   error: "error",
   queued: "idle",
+  reviewing: "processing",
   running: "processing",
 } as const;
 
@@ -48,32 +51,45 @@ const STATUS_TONES: Record<JobStatus, string> = {
   done: "text-success",
   error: "text-destructive",
   queued: "text-muted-foreground",
+  reviewing: "text-foreground",
   running: "text-foreground",
 };
 
 type JobRowProps = {
   index: number;
   job: Job;
+  onApply: (id: string) => void;
+  onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
   onLanguageChange: (id: string, choice: DocumentLanguageChoice) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
   selected: boolean;
 };
 
-const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: JobRowProps) => {
+const JobRow = ({
+  index,
+  job,
+  onApply,
+  onDismissedChange,
+  onLanguageChange,
+  onRemove,
+  onSelect,
+  selected,
+}: JobRowProps) => {
   const { t } = useTranslations();
-  const { error, file, id, language, progress, result, stage, status } = job;
+  const { analysis, dismissed, error, file, id, language, progress, result, stage, status } = job;
 
   const busy = status === "running";
   const inFlight = status === "queued" || busy;
   const languageMatters = usesLanguage(file);
   const warnings = result?.warnings ?? [];
   const failure = status === "error" && error !== undefined;
+  const reviewing = status === "reviewing" && analysis !== undefined;
 
-  const hasDetails = languageMatters || failure || warnings.length > 0;
+  const hasDetails = languageMatters || failure || reviewing || warnings.length > 0;
 
   const [chosen, setChosen] = useState<boolean | undefined>(undefined);
-  const open = chosen ?? failure;
+  const open = chosen ?? (failure || reviewing);
 
   const handleLanguageChange = (choice: DocumentLanguageChoice) => {
     onLanguageChange(id, choice);
@@ -173,6 +189,19 @@ const JobRow = ({ index, job, onLanguageChange, onRemove, onSelect, selected }: 
           <CollapsiblePanel className="w-full">
             <div className="pt-3">
               <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
+                {reviewing ? (
+                  <DetectionReview
+                    detections={analysis.detections}
+                    dismissed={dismissed}
+                    onApply={() => {
+                      onApply(id);
+                    }}
+                    onDismissedChange={(next) => {
+                      onDismissedChange(id, next);
+                    }}
+                  />
+                ) : null}
+
                 {languageMatters ? (
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground text-base sm:text-sm">

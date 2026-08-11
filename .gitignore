@@ -45,3 +45,9 @@ playwright/.cache/
 
 # claude code local
 .claude/
+
+# model export scratch
+tools/model-export/build/
+tools/model-export/prompts.json
+
+apps/web/public/candidate.onnx

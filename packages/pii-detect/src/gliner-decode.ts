@@ -26,15 +26,25 @@ const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> }): Logit
   return { data: tensor.data, dims: [...tensor.dims] };
 };
 
-const decodeSpans = (
-  logits: Logits,
-  wordCount: number,
-  entityCount: number,
-  threshold: number,
-): Array<SpanCandidate> => {
+type DecodeOptions = {
+  entityCount: number;
+  item: number;
+  logits: Logits;
+  threshold: number;
+  wordCount: number;
+};
+
+const decodeSpans = ({
+  entityCount,
+  item,
+  logits,
+  threshold,
+  wordCount,
+}: DecodeOptions): Array<SpanCandidate> => {
   const entities = logits.dims.at(-1) ?? 0;
   const widths = logits.dims.at(-2) ?? 0;
   const positions = logits.dims.at(-3) ?? 0;
+  const batch = logits.dims.length > 3 ? (logits.dims.at(-4) ?? 1) : 1;
 
   if (entities !== entityCount) {
     throw new TypeError(
@@ -42,11 +52,18 @@ const decodeSpans = (
     );
   }
 
-  if (positions * widths * entities !== logits.data.length) {
+  if (batch * positions * widths * entities !== logits.data.length) {
     throw new TypeError("The model returned logits whose shape does not match their length");
   }
 
+  if (item >= batch) {
+    throw new RangeError(
+      `The model returned ${String(batch)} results where item ${String(item)} was asked for`,
+    );
+  }
+
   const candidates: Array<SpanCandidate> = [];
+  const offset = item * positions * widths * entities;
 
   for (let start = 0; start < positions; start += 1) {
     for (let width = 0; width < widths; width += 1) {
@@ -56,7 +73,7 @@ const decodeSpans = (
         continue;
       }
 
-      const base = (start * widths + width) * entities;
+      const base = offset + (start * widths + width) * entities;
 
       for (let entity = 0; entity < entities; entity += 1) {
         const score = sigmoid(logits.data[base + entity]);
@@ -89,4 +106,4 @@ const suppressOverlaps = (candidates: Array<SpanCandidate>): Array<SpanCandidate
 };
 
 export { decodeSpans, suppressOverlaps, toLogits };
-export type { Logits, SpanCandidate };
+export type { DecodeOptions, Logits, SpanCandidate };

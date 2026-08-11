@@ -1,0 +1,7 @@
+torch
+onnx
+onnxruntime
+transformers>=4.40
+optimum[onnxruntime]
+gliner
+huggingface_hub

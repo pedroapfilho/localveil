@@ -55,17 +55,22 @@ const createHarness = () => {
 const promptIndex = (prompt: string) =>
   ENTITY_PROMPTS.findIndex((entity) => entity.prompt === prompt);
 
-const logitsFor = (wordCount: number, hits: Array<Hit>) => {
+const logitsFor = (counts: Array<number>, hits: Array<Array<Hit>>) => {
   const entities = ENTITY_PROMPTS.length;
-  const data = new Float32Array(wordCount * MAX_WIDTH * entities).fill(-50);
+  const positions = Math.max(...counts);
+  const perItem = positions * MAX_WIDTH * entities;
+  const data = new Float32Array(counts.length * perItem).fill(-50);
 
-  for (const hit of hits) {
-    const width = hit.end - hit.start;
+  hits.forEach((forItem, item) => {
+    for (const hit of forItem) {
+      const width = hit.end - hit.start;
+      const at = (hit.start * MAX_WIDTH + width) * entities + promptIndex(hit.prompt);
 
-    data[(hit.start * MAX_WIDTH + width) * entities + promptIndex(hit.prompt)] = hit.logit ?? 50;
-  }
+      data[item * perItem + at] = hit.logit ?? 50;
+    }
+  });
 
-  return { data, dims: [1, wordCount, MAX_WIDTH, entities] };
+  return { data, dims: [counts.length, positions, MAX_WIDTH, entities] };
 };
 
 const setup = (respond: Respond) => {
@@ -75,15 +80,22 @@ const setup = (respond: Respond) => {
   vi.mocked(pickDevice).mockResolvedValue("webgpu");
   vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
 
-  const run = vi.fn((input: GlinerInput) => {
-    const hits = respond(wordsOf(input));
+  const submitted: Array<GlinerInput> = [];
 
-    return Promise.resolve(logitsFor(input.keptWords.length, hits));
+  const run = vi.fn((inputs: Array<GlinerInput>) => {
+    submitted.push(...inputs);
+
+    return Promise.resolve(
+      logitsFor(
+        inputs.map((input) => input.keptWords.length),
+        inputs.map((input) => respond(wordsOf(input))),
+      ),
+    );
   });
 
   vi.mocked(createModelRunner).mockResolvedValue(run);
 
-  return { run, wordsOf };
+  return { run, submitted, wordsOf };
 };
 
 beforeEach(() => {
@@ -95,16 +107,16 @@ beforeEach(() => {
 
 describe("createDetector", () => {
   it("chunks a long input into more than one model call", async () => {
-    const { run } = setup(() => []);
+    const { submitted } = setup(() => []);
     const detect = await createDetector({ maxWords: 3, overlapWords: 0 });
 
     await detect("aa bb cc dd ee");
 
-    expect(run.mock.calls.length).toBeGreaterThan(1);
+    expect(submitted.length).toBeGreaterThan(1);
   });
 
   it("returns character offsets for the words the model flagged", async () => {
-    const { run } = setup((words) =>
+    const { submitted } = setup((words) =>
       words[0] === "mail" ? [{ end: 0, prompt: "email", start: 0 }] : [],
     );
     const detect = await createDetector();
@@ -112,7 +124,7 @@ describe("createDetector", () => {
     expect(await detect("mail me")).toEqual([
       { end: 4, label: "private_email", score: 1, start: 0 },
     ]);
-    expect(run.mock.calls.length).toBe(1);
+    expect(submitted.length).toBe(1);
   });
 
   it("reports spans from a later chunk at absolute offsets", async () => {
@@ -162,7 +174,7 @@ describe("createDetector", () => {
     vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
     vi.mocked(createModelRunner)
       .mockRejectedValueOnce(new Error("no adapter"))
-      .mockResolvedValueOnce(vi.fn(() => Promise.resolve(logitsFor(0, []))));
+      .mockResolvedValueOnce(vi.fn(() => Promise.resolve(logitsFor([0], [[]]))));
 
     const stages: Array<string> = [];
 
@@ -218,30 +230,30 @@ describe("shouting text", () => {
   });
 
   it("does not pay for a second pass when nothing is shouting", async () => {
-    const { run } = setup(() => []);
+    const { submitted } = setup(() => []);
     const detect = await createDetector();
 
     await detect("Pedro Silva went home");
 
-    expect(run.mock.calls.length).toBe(1);
+    expect(submitted.length).toBe(1);
   });
 
   it("does not pay for a second pass over a lone acronym", async () => {
-    const { run } = setup(() => []);
+    const { submitted } = setup(() => []);
     const detect = await createDetector();
 
     await detect("2026-01-01 INFO user signed in");
 
-    expect(run.mock.calls.length).toBe(1);
+    expect(submitted.length).toBe(1);
   });
 
   it("sends the second pass the shouted line rather than the whole chunk", async () => {
-    const { run, wordsOf } = setup(() => []);
+    const { submitted, wordsOf } = setup(() => []);
     const detect = await createDetector();
 
     await detect("an invoice\nPEDRO AFONSO\ntotal 210");
 
-    const second = run.mock.calls.at(1)?.at(0);
+    const second = submitted.at(1);
 
     expect(second && wordsOf(second)).toEqual(["Pedro", "Afonso"]);
   });

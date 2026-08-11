@@ -3,15 +3,20 @@ import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
   buildWordIndex,
+  dedupeDetections,
+  describeSpans,
+  isCovered,
+  keptSpans,
   mergeOverlappingRanges,
   spansForTokens,
   spansToRects,
+  survivingSpans,
   toArrayBuffer,
   tokensFromSpans,
 } from "@repo/redact-core";
+import type { PDFDocument } from "pdf-lib";
 
 import { OffscreenCanvasFactory } from "./canvas-factory.ts";
-import { isCovered } from "./covered.ts";
 import { NoFilterFactory } from "./filter-factory.ts";
 
 const SCALE = 2;
@@ -19,6 +24,10 @@ const SCALE = 2;
 const MIN_TEXT_WORDS = 4;
 
 const MIN_LANGUAGE_CONFIDENCE = 0.5;
+
+type Page = { spans: Array<Span>; text: string; words: Array<PositionedWord> };
+
+type PdfHandle = { pages: Array<Page> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -58,9 +67,7 @@ const paint = (canvas: OffscreenCanvas, rects: Array<Rect>) => {
   }
 };
 
-const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) => {
-  onProgress(0, "stage.reading");
-
+const openPdf = async (file: File) => {
   parserInstalled ??= installParser();
 
   // oxlint-disable-next-line react-doctor/async-parallel
@@ -73,39 +80,47 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
   ]);
 
   const opened = pdfjs.getDocument(documentOptions(new Uint8Array(source)));
-  const [pdf, out] = await Promise.all([opened.promise, pdfLib.PDFDocument.create()]);
 
-  const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
+  return { pdf: await opened.promise, pdfLib };
+};
+
+const renderer = (pdf: Awaited<ReturnType<typeof openPdf>>["pdf"]) => async (number: number) => {
+  const page = await pdf.getPage(number);
+  const viewport = page.getViewport({ scale: SCALE });
+  const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
+
+  await page.render({
+    background: "#FFFFFF",
+    canvas: null,
+    canvasContext: target,
+    viewport,
+  }).promise;
+
+  return { canvas, page, viewport };
+};
+
+const isHandle = (value: unknown): value is PdfHandle =>
+  typeof value === "object" && value !== null && Array.isArray(Reflect.get(value, "pages"));
+
+const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options) => {
+  onProgress(0, "stage.reading");
+
+  const { pdf } = await openPdf(file);
+  const renderPage = renderer(pdf);
 
   const warnings = new Set<WarningKey>();
-  const read: Array<{ spans: Array<Span>; text: string; words: Array<PositionedWord> }> = [];
+  const pages: Array<Page> = [];
   const tokens = new Map<string, PiiToken>();
 
   let language: OcrLanguage | undefined = options?.language;
   let anyText = false;
 
-  const renderPage = async (number: number) => {
-    const page = await pdf.getPage(number);
-    const viewport = page.getViewport({ scale: SCALE });
-    const canvas = new OffscreenCanvas(viewport.width, viewport.height);
-
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
-
-    await page.render({
-      background: "#FFFFFF",
-      canvas: null,
-      canvasContext: target,
-      viewport,
-    }).promise;
-
-    return { canvas, page, viewport };
-  };
-
   /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
-
   for (let number = 1; number <= pdf.numPages; number += 1) {
-    const progress = ((number - 1) / pdf.numPages) * 0.7;
+    const progress = ((number - 1) / pdf.numPages) * 0.9;
 
     onProgress(progress, "stage.rendering");
 
@@ -150,24 +165,98 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
       tokens.set(token.text.toLowerCase(), token);
     }
 
-    read.push({ spans, text, words });
+    pages.push({ spans, text, words });
     page.cleanup();
+  }
+  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+
+  if (!anyText) {
+    warnings.add("warning.noText");
   }
 
   const everyToken = [...tokens.values()];
+
+  onProgress(1, "stage.finished");
+
+  return {
+    detections: dedupeDetections(
+      pages.flatMap((page, at) => [
+        ...describeSpans({ page: at, source: "model", spans: page.spans, text: page.text }),
+        ...describeSpans({
+          page: at,
+          source: "repeat",
+          spans: spansForTokens(page.text, everyToken),
+          text: page.text,
+        }),
+      ]),
+    ),
+    handle: { pages } satisfies PdfHandle,
+    warnings: [...warnings],
+  };
+};
+
+const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, onProgress }) => {
+  if (!isHandle(analysis.handle)) {
+    throw new TypeError("The PDF analysis carried no recognised pages to paint from");
+  }
+
+  const { pages } = analysis.handle;
+  const { pdf, pdfLib } = await openPdf(file);
+  const renderPage = renderer(pdf);
+  const out = await pdfLib.PDFDocument.create();
+  const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
+
+  const warnings = new Set<WarningKey>(analysis.warnings);
+  const survived: Array<string> = [];
+
+  let original: Promise<PDFDocument> | undefined;
+  let copying = true;
   let redactionCount = 0;
 
-  for (let number = 1; number <= pdf.numPages; number += 1) {
-    const progress = 0.7 + ((number - 1) / pdf.numPages) * 0.3;
-    const page = read[number - 1];
+  const copyPage = async (number: number) => {
+    if (!copying) {
+      return false;
+    }
+
+    try {
+      const from = await (original ??= file
+        .arrayBuffer()
+        .then((bytes) => pdfLib.PDFDocument.load(bytes)));
+      const [copied] = await out.copyPages(from, [number - 1]);
+
+      out.addPage(copied);
+
+      return true;
+    } catch (error) {
+      copying = false;
+
+      // oxlint-disable-next-line eslint/no-console
+      console.warn("Could not copy an untouched page, so it is painted instead", error);
+
+      return false;
+    }
+  };
+
+  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+  for (let number = 1; number <= pages.length; number += 1) {
+    const progress = ((number - 1) / pages.length) * 0.9;
+    const page = pages[number - 1];
 
     onProgress(progress, "stage.redacting");
 
-    const { canvas, viewport } = await renderPage(number);
-    const spans = [...page.spans, ...spansForTokens(page.text, everyToken)];
+    const spans = keptSpans(analysis.detections, decisions, number - 1);
     const rects = spansToRects(spans, page.words);
+    const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
 
     redactionCount += mergeOverlappingRanges(spans).length;
+    survived.push(...showing.map((word) => word.text));
+
+    if (rects.length === 0 && (await copyPage(number))) {
+      continue;
+    }
+
+    const { canvas, viewport } = await renderPage(number);
+
     paint(canvas, rects);
 
     onProgress(progress, "stage.assembling");
@@ -183,11 +272,7 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
       y: 0,
     });
 
-    for (const word of page.words) {
-      if (isCovered(word.bbox, rects)) {
-        continue;
-      }
-
+    for (const word of showing) {
       try {
         sheet.drawText(word.text, {
           font,
@@ -204,8 +289,10 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
   }
   /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-  if (!anyText) {
-    warnings.add("warning.noText");
+  const survivors = await survivingSpans(survived.join(" "), detect);
+
+  if (survivors.length > 0) {
+    warnings.add("warning.notFullyRedacted");
   }
 
   onProgress(1, "stage.finished");
@@ -219,7 +306,8 @@ const redactPdf: Redactor["redact"] = async (file, detect, onProgress, options) 
 
 const pdfRedactor: Redactor = {
   accepts: (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
-  redact: redactPdf,
+  analyse: analysePdf,
+  apply: applyPdf,
 };
 
 export { documentOptions, pdfRedactor };

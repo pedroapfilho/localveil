@@ -35,11 +35,28 @@ const es: Messages = {
   "glossary.searchable.description":
     "Un PDF guarda una capa de texto invisible detrás de la imagen de la página, y esa capa es la que leen la búsqueda y el copiar y pegar. Donde un carácter no se pudo escribir de vuelta, la capa queda con un hueco.",
   "glossary.searchable.label": "se pueden buscar",
+  "label.account_number": "Número de cuenta",
+  "label.private_address": "Dirección",
+  "label.private_date": "Fecha",
+  "label.private_email": "Correo",
+  "label.private_person": "Nombre",
+  "label.private_phone": "Teléfono",
+  "label.private_url": "Enlace",
+  "label.secret": "Secreto",
   "model.downloading": "Descargando el modelo de detección",
   "model.failed":
     "No se pudo cargar el modelo de detección. Vuelve a cargar la página para intentarlo de nuevo.",
   "model.ready": "Modelo de detección listo",
   "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",
+  "review.apply": "Aplicar",
+  "review.before": "Revisar antes de exportar",
+  "review.dismissGroup": "Mantener todo de {label} legible",
+  "review.heading": "{count} encontrados. Desmarca lo que no sea dato personal.",
+  "review.keepAll": "Cubrir todo",
+  "review.kept": "{count} de {total} se cubrirán",
+  "review.nothing": "No se encontró nada en este archivo.",
+  "review.page": "Página {number}",
+  "review.toggle": "Cubrir {preview}",
   "stage.assembling": "Rearmando el archivo",
   "stage.detecting": "Buscando datos personales",
   "stage.extracting": "Leyendo el documento",
@@ -52,6 +69,7 @@ const es: Messages = {
   "status.done": "Listo",
   "status.error": "Falló",
   "status.queued": "En cola",
+  "status.reviewing": "Listo para revisar",
   "status.running": "Procesando",
   "toast.downloaded": "Tu ZIP se está descargando.",
   "toast.failed": "No se pudieron ocultar los datos de {name}.",
@@ -61,6 +79,8 @@ const es: Messages = {
   "warning.lowConfidence":
     "Parte del texto era difícil de leer, así que puede haberse escapado algún dato personal.",
   "warning.noText": "No se encontró texto legible en este archivo.",
+  "warning.notFullyRedacted":
+    "Al releer el resultado aún aparecieron datos personales, así que revisa este archivo a mano antes de enviarlo.",
   "warning.scannedPages":
     "Este archivo fue escaneado en lugar de escrito, así que se leyó con OCR.",
 };

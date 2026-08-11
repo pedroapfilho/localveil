@@ -1,4 +1,4 @@
-import type { Bbox, Rect } from "@repo/redact-core";
+import type { Bbox, Rect } from "./types.ts";
 
 const isCovered = (bbox: Bbox, rects: Array<Rect>) =>
   rects.some(

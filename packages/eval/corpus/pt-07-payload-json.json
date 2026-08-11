@@ -1,0 +1,6 @@
+{
+  "id": "pt-07-payload-json",
+  "language": "pt",
+  "source": "synthetic",
+  "marked": "{\n  \"titular\": \"[[private_person|Fernanda Lacerda Antunes]]\",\n  \"email\": \"[[private_email|fernanda.antunes@exemplo.com.br]]\",\n  \"cpf\": \"[[account_number|529.982.247-25]]\",\n  \"senha\": \"[[secret|Tr0vao#Azul2024]]\",\n  \"plano\": \"premium\",\n  \"criadoEm\": \"2024-01-08\"\n}"
+}

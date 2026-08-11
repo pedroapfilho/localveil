@@ -69,7 +69,7 @@ Spans come from `gliner_multi_pii-v1`, a GLiNER model whose training languages i
 
 The weights are the ONNX export of that model, [`onnx-community/gliner_multi_pii-v1`](https://huggingface.co/onnx-community/gliner_multi_pii-v1), pinned to one commit rather than tracked on `main`. Unpinned, a download resumed across an update splices bytes from two revisions into a single file, and the cache key never moves when the model does. The tokenizer beside it loads through `@huggingface/transformers` at the same commit.
 
-One export, `model_q4.onnx`, is used in both the browser and the CLI: 4-bit weights with activations left in fp32. The dynamic-int8 export is a third of the size and scores correctly on native CPU, but it collapses on the browser's wasm integer kernels, where a name scoring 0.999 natively came back at 0.17. The fp16-activation exports either cannot create a session at all, because the model's LSTM has no fp16 CPU kernel, or crush the person head on WebGPU. Carrying one file also means the terminal and the tab cannot disagree about a document, and it makes the WebGPU-to-wasm fallback a cache hit rather than a second download.
+One export, `model_q4.onnx`, is used in both the browser and the CLI: 4-bit weights with activations left in fp32. The dynamic-int8 export is a third of the size and scores correctly on native CPU, but it collapses in the browser, where a name scoring 0.999 natively came back at 0.17 on wasm and 0.09 on WebGPU. Re-quantizing per channel rather than per tensor does not rescue it; that was measured, not assumed, and the numbers are in `packages/eval/BASELINE.md`. The fp16-activation exports either cannot create a session at all, because the model's LSTM has no fp16 CPU kernel, or crush the person head on WebGPU. Carrying one file also means the terminal and the tab cannot disagree about a document, and it makes the WebGPU-to-wasm fallback a cache hit rather than a second download.
 
 ### Where the model runs
 
@@ -86,7 +86,7 @@ GLiNER classifies against label strings handed to it at inference time, so the e
 | Chunk size   | 280 words | Trained at 384 words per example; the rest is headroom for the label prompts    |
 | Overlap      | 24 words  | An entity split across a boundary is still seen whole by one chunk or the other |
 | Longest span | 12 words  | The model's own `gliner_config.json` says so                                    |
-| Score floor  | 0.35      | A false span costs an unneeded box, a missed one leaks an identity              |
+| Score floor  | 0.65      | Measured: 92.5 F1 at 0.35, 95.3 at 0.65, and Portuguese recall holds at 96.5    |
 
 Chunks are measured in words rather than characters because the model's context is a word count. A character budget silently overshoots it on short-word text, and whatever falls off the end is personal data nobody scanned. Each chunk comes back with its own spans, overlapping ones are suppressed, and the rest are merged into a single set of ranges over the original text.
 
@@ -196,6 +196,10 @@ The file is read as a string, chunked by words with an overlap so an entity spli
 
 Line breaks inside a covered range survive. A span that runs off the end of one line would otherwise weld two rows of a log or a CSV together.
 
+A `.csv` or a `.json` gets a second layer beneath the model, in the same spirit as the pattern layer: a column headed `email` guarantees every cell under it is an email, and a key named `cpf` guarantees the same about its value. The model still reads the whole file, and the structural layer only adds to what it found. Field names are matched with case, separators and accents folded away, so `Nome_Completo`, `nome completo` and `nomeCompleto` are one name. Generic names like `id`, `date` and `data` map to nothing, and so does a bare `city`, which the model does not cover in prose either.
+
+The output is still the original string with runs replaced, never a reserialised document. A reserialised JSON is not your file.
+
 </details>
 
 <details>
@@ -233,6 +237,26 @@ When you already know the answer, say so: the picker beside the dropzone and `--
 A page whose fonts do not resolve renders as a wall of boxes. Recognisers read that as gibberish, and a detection model will confidently tag a long run of it as somebody's name, which paints a black rectangle over every line.
 
 Under a confidence floor localveil looks for nothing. The page comes back untouched and carries a warning, so you can see it was unreadable and go and check it yourself.
+
+</details>
+
+<details>
+<summary><b>Review</b>: see it before it is written</summary>
+
+Detection and writing are two steps, not one. The first reads the file and hands back what it found: every span with its label, its confidence, the page it sits on, and the text it would cover. Nothing is painted yet.
+
+The list groups by label, lowest confidence first, because those are the ones worth a human's eye. Uncheck anything that is not personal data and press apply; the file is written from what survives. A toggle beside the dropzone turns the step off, and the terminal never asks.
+
+The pause is free. The worker is released while you read, so a long review does not hold a slot the other files in the queue are waiting for.
+
+</details>
+
+<details>
+<summary><b>The result</b>: read back and checked</summary>
+
+Every finished file goes back through the detector once more, over what is left showing: the masked string for text, and the words no rectangle covers for a PDF or an image. Anything the model still recognises there raises a warning.
+
+This catches painting and plumbing, not detection. A rectangle that lands a few pixels short, a word written back into a PDF's searchable layer that should have been dropped, a span whose coordinates came out reversed: those produce a file that looks redacted and is not, and nothing else in the pipeline would notice. What it cannot catch is a name the model walked past on the way in, because the same model reads the output.
 
 </details>
 

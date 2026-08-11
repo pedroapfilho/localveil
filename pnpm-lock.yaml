@@ -192,6 +192,37 @@ importers:
         specifier: ^26.1.1
         version: 26.1.1
 
+  packages/eval:
+    dependencies:
+      '@repo/pii-detect':
+        specifier: workspace:*
+        version: link:../pii-detect
+      '@repo/redact-core':
+        specifier: workspace:*
+        version: link:../redact-core
+      '@repo/redact-text':
+        specifier: workspace:*
+        version: link:../redact-text
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
+    devDependencies:
+      '@repo/config-vitest':
+        specifier: workspace:*
+        version: link:../config-vitest
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../config-typescript
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
+
   packages/i18n:
     dependencies:
       react:

@@ -1,5 +1,6 @@
 import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
+import { redactFile } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const events: Array<string> = [];
@@ -9,12 +10,14 @@ type FakePage = { layer: string; words: Array<string> };
 const state = {
   confidence: 90,
   confidenceOf: (_text: string) => 95,
+  copied: [] as Array<number>,
   drawn: [] as Array<Array<string>>,
   drawTextThrowsOn: undefined as string | undefined,
   language: "en" as "en" | "es" | "pt",
   pages: [] as Array<FakePage>,
   painted: [] as Array<string>,
   recognisedIn: [] as Array<string | undefined>,
+  sourceOpens: true,
 };
 
 const WORD_WIDTH = 40;
@@ -62,7 +65,14 @@ vi.mock("pdf-lib", () => ({
   PDFDocument: {
     create: () =>
       Promise.resolve({
-        addPage: () => {
+        addPage: (sheet: Array<number> | { index: number }) => {
+          if (!Array.isArray(sheet)) {
+            state.copied.push(sheet.index);
+            events.push("copy");
+
+            return undefined;
+          }
+
           const words: Array<string> = [];
 
           state.drawn.push(words);
@@ -81,10 +91,16 @@ vi.mock("pdf-lib", () => ({
             },
           };
         },
+        copyPages: (_from: unknown, indices: Array<number>) =>
+          Promise.resolve(indices.map((index) => ({ index }))),
         embedFont: () => Promise.resolve({}),
         embedPng: () => Promise.resolve({}),
         save: () => Promise.resolve(new Uint8Array([37, 80, 68, 70])),
       }),
+    load: () =>
+      state.sourceOpens
+        ? Promise.resolve({})
+        : Promise.reject(new Error("This PDF is encrypted and cannot be reopened")),
   },
   StandardFonts: { Helvetica: "Helvetica" },
 }));
@@ -149,11 +165,14 @@ const detecting = (targets: Array<string>): Detect =>
 const run = (detect: Detect = detecting([])) => {
   const stages: Array<FileStageKey> = [];
 
-  return pdfRedactor
-    .redact(file(), detect, (_fraction, stage) => {
+  return redactFile({
+    detect,
+    file: file(),
+    onProgress: (_fraction, stage) => {
       stages.push(stage);
-    })
-    .then((result) => ({ ...result, stages }));
+    },
+    redactor: pdfRedactor,
+  }).then((result) => ({ ...result, stages }));
 };
 
 const page = (layer: string, words = layer.split(" ")): FakePage => ({ layer, words });
@@ -161,6 +180,7 @@ const page = (layer: string, words = layer.split(" ")): FakePage => ({ layer, wo
 beforeEach(() => {
   events.length = 0;
   state.confidence = 90;
+  state.copied = [];
   state.drawn = [];
   state.drawTextThrowsOn = undefined;
   state.language = "en";
@@ -168,6 +188,7 @@ beforeEach(() => {
   state.confidenceOf = () => 95;
   state.painted = [];
   state.recognisedIn = [];
+  state.sourceOpens = true;
 
   vi.stubGlobal("OffscreenCanvas", FakeCanvas);
 });
@@ -296,7 +317,7 @@ describe("pdfRedactor", () => {
   it("warns when a character could not go back into the text layer", async () => {
     state.drawTextThrowsOn = "Invoice";
 
-    const { warnings } = await run();
+    const { warnings } = await run(detecting(["Ana Lima"]));
 
     expect(warnings).toContain("warning.droppedCharacters");
   });
@@ -323,14 +344,15 @@ describe("pdfRedactor", () => {
 
     const stages: Array<FileStageKey> = [];
 
-    await pdfRedactor.redact(
-      file(),
-      detecting([]),
-      (_fraction, stage) => {
+    await redactFile({
+      detect: detecting([]),
+      file: file(),
+      onProgress: (_fraction, stage) => {
         stages.push(stage);
       },
-      { language: "pt" },
-    );
+      options: { language: "pt" },
+      redactor: pdfRedactor,
+    });
 
     expect(state.recognisedIn).toEqual(["pt", "pt"]);
   });
@@ -350,6 +372,82 @@ describe("pdfRedactor", () => {
 
     await run();
 
-    expect(state.drawn.length).toBe(3);
+    expect(state.copied.length + state.drawn.length).toBe(3);
+  });
+
+  it("copies a page that carries no redaction rather than rasterising it", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.copied).toEqual([0]);
+    expect(state.drawn.length).toBe(1);
+  });
+
+  it("keeps every page when it mixes copied and painted ones", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima"), page("Page three")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.copied.length + state.drawn.length).toBe(3);
+  });
+
+  it("paints every page when every page carries a redaction", async () => {
+    state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.copied).toEqual([]);
+    expect(state.drawn.length).toBe(2);
+  });
+
+  it("does not render a page a second time to copy it", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(events.filter((event) => event === "render:1")).toHaveLength(1);
+    expect(events.filter((event) => event === "render:2")).toHaveLength(2);
+  });
+
+  it("counts the same whether a page is copied or painted", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    const { redactionCount } = await run(detecting(["Ana Lima"]));
+
+    expect(redactionCount).toBe(1);
+  });
+
+  it("warns when the detector still finds personal data in what stayed visible", async () => {
+    const answers = [[], [{ end: 20, label: "private_person" as const, score: 0.9, start: 12 }]];
+    const { warnings } = await run(() => Promise.resolve(answers.shift() ?? []));
+
+    expect(warnings).toContain("warning.notFullyRedacted");
+  });
+
+  it("says nothing when the words left showing carry no personal data", async () => {
+    const { warnings } = await run(detecting(["Ana Lima"]));
+
+    expect(warnings).not.toContain("warning.notFullyRedacted");
+  });
+
+  it("checks what stayed visible on a copied page too", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    const detect = detecting(["Ana Lima"]);
+
+    await run(detect);
+
+    expect(detect).toHaveBeenCalledWith("Invoice total due Signed by");
+  });
+
+  it("paints an untouched page when the source cannot be reopened", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+    state.sourceOpens = false;
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(state.copied).toEqual([]);
+    expect(state.drawn.length).toBe(2);
   });
 });

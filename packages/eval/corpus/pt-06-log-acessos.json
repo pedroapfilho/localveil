@@ -1,0 +1,6 @@
+{
+  "id": "pt-06-log-acessos",
+  "language": "pt",
+  "source": "synthetic",
+  "marked": "INFO 2024-03-14T09:12:04Z sessao iniciada servico=api regiao=sa-east-1\nINFO 2024-03-14T09:12:05Z cache HIT chave=CFG-2211 ttl=300\nWARN 2024-03-14T09:13:41Z tentativa de login falhou usuario=[[private_email|joao.p@exemplo.com]]\nERRO 2024-03-14T09:13:52Z limite excedido para [[private_person|Joao Pereira]] origem=[[private_url|https://painel.exemplo.com/contas/8891]]\nINFO 2024-03-14T09:14:00Z retomando fila TAREFA-4410 pendentes=12\nINFO 2024-03-14T09:14:03Z relatorio 2019-2024 exportado com sucesso"
+}

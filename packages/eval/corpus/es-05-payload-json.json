@@ -1,0 +1,6 @@
+{
+  "id": "es-05-payload-json",
+  "language": "es",
+  "source": "synthetic",
+  "marked": "{\n  \"titular\": \"[[private_person|Joaquin Peralta Sanz]]\",\n  \"correo\": \"[[private_email|joaquin.peralta@ejemplo.es]]\",\n  \"contrasena\": \"[[secret|Molino-Rojo-77!]]\",\n  \"plan\": \"empresa\",\n  \"alta\": \"2024-01-08\"\n}"
+}

@@ -1,4 +1,5 @@
 import { useTranslations } from "@repo/i18n";
+import { Checkbox } from "@repo/ui/components/checkbox";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
 import { AnimatePresence, motion } from "motion/react";
@@ -35,7 +36,18 @@ const BrandMark = () => (
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const { clear, downloadZip, remove, removeMany, setLanguage, submit } = useRedaction();
+  const {
+    applyDecisions,
+    clear,
+    downloadZip,
+    remove,
+    removeMany,
+    reviewing,
+    setDismissed,
+    setLanguage,
+    setReviewing,
+    submit,
+  } = useRedaction();
 
   useDocumentLocale();
 
@@ -95,6 +107,17 @@ const App = () => {
             onFilesSelected={handleFilesSelected}
           />
 
+          <label className="text-muted-foreground mx-auto flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={reviewing}
+              onChange={(event) => {
+                setReviewing(event.currentTarget.checked);
+              }}
+            />
+
+            {t("review.before")}
+          </label>
+
           <AnimatePresence initial={false}>
             {queued ? (
               <motion.div
@@ -105,7 +128,9 @@ const App = () => {
               >
                 <JobList
                   jobs={jobs}
+                  onApply={applyDecisions}
                   onClear={clear}
+                  onDismissedChange={setDismissed}
                   onLanguage={setLanguage}
                   onRemove={remove}
                   onRemoveMany={removeMany}

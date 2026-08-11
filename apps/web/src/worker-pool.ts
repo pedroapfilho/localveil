@@ -1,4 +1,6 @@
 import type {
+  Analysis,
+  Decisions,
   DocumentLanguage,
   FileStageKey,
   ModelStageKey,
@@ -11,14 +13,17 @@ import type { ModelHost } from "./model-host";
 import { createModelHost } from "./model-host";
 // oxlint-disable-next-line import/default
 import redactWorkerUrl from "./redact-worker.ts?worker&url";
-import type { ProgressEvent, RedactTask } from "./worker-protocol";
+import type { AnalyseTask, ApplyTask, ProgressEvent } from "./worker-protocol";
 
 const SILENCE_LIMIT = 120_000;
 
 type JobRequest = { file: File; id: string; language?: DocumentLanguage };
 
+type ApplyRequest = { analysis: Analysis; decisions: Decisions; file: File; id: string };
+
 type RedactionPoolOptions = {
   maxWorkers: number;
+  onAnalysed: (id: string, analysis: Analysis) => void;
   onDone: (id: string, result: RedactionResult) => void;
   onError: (id: string, message: string, unsupported: boolean) => void;
   onModelLost: (reason: string) => void;
@@ -27,6 +32,7 @@ type RedactionPoolOptions = {
 };
 
 type RedactionPool = {
+  apply: (request: ApplyRequest) => void;
   cancel: (id: string) => void;
   destroy: () => void;
   submit: (job: JobRequest) => void;
@@ -34,16 +40,23 @@ type RedactionPool = {
 
 type PooledTask = {
   cancel: () => void;
-  settle: (onDone: (result: RedactionResult) => void, onFail: (error: unknown) => void) => void;
+  settle: (onDone: (value: unknown) => void, onFail: (error: unknown) => void) => void;
 };
 
 type LiveJob = {
   channel: string;
-  request: JobRequest;
+  id: string;
+  restart: () => void;
   started: boolean;
   task: PooledTask;
   watchdog?: ReturnType<typeof setTimeout>;
 };
+
+const isAnalysis = (value: unknown): value is Analysis =>
+  typeof value === "object" && value !== null && Array.isArray(Reflect.get(value, "detections"));
+
+const isResult = (value: unknown): value is RedactionResult =>
+  typeof value === "object" && value !== null && Reflect.get(value, "blob") instanceof Blob;
 
 const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   typeof payload === "object" &&
@@ -82,7 +95,8 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
 };
 
 const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
-  const { maxWorkers, onDone, onError, onModelLost, onModelProgress, onProgress } = options;
+  const { maxWorkers, onAnalysed, onDone, onError, onModelLost, onModelProgress, onProgress } =
+    options;
 
   const jobs = new Map<string, LiveJob>();
 
@@ -94,7 +108,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
     job.watchdog = setTimeout(() => {
       // eslint-disable-next-line no-use-before-define -- mutually recursive with give
-      give(job.request.id, "The redaction worker stopped answering");
+      give(job.id, "The redaction worker stopped answering");
     }, SILENCE_LIMIT);
   };
 
@@ -131,7 +145,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       // oxlint-disable-next-line unicorn/no-useless-spread
       for (const job of [...jobs.values()]) {
         if (job.started || fatal) {
-          give(job.request.id, reason);
+          give(job.id, reason);
         }
       }
 
@@ -142,10 +156,9 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       }
 
       for (const job of waiting) {
-        release(job.request.id);
+        release(job.id);
         job.task.cancel();
-        // eslint-disable-next-line no-use-before-define -- resubmission needs submit
-        submit(job.request);
+        job.restart();
       }
     },
     onProgress: (fraction, stage) => {
@@ -166,57 +179,107 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     workerType: "web",
   });
 
-  const submit = (job: JobRequest) => {
+  const watching = (id: string) => (payload: unknown) => {
+    const live = jobs.get(id);
+
+    if (live === undefined || !isProgressEvent(payload)) {
+      return;
+    }
+
+    live.started = true;
+    arm(live);
+    onProgress(id, payload.fraction, payload.stage);
+  };
+
+  const start = (
+    id: string,
+    restart: () => void,
+    run: (port: MessagePort) => object,
+    settled: (value: unknown) => void,
+  ) => {
     const channel = crypto.randomUUID();
     const wire = new MessageChannel();
 
     host.connect(channel, wire.port1);
 
     const mine = () => {
-      const live = jobs.get(job.id);
+      const live = jobs.get(id);
 
       return live?.channel === channel ? live : undefined;
     };
 
     try {
-      const task = asPooledTask(
-        pool.exec<RedactTask>("redact", [job.file, job.language, wire.port2], {
-          on: (payload: unknown) => {
-            const live = mine();
+      const task = asPooledTask(run(wire.port2));
 
-            if (live === undefined || !isProgressEvent(payload)) {
-              return;
-            }
-
-            live.started = true;
-            arm(live);
-            onProgress(job.id, payload.fraction, payload.stage);
-          },
-          transfer: [wire.port2],
-        }),
-      );
-
-      jobs.set(job.id, { channel, request: job, started: false, task });
+      jobs.set(id, { channel, id, restart, started: false, task });
 
       task.settle(
-        (result) => {
-          if (mine() !== undefined && release(job.id) !== undefined) {
-            onDone(job.id, result);
+        (value) => {
+          if (mine() !== undefined && release(id) !== undefined) {
+            settled(value);
           }
         },
         (error) => {
-          if (mine() !== undefined && release(job.id) !== undefined) {
-            onError(job.id, describeError(error), isUnsupportedFile(error));
+          if (mine() !== undefined && release(id) !== undefined) {
+            onError(id, describeError(error), isUnsupportedFile(error));
           }
         },
       );
     } catch (error) {
       host.disconnect(channel);
-      onError(job.id, describeError(error), false);
+      onError(id, describeError(error), false);
     }
   };
 
+  const submit = (job: JobRequest) => {
+    start(
+      job.id,
+      () => {
+        submit(job);
+      },
+      (port) =>
+        pool.exec<AnalyseTask>("analyse", [job.file, job.language, port], {
+          on: watching(job.id),
+          transfer: [port],
+        }),
+      (value) => {
+        if (isAnalysis(value)) {
+          onAnalysed(job.id, value);
+
+          return;
+        }
+
+        onError(job.id, "The worker returned something that is not an analysis", false);
+      },
+    );
+  };
+
+  const apply = (request: ApplyRequest) => {
+    start(
+      request.id,
+      () => {
+        apply(request);
+      },
+      (port) =>
+        pool.exec<ApplyTask>(
+          "apply",
+          [request.file, { analysis: request.analysis, decisions: request.decisions }, port],
+          { on: watching(request.id), transfer: [port] },
+        ),
+      (value) => {
+        if (isResult(value)) {
+          onDone(request.id, value);
+
+          return;
+        }
+
+        onError(request.id, "The worker returned something that is not a redacted file", false);
+      },
+    );
+  };
+
   return {
+    apply,
     cancel: (id) => {
       release(id)?.task.cancel();
     },
@@ -234,4 +297,4 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 };
 
 export { createRedactionPool, SILENCE_LIMIT };
-export type { JobRequest, RedactionPool, RedactionPoolOptions };
+export type { ApplyRequest, JobRequest, RedactionPool, RedactionPoolOptions };
