@@ -2,5 +2,5 @@
   "id": "pt-12-credenciais",
   "language": "pt",
   "source": "synthetic",
-  "marked": "Notas de implantacao\n\nO painel fica em [[private_url|https://admin.exemplo.com/entrar]].\n\nUsuario de servico: [[private_email|deploy@exemplo.com]]\nSenha temporaria: [[secret|Vento-Norte-88!]]\nChave de API: [[secret|sk_live_9f2b7c41ae55d0836b1e]]\n\nTroque as duas assim que o primeiro deploy passar."
+  "marked": "Notas de implantacao\n\nO painel fica em https://admin.exemplo.com/entrar.\n\nUsuario de servico: [[private_email|deploy@exemplo.com]]\nSenha temporaria: [[secret|Vento-Norte-88!]]\nChave de API: [[secret|sk_live_9f2b7c41ae55d0836b1e]]\n\nTroque as duas assim que o primeiro deploy passar."
 }

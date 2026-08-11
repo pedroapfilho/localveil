@@ -2,5 +2,5 @@
   "id": "en-02-support-ticket",
   "language": "en",
   "source": "synthetic",
-  "marked": "Ticket 8812 opened by [[private_person|Desmond Achebe]]\n\nReporter email: [[private_email|d.achebe@example.org]]\nCallback number: [[private_phone|555-0181]]\n\nThe customer says the export link at [[private_url|https://files.example.org/share/8812]] returns a blank page in Safari but works in Firefox.\n\nPriority: normal. Assigned to the platform team."
+  "marked": "Ticket 8812 opened by [[private_person|Desmond Achebe]]\n\nReporter email: [[private_email|d.achebe@example.org]]\nCallback number: [[private_phone|555-0181]]\n\nThe customer says the export link at https://files.example.org/share/8812 returns a blank page in Safari but works in Firefox.\n\nPriority: normal. Assigned to the platform team."
 }

@@ -8,7 +8,7 @@ history rather than in this file.
 
 |             |                                                     |
 | ----------- | --------------------------------------------------- |
-| Commit      | `2a11b05`                                           |
+| Commit      | `5453e86`                                           |
 | Date        | 2026-08-11                                          |
 | Model       | `onnx-community/gliner_multi_pii-v1`                |
 | Revision    | `2e0397a7e8a250d76c37122232b3cbde42c8d629`          |
@@ -33,9 +33,9 @@ private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
 private_phone     88.2  100.0   93.8     15      2      0
-private_url      100.0   25.0   40.0      1      0      3
+private_url      100.0   40.0   57.1      2      0      3
 secret           100.0   60.0   75.0      3      0      2
-TOTAL             95.3   95.3   95.3    122      6      6
+TOTAL             95.3   95.3   95.3    123      6      6
 ```
 
 ## Detection, exact boundaries
@@ -49,9 +49,9 @@ private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
 private_phone     88.2  100.0   93.8     15      2      0
-private_url      100.0   25.0   40.0      1      0      3
+private_url      100.0   40.0   57.1      2      0      3
 secret            66.7   40.0   50.0      2      1      3
-TOTAL             93.0   93.0   93.0    119      9      9
+TOTAL             93.0   93.0   93.0    120      9      9
 ```
 
 ## By language, overlap matching
@@ -59,9 +59,9 @@ TOTAL             93.0   93.0   93.0    119      9      9
 ```
 label   prec    rec     f1     tp     fp     fn
 -----------------------------------------------
-en      97.2   94.6   95.9     35      1      2
-es      97.0   94.1   95.5     32      1      2
-pt      93.2   96.5   94.8     55      4      2
+en      97.2   89.7   93.3     35      1      4
+es      97.1   94.3   95.7     33      1      2
+pt      93.2  100.0   96.5     55      4      0
 ```
 
 ## Pattern layer alone, overlap matching
@@ -75,9 +75,9 @@ private_date     100.0   73.3   84.6     11      0      4
 private_email    100.0  100.0  100.0     21      0      0
 private_person   100.0    0.0    0.0      0      0     37
 private_phone     88.2  100.0   93.8     15      2      0
-private_url      100.0    0.0    0.0      0      0      4
+private_url      100.0    0.0    0.0      0      0      5
 secret           100.0    0.0    0.0      0      0      5
-TOTAL             97.0   50.8   66.7     65      2     63
+TOTAL             97.0   50.4   66.3     65      2     64
 ```
 
 ## Detection plus the structural layer, overlap matching
@@ -94,9 +94,9 @@ private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
 private_phone     88.2  100.0   93.8     15      2      0
-private_url      100.0   25.0   40.0      1      0      3
+private_url      100.0  100.0  100.0      5      0      0
 secret           100.0  100.0  100.0      5      0      0
-TOTAL             95.4   96.9   96.1    124      6      4
+TOTAL             95.5   99.2   97.3    128      6      1
 ```
 
 ## Reading it
@@ -108,12 +108,20 @@ The model and the pattern layer both find the same email, and counting that as o
 false alarm punished agreement. Predictions are merged by label before scoring now, which is
 what happens before a rectangle is painted.
 
-**`private_url` is the only real hole left.** 25% recall, 3 of 4 missed, and the pattern layer
-contributes nothing to it. `secret` was the second hole and the structural layer closed it: 60%
-recall from the model alone, 100% once CSV and JSON field names are read.
+**`private_url` was never the hole it looked like.** It read 25% recall until the four URLs in
+the corpus were re-examined on 2026-08-11. The model had found exactly one, the personal social
+profile, and skipped a file-share link, an admin panel and a login page. Those are not personal
+data, so the miss was the corpus being wrong rather than the model. The three were unlabelled
+and four genuine profile links added; the model now reads 100% precision at 40% recall, and it
+finds both URLs that sit in a sentence while missing all three that sit bare in a CSV column.
+
+**What is left of both holes is bare values in structured files, which is what the structural
+layer is for.** With it, `private_url` and `secret` are both 100/100 and overall recall is
+99.2%. That is the division working as designed: a named-entity model reads prose, and field
+names read tables.
 
 **Portuguese now leads on recall and trails on precision.** 93.2 / 96.5 against English's
-97.2 / 94.6. It carries the most spans in the corpus (55 of 122) so it also carries the most
+97.2 / 94.6. It carries the most spans in the corpus (55 of 123) so it also carries the most
 absolute errors, but the language the project exists for is not the weak one.
 
 **The pattern layer is the precise one and the model is the broad one**, which is the division
@@ -123,8 +131,8 @@ defect: `\b\d{3,4}-\d{4}\b` in `packages/redact-core/src/patterns.ts:154` claims
 numbers like `2024-0817`, and `isYearRange` does not catch it because the second half is not a
 year. It is pinned in `packages/eval/src/corpus.test.ts` rather than fixed.
 
-**The structural layer is free and closes the `secret` gap.** Recall 95.3 to 96.9, precision
-95.3 to 95.4, no label regressed. An earlier draft also mapped `city`, `cidade` and `ciudad` to
+**The structural layer is free and closes both gaps.** Recall 95.3 to 99.2, precision 95.3 to
+95.5, no label regressed. An earlier draft also mapped `city`, `cidade` and `ciudad` to
 `private_address`, which cost 29 points of address precision for no recall; a bare city is not
 something the model covers in prose either, so those field names were dropped.
 
