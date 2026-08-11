@@ -121,13 +121,13 @@ describe("the corpus", () => {
     }
   });
 
-  it("pins the pattern layer's known false positives on negative material", () => {
+  it("finds nothing at all in negative material", () => {
     const found = corpus
       .filter((document) => isNegative(document.id))
       .flatMap((document) =>
         patternSpans(document.text).map((span) => document.text.slice(span.start, span.end)),
       );
 
-    expect(found.toSorted()).toEqual(["2024-0817", "2024-0817"]);
+    expect(found).toEqual([]);
   });
 });

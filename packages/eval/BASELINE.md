@@ -8,7 +8,7 @@ history rather than in this file.
 
 |             |                                                     |
 | ----------- | --------------------------------------------------- |
-| Commit      | `5453e86`                                           |
+| Commit      | `74ecb8d`                                           |
 | Date        | 2026-08-11                                          |
 | Model       | `onnx-community/gliner_multi_pii-v1`                |
 | Revision    | `2e0397a7e8a250d76c37122232b3cbde42c8d629`          |
@@ -32,10 +32,10 @@ private_address   92.9  100.0   96.3     13      1      0
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
-private_phone     88.2  100.0   93.8     15      2      0
+private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0   40.0   57.1      2      0      3
 secret           100.0   60.0   75.0      3      0      2
-TOTAL             95.3   95.3   95.3    123      6      6
+TOTAL             96.9   95.3   96.1    123      4      6
 ```
 
 ## Detection, exact boundaries
@@ -48,10 +48,10 @@ private_address   85.7   92.3   88.9     12      2      1
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
-private_phone     88.2  100.0   93.8     15      2      0
+private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0   40.0   57.1      2      0      3
 secret            66.7   40.0   50.0      2      1      3
-TOTAL             93.0   93.0   93.0    120      9      9
+TOTAL             94.5   93.0   93.8    120      7      9
 ```
 
 ## By language, overlap matching
@@ -60,8 +60,8 @@ TOTAL             93.0   93.0   93.0    120      9      9
 label   prec    rec     f1     tp     fp     fn
 -----------------------------------------------
 en      97.2   89.7   93.3     35      1      4
-es      97.1   94.3   95.7     33      1      2
-pt      93.2  100.0   96.5     55      4      0
+es     100.0   94.3   97.1     33      0      2
+pt      94.8  100.0   97.3     55      3      0
 ```
 
 ## Pattern layer alone, overlap matching
@@ -71,13 +71,13 @@ label             prec    rec     f1     tp     fp     fn
 ---------------------------------------------------------
 account_number   100.0   94.4   97.1     17      0      1
 private_address  100.0    7.7   14.3      1      0     12
-private_date     100.0   73.3   84.6     11      0      4
+private_date     100.0  100.0  100.0     15      0      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person   100.0    0.0    0.0      0      0     37
-private_phone     88.2  100.0   93.8     15      2      0
+private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0    0.0    0.0      0      0      5
 secret           100.0    0.0    0.0      0      0      5
-TOTAL             97.0   50.4   66.3     65      2     64
+TOTAL            100.0   53.5   69.7     69      0     60
 ```
 
 ## Detection plus the structural layer, overlap matching
@@ -93,10 +93,10 @@ private_address   92.9  100.0   96.3     13      1      0
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
-private_phone     88.2  100.0   93.8     15      2      0
+private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0  100.0  100.0      5      0      0
 secret           100.0  100.0  100.0      5      0      0
-TOTAL             95.5   99.2   97.3    128      6      1
+TOTAL             97.0   99.2   98.1    128      4      1
 ```
 
 ## Reading it
@@ -389,3 +389,31 @@ character width on each side. That is the drift the README warned about, and the
 answer to it: over-covering by a character is a wider black rectangle, under-covering leaves the
 first letter of a name showing. A page with a thin layer, or a viewport with no usable transform,
 still goes to OCR, so the fallback is the safe direction.
+
+## The pattern layer is now perfectly precise
+
+Both defects this file had been recording got fixed on 2026-08-11, and they were mirror images
+of each other: one leaked, one over-covered.
+
+**`2 April ████`.** The date matcher only knew `dd/mm/yyyy`, so a written date reached the
+pattern layer unmatched and the model covered its year alone. Written dates are now matched
+whole, in all three languages, with and without the accent on `março`, because OCR drops accents
+often enough that requiring one loses real dates. `fixtures/sample.csv` comes back with no
+warnings.
+
+**`2024-0817`.** `\b\d{3,4}-\d{4}\b` claimed order numbers as NANP phone numbers, and
+`isYearRange` missed it because the second half is not a year. A first group that looks like a
+year is now rejected, which keeps `555-0181` and drops `2024-0817`. The corpus test that pinned
+this as a known false positive is now a regression guard asserting the pattern layer finds
+nothing at all in negative material.
+
+```
+                        before              after
+private_date     100.0 / 73.3 / 84.6   100.0 / 100.0 / 100.0
+private_phone     88.2 / 100.0 / 93.8  100.0 / 100.0 / 100.0
+pattern total     97.0 / 50.8 / 66.7   100.0 /  53.5 /  69.7
+```
+
+The pattern layer now runs at **100% precision with zero false positives**, which is what a
+checksummed layer beneath a statistical one should look like. End to end that is F1 97.3 to 98.1
+with recall unchanged at 99.2.

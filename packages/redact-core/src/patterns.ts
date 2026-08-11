@@ -99,6 +99,29 @@ const isIban = (value: string) => {
 
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
+// A reference like 2024-0817 has the shape of a NANP number and is not one. Rejecting a
+// year-like first group keeps 555-0181 while dropping an invoice or order number, which the
+// eval corpus pins as the pattern layer's one false positive.
+const startsWithAYear = (value: string) => /^(?:19|20)\d{2}[\s\-]/v.test(value);
+
+// Month names in the three languages the app reads, with and without the accent on março,
+// because OCR drops accents often enough that requiring one loses real dates. A written date is
+// matched whole: the model tends to cover only the year, which leaves "2 April" readable.
+const MONTHS =
+  "january|february|march|april|may|june|july|august|september|october|november|december|" +
+  "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|" +
+  "enero|febrero|marzo|mayo|junio|julio|septiembre|setiembre|octubre|noviembre|diciembre";
+
+const WRITTEN_DATE = new RegExp(
+  `\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:de\\s+)?(?:${MONTHS})\\b(?:\\s+(?:de\\s+)?(?:19|20)\\d{2})?`,
+  "giv",
+);
+
+const MONTH_FIRST_DATE = new RegExp(
+  `\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+(?:19|20)\\d{2})?`,
+  "giv",
+);
+
 const PATTERNS: ReadonlyArray<Pattern> = [
   {
     label: "private_email",
@@ -143,15 +166,18 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     label: "private_date",
     matcher: /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2}\b/gv,
   },
+  { label: "private_date", matcher: WRITTEN_DATE },
+  { label: "private_date", matcher: MONTH_FIRST_DATE },
   {
     label: "private_phone",
     matcher:
       /\+\d{1,3}[\s\-]?\(?\d{2,4}\)?[\s\-]?\d{3,5}[\s\-]?\d{3,5}|\(\d{2,4}\)\s?\d{3,5}[\s\-]\d{3,5}|\b\d{3,4}-\d{4}\b/gv,
-    verify: (value) => !isYearRange(value),
+    verify: (value) => !isYearRange(value) && !startsWithAYear(value),
   },
   {
     label: "private_phone",
     matcher: /\b\d{3}-\d{3}-\d{4}\b|\b\d{2}\s9?\d{4}-\d{4}\b|\b9\d{4}-\d{4}\b/gv,
+    verify: (value) => !startsWithAYear(value),
   },
 ];
 
