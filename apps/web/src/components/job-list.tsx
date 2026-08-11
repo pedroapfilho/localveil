@@ -24,6 +24,7 @@ type JobListProps = {
   onApply: (id: string) => void;
   onClear: () => void;
   onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
+  onKeptChange: (id: string, kept: ReadonlyArray<string>) => void;
   onLanguage: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => void;
   onRemove: (id: string) => void;
   onRemoveMany: (ids: ReadonlyArray<string>) => void;
@@ -34,6 +35,7 @@ const JobList = ({
   onApply,
   onClear,
   onDismissedChange,
+  onKeptChange,
   onLanguage,
   onRemove,
   onRemoveMany,
@@ -131,6 +133,7 @@ const JobList = ({
                 key={job.id}
                 onApply={onApply}
                 onDismissedChange={onDismissedChange}
+                onKeptChange={onKeptChange}
                 onLanguageChange={handleRowLanguage}
                 onRemove={onRemove}
                 onSelect={handleSelect}

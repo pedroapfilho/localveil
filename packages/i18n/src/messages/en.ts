@@ -53,6 +53,9 @@ const en = {
   "review.kept": "{count} of {total} will be covered",
   "review.nothing": "Nothing was found in this file.",
   "review.page": "Page {number}",
+  "review.suggestions": "{count} more the model was unsure about",
+  "review.suggestionsHint":
+    "These are below the bar for covering automatically. Tick any that are personal data.",
   "review.toggle": "Cover {preview}",
   "stage.assembling": "Rebuilding the file",
   "stage.detecting": "Looking for personal data",

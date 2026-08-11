@@ -7,10 +7,16 @@ run by hand when someone wants to change what the app fetches.
 The weights the app uses today come from `onnx-community/gliner_multi_pii-v1`, quantized by
 somebody else. Two levers are available on our own export and they compose:
 
-**Result so far: int8 is dead, trimming is untested.** Both quantization recipes below collapse
-in the browser exactly as the shipped README describes, so lever 2 is closed. Lever 1 remains
-open and is now the only one, because it deletes embedding rows rather than reducing precision
-and so does not touch the arithmetic that breaks.
+**Result: int8 is dead, trimming works.** Both int8 recipes below collapse in the browser
+exactly as the shipped README describes, so lever 2 is closed. Lever 1 lands: trimming to Latin
+script and then quantizing to 4 bits gives 539 MB against the shipped 853 MB with identical
+spans on all 30 corpus documents and a 0.9956 name score on both browser paths. The only step
+left is publishing the weights and the trimmed tokenizer at one pinned revision.
+
+Keep U+2581 in the keep set. It is SentencePiece's word-initial marker, it lives in Block
+Elements rather than General Punctuation, and dropping it deletes every `\u2581word` piece while
+leaving the bare form. Nothing hits an unknown token, so the tokenizer looks fine; the corpus
+just tokenizes about half again as long and the model loses 5 F1.
 
 1. **Vocabulary trimming.** mDeBERTa-v3-base is 86M parameters of transformer and 190M of
    embedding matrix for a 250K-token multilingual vocabulary, so roughly two thirds of the

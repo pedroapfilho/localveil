@@ -159,7 +159,7 @@ describe("textRedactor", () => {
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
     const result = await textRedactor.apply({
       analysis,
-      decisions: { dismissed: analysis.detections.map((detection) => detection.id) },
+      decisions: { dismissed: analysis.detections.map((detection) => detection.id), kept: [] },
       detect: detecting([]),
       file: source,
       onProgress: noProgress,
@@ -184,7 +184,7 @@ describe("textRedactor", () => {
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
     const result = await textRedactor.apply({
       analysis,
-      decisions: { dismissed: [] },
+      decisions: { dismissed: [], kept: [] },
       detect: detecting([]),
       file: source,
       onProgress: noProgress,

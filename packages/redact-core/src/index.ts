@@ -1,7 +1,7 @@
 export { chunkText } from "./chunk.ts";
 export { isCovered } from "./covered.ts";
 export { describeError } from "./describe-error.ts";
-export { dedupeDetections, describeSpans, keptSpans } from "./detections.ts";
+export { APPLY_SCORE, dedupeDetections, describeSpans, keptSpans } from "./detections.ts";
 export type { TextChunk } from "./chunk.ts";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
 export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";

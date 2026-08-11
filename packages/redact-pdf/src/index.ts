@@ -2,6 +2,7 @@ import type { OcrLanguage } from "@repo/ocr";
 import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
+  APPLY_SCORE,
   buildWordIndex,
   dedupeDetections,
   describeSpans,
@@ -181,8 +182,15 @@ const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options
   return {
     detections: dedupeDetections(
       pages.flatMap((page, at) => [
-        ...describeSpans({ page: at, source: "model", spans: page.spans, text: page.text }),
         ...describeSpans({
+          applyAbove: APPLY_SCORE,
+          page: at,
+          source: "model",
+          spans: page.spans,
+          text: page.text,
+        }),
+        ...describeSpans({
+          applyAbove: APPLY_SCORE,
           page: at,
           source: "repeat",
           spans: spansForTokens(page.text, everyToken),

@@ -59,6 +59,7 @@ type Detection = {
   preview: string;
   source: DetectionSource;
   start: number;
+  suggested: boolean;
 };
 
 type Analysis = {
@@ -67,7 +68,7 @@ type Analysis = {
   warnings: Array<WarningKey>;
 };
 
-type Decisions = { dismissed: ReadonlyArray<string> };
+type Decisions = { dismissed: ReadonlyArray<string>; kept: ReadonlyArray<string> };
 
 type ApplyRequest = {
   analysis: Analysis;

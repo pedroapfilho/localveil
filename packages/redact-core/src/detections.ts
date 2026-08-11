@@ -1,10 +1,21 @@
 import type { Decisions, Detection, DetectionSource, Span } from "./types.ts";
 
+// Spans at or above this are covered unless somebody dismisses them; spans below it are
+// offered as suggestions and covered only if somebody ticks them. Swept in packages/eval:
+// see BASELINE.md for what each floor costs.
+const APPLY_SCORE = 0.65;
+
 const PREVIEW_GRAPHEMES = 80;
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-type Described = { page?: number; source: DetectionSource; spans: Array<Span>; text: string };
+type Described = {
+  applyAbove: number;
+  page?: number;
+  source: DetectionSource;
+  spans: Array<Span>;
+  text: string;
+};
 
 const preview = (value: string) => {
   const segments = [...GRAPHEMES.segment(value)];
@@ -22,7 +33,7 @@ const preview = (value: string) => {
 const idFor = (span: Span, page?: number) =>
   `${page === undefined ? "" : String(page)}:${String(span.start)}-${String(span.end)}:${span.label}`;
 
-const describeSpans = ({ page, source, spans, text }: Described): Array<Detection> =>
+const describeSpans = ({ applyAbove, page, source, spans, text }: Described): Array<Detection> =>
   spans.map((span) => ({
     confidence: span.score,
     end: span.end,
@@ -32,6 +43,7 @@ const describeSpans = ({ page, source, spans, text }: Described): Array<Detectio
     preview: preview(text.slice(span.start, span.end)),
     source,
     start: span.start,
+    suggested: span.score < applyAbove,
   }));
 
 const dedupeDetections = (detections: Array<Detection>): Array<Detection> => {
@@ -52,10 +64,15 @@ const dedupeDetections = (detections: Array<Detection>): Array<Detection> => {
 
 const keptSpans = (detections: Array<Detection>, decisions: Decisions, page?: number) => {
   const dismissed = new Set(decisions.dismissed);
+  const chosen = new Set(decisions.kept);
   const kept: Array<Span> = [];
 
   for (const detection of detections) {
     if (detection.page !== page || dismissed.has(detection.id)) {
+      continue;
+    }
+
+    if (detection.suggested && !chosen.has(detection.id)) {
       continue;
     }
 
@@ -70,5 +87,5 @@ const keptSpans = (detections: Array<Detection>, decisions: Decisions, page?: nu
   return kept;
 };
 
-export { dedupeDetections, describeSpans, keptSpans };
+export { APPLY_SCORE, dedupeDetections, describeSpans, keptSpans };
 export type { Described };

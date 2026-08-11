@@ -56,6 +56,9 @@ const es: Messages = {
   "review.kept": "{count} de {total} se cubrirán",
   "review.nothing": "No se encontró nada en este archivo.",
   "review.page": "Página {number}",
+  "review.suggestions": "{count} más sobre los que el modelo dudó",
+  "review.suggestionsHint":
+    "Estos quedan por debajo del umbral para cubrirlos automáticamente. Marca los que sean datos personales.",
   "review.toggle": "Cubrir {preview}",
   "stage.assembling": "Rearmando el archivo",
   "stage.detecting": "Buscando datos personales",

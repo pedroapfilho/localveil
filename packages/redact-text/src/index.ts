@@ -1,5 +1,6 @@
 import type { Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
+  APPLY_SCORE,
   dedupeDetections,
   describeSpans,
   keptSpans,
@@ -60,13 +61,19 @@ const textRedactor: Redactor = {
     return {
       detections: dedupeDetections([
         ...describeSpans({
+          applyAbove: APPLY_SCORE,
           source: "model",
           spans: found.filter((span) => !isPattern(span)),
           text,
         }),
-        ...describeSpans({ source: "pattern", spans: found.filter(isPattern), text }),
-        ...describeSpans({ source: "structure", spans: structural, text }),
-        ...describeSpans({ source: "repeat", spans: repeated, text }),
+        ...describeSpans({
+          applyAbove: APPLY_SCORE,
+          source: "pattern",
+          spans: found.filter(isPattern),
+          text,
+        }),
+        ...describeSpans({ applyAbove: APPLY_SCORE, source: "structure", spans: structural, text }),
+        ...describeSpans({ applyAbove: APPLY_SCORE, source: "repeat", spans: repeated, text }),
       ]),
       handle: text,
       warnings: [],

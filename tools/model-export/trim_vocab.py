@@ -29,7 +29,12 @@ KEPT_RANGES = [
     (0x0250, 0x02FF),  # IPA and spacing modifiers, which SentencePiece emits for some pieces
     (0x0300, 0x036F),  # Combining diacritics
     (0x1E00, 0x1EFF),  # Latin Extended Additional
-    (0x2000, 0x206F),  # General punctuation, including the SentencePiece meta space
+    (0x2000, 0x206F),  # General punctuation
+    # U+2581 LOWER ONE EIGHTH BLOCK is SentencePiece's word-initial marker. Leaving it out
+    # deletes every "\u2581word" piece and keeps only the bare "word" form, so a word-initial
+    # token becomes two tokens. Measured: that inflates the corpus by about half and costs
+    # 5 F1, with no unknown tokens to hint at why.
+    (0x2580, 0x259F),  # Block elements
     (0x20A0, 0x20CF),  # Currency symbols
     (0x2100, 0x214F),  # Letterlike symbols
 ]
@@ -117,6 +122,11 @@ def main() -> None:
 
     unigram = len(spec["model"]["vocab"])
     keep = choose(spec, protected)
+    added_names = [
+        entry["content"] for entry in sorted(spec.get("added_tokens", []), key=lambda e: e["id"])
+        if entry["id"] >= unigram
+    ]
+    spec_ent_token = model.config.ent_token
 
     encoder = model.model.token_rep_layer.bert_layer.model
     embeddings = encoder.get_input_embeddings()
@@ -138,6 +148,17 @@ def main() -> None:
     embeddings.num_embeddings = len(order)
     encoder.config.vocab_size = len(order)
     model.config.vocab_size = len(order)
+
+    # GLiNER stores the absolute id of <<ENT>> and refuses to load if it points past the
+    # tokenizer. The added tokens keep their order at the end of the table, so the new id is
+    # their old offset past the Unigram vocabulary, counted from the trimmed length.
+    added = {name: unigram + at for at, name in enumerate(added_names)}
+    ent = added.get(spec_ent_token)
+
+    if ent is None:
+        raise SystemExit(f"{spec_ent_token} is not one of the added tokens {list(added)}")
+
+    model.config.class_token_index = order.index(ent)
 
     model.save_pretrained(args.out)
     path.write_text(json.dumps(rewrite(spec, keep), ensure_ascii=False))

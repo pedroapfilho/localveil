@@ -20,8 +20,10 @@ const LABEL_KEYS: Record<PiiLabel, MessageKey> = {
 type DetectionReviewProps = {
   detections: Array<Detection>;
   dismissed: ReadonlyArray<string>;
+  kept: ReadonlyArray<string>;
   onApply: () => void;
   onDismissedChange: (dismissed: ReadonlyArray<string>) => void;
+  onKeptChange: (kept: ReadonlyArray<string>) => void;
 };
 
 type Group = { detections: Array<Detection>; label: PiiLabel };
@@ -52,14 +54,19 @@ const groupByLabel = (detections: Array<Detection>): Array<Group> => {
 const DetectionReview = ({
   detections,
   dismissed,
+  kept,
   onApply,
   onDismissedChange,
+  onKeptChange,
 }: DetectionReviewProps) => {
   const { t } = useTranslations();
-  const groups = useMemo(() => groupByLabel(detections), [detections]);
+  const certain = useMemo(() => detections.filter((entry) => !entry.suggested), [detections]);
+  const maybe = useMemo(() => detections.filter((entry) => entry.suggested), [detections]);
+  const groups = useMemo(() => groupByLabel(certain), [certain]);
   const dropped = useMemo(() => new Set(dismissed), [dismissed]);
+  const chosen = useMemo(() => new Set(kept), [kept]);
 
-  if (detections.length === 0) {
+  if (certain.length === 0 && maybe.length === 0) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-muted-foreground text-sm">{t("review.nothing")}</p>
@@ -70,7 +77,7 @@ const DetectionReview = ({
     );
   }
 
-  const kept = detections.length - dropped.size;
+  const covering = certain.length - dropped.size + chosen.size;
 
   const toggle = (id: string) => {
     onDismissedChange(
@@ -87,6 +94,10 @@ const DetectionReview = ({
         ? dismissed.filter((id) => !ids.includes(id))
         : [...new Set([...dismissed, ...ids])],
     );
+  };
+
+  const toggleSuggestion = (id: string) => {
+    onKeptChange(chosen.has(id) ? kept.filter((other) => other !== id) : [...kept, id]);
   };
 
   const rows: Array<Row> = [];
@@ -148,7 +159,7 @@ const DetectionReview = ({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted-foreground text-sm">
-        {t("review.heading", { count: String(detections.length) })}
+        {t("review.heading", { count: String(certain.length) })}
       </p>
 
       <ScrollArea className="max-h-80">
@@ -157,8 +168,39 @@ const DetectionReview = ({
         </div>
       </ScrollArea>
 
+      {maybe.length === 0 ? null : (
+        <details className="border-foreground/10 rounded-md border p-2">
+          <summary className="cursor-pointer text-xs font-medium">
+            {t("review.suggestions", { count: String(maybe.length) })}
+          </summary>
+
+          <p className="text-muted-foreground pt-1 pb-2 text-xs">{t("review.suggestionsHint")}</p>
+
+          <div className="flex flex-col">
+            {maybe.map((detection) => (
+              <label
+                className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+                key={detection.id}
+              >
+                <Checkbox
+                  aria-label={t("review.toggle", { preview: detection.preview })}
+                  checked={chosen.has(detection.id)}
+                  onChange={() => {
+                    toggleSuggestion(detection.id);
+                  }}
+                />
+                <span className="truncate font-mono text-xs">{detection.preview}</span>
+                <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+                  {t(LABEL_KEYS[detection.label])} · {(detection.confidence * 100).toFixed(0)}%
+                </span>
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+
       <p aria-live="polite" className="text-muted-foreground text-xs tabular-nums">
-        {t("review.kept", { count: String(kept), total: String(detections.length) })}
+        {t("review.kept", { count: String(covering), total: String(detections.length) })}
       </p>
 
       <div className="flex gap-2">

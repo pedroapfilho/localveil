@@ -11,6 +11,7 @@ type Job = {
   error?: string;
   file: File;
   id: string;
+  kept: ReadonlyArray<string>;
 
   language?: DocumentLanguage;
   progress: number;
@@ -35,6 +36,7 @@ const REQUEUED = {
   analysis: undefined,
   dismissed: [],
   error: undefined,
+  kept: [],
   progress: 0,
   result: undefined,
   stage: undefined,
@@ -47,6 +49,7 @@ const useJobStore = create<JobStore>((set) => ({
       dismissed: [] as ReadonlyArray<string>,
       file,
       id: crypto.randomUUID(),
+      kept: [] as ReadonlyArray<string>,
       language,
       progress: 0,
       status: "queued" as const,

@@ -241,3 +241,81 @@ The page that produced these numbers is `apps/web/wasm-check.html`. Drop a candi
 the default device or `/wasm-check.html?device=wasm` to force the fallback path. It seeds the
 candidate into CacheStorage under the pinned model URL, so it exercises the app's own loading
 and device-selection code rather than a parallel copy of it.
+
+## Two thresholds, not one
+
+The floor split on 2026-08-11. Detection returns everything down to `MIN_SCORE` (0.15) in
+`packages/pii-detect/src/detector.ts`, and `APPLY_SCORE` (0.65) in
+`packages/redact-core/src/detections.ts` decides what that means: at or above it a span is
+covered unless somebody dismisses it, below it the span is a suggestion and is covered only if
+somebody ticks it. Nothing under the apply floor reaches a file on its own, which is what makes
+reading down to 0.15 affordable.
+
+Every table above is scored at 0.65, so they describe what gets covered without a reviewer. The
+suggestion band changes nothing about them.
+
+## Vocabulary trimming works, once the word-initial marker survives
+
+The premise held up: 192M of this checkpoint's 289M parameters are the embedding matrix
+(250,105 rows by 768, measured). Trimming it to the scripts localveil reads is the only lever
+left on the download after int8 was ruled out.
+
+The first attempt kept 96,820 of 250,101 pieces and cost 5 F1, which looked like the literature
+being wrong about pruning. It was a bug in the keep rule. `▁` is U+2581, in Block Elements, and
+the rule only kept up to U+206F, so **every word-initial piece was deleted** and only the bare
+form survived. `▁para` became `▁` plus `para`. Nothing hit an unknown token, so the tokenizer
+looked healthy; what changed was segmentation.
+
+```
+sentence                                          original  broken trim  fixed trim
+--------------------------------------------------------------------------------
+Fatura para Mariana Duarte Rocha, CPF ...                22           31          22
+Assinado por Joao Pereira em Niteroi                     12           19          12
+Alejandra Ibarra Mendoza, Calle Alcala 214, ...          15           22          15
+Eleanor Whitfield, 118 Marlow Street, Bristol            12           18          12
+```
+
+With U+2581 kept, 134,672 of 250,101 pieces survive, segmentation is identical on every sample,
+and the cost is small. Compared like for like, against the same pipeline's untrimmed export
+rather than against the shipped file, each at its own best floor:
+
+```
+export                        size      best floor   prec    rec     f1
+-----------------------------------------------------------------------
+self-exported fp32           1157 MB    0.80         93.2   96.1   94.6
+trimmed fp32                  803 MB    0.80         93.2   95.3   94.3
+```
+
+**0.3 F1 and 0.8 recall for 31% fewer bytes** at fp32. Quantized the same way the shipped file
+is, with `MatMulNBitsQuantizer` at 4 bits, it stops costing anything at all:
+
+```
+export                        size      floor   prec    rec     f1     pt f1
+----------------------------------------------------------------------------
+model_q4.onnx (shipped)      853 MB     0.65    95.3   95.3   95.3     96.5
+trimmed, 4-bit               539 MB     0.65    95.3   95.3   95.3     96.5
+```
+
+Every label matches, every language matches, and all 30 corpus documents come back with
+**identical spans**. 539 MB against 853 MB is 37% off the download for nothing measurable.
+
+It survives the browser, which is the gate that killed int8. Scoring the name in the same probe
+sentence `apps/web/wasm-check.html` uses:
+
+```
+runtime                       int8, per-channel    trimmed 4-bit
+------------------------------------------------------------------
+onnxruntime-node, native CPU             0.9972           0.9970
+browser, WebGPU                          0.0911           0.9956
+browser, wasm                            0.2084           0.9956
+```
+
+That difference is the point. Quantization changes the arithmetic and DeBERTa's attention does
+not survive it in a browser; trimming only deletes rows the app never looks up, so there is
+nothing for a wasm kernel to get wrong.
+
+What is left before this ships is publishing: the weights and the trimmed `tokenizer.json` have
+to sit at one pinned revision in a repo the project controls, because `detector.ts` loads the
+tokenizer by `MODEL_ID` and revision and a trimmed model with the original tokenizer fails
+loudly (`idx=250103 must be within the inclusive range [-134676,134675]`). Then three constants
+change and the first run gets 314 MB shorter.

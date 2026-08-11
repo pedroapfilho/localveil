@@ -98,12 +98,17 @@ const useRedaction = () => {
         }
 
         if (!reviewingRef.current) {
-          poolRef.current?.apply({ analysis, decisions: { dismissed: [] }, file: job.file, id });
+          poolRef.current?.apply({
+            analysis,
+            decisions: { dismissed: [], kept: [] },
+            file: job.file,
+            id,
+          });
 
           return;
         }
 
-        updateJob(id, { analysis, dismissed: [], progress: 0.5, status: "reviewing" });
+        updateJob(id, { analysis, dismissed: [], kept: [], progress: 0.5, status: "reviewing" });
       },
       onDone: (id, result) => {
         useJobStore.getState().updateJob(id, {
@@ -269,7 +274,7 @@ const useRedaction = () => {
     updateJob(id, { progress: 0.6, status: "running" });
     poolRef.current?.apply({
       analysis: job.analysis,
-      decisions: { dismissed: job.dismissed },
+      decisions: { dismissed: job.dismissed, kept: job.kept },
       file: job.file,
       id,
     });
@@ -277,6 +282,10 @@ const useRedaction = () => {
 
   const setDismissed = useCallback((id: string, dismissed: ReadonlyArray<string>) => {
     useJobStore.getState().updateJob(id, { dismissed });
+  }, []);
+
+  const setKept = useCallback((id: string, kept: ReadonlyArray<string>) => {
+    useJobStore.getState().updateJob(id, { kept });
   }, []);
 
   const setReviewing = useCallback((on: boolean) => {
@@ -316,6 +325,7 @@ const useRedaction = () => {
     removeMany,
     reviewing,
     setDismissed,
+    setKept,
     setLanguage,
     setReviewing,
     submit,

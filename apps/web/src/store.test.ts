@@ -189,6 +189,7 @@ describe("job selectors", () => {
     dismissed: [],
     file: textFile("a.txt"),
     id: "id",
+    kept: [],
     progress: 0,
     status: "queued",
     ...patch,

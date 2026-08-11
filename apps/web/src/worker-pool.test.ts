@@ -111,7 +111,12 @@ describe("createRedactionPool", () => {
     pool.submit(job("a"));
     taskAt(0).finish(analysis);
 
-    pool.apply({ analysis, decisions: { dismissed: [] }, file: new File([], "a.txt"), id: "a" });
+    pool.apply({
+      analysis,
+      decisions: { dismissed: [], kept: [] },
+      file: new File([], "a.txt"),
+      id: "a",
+    });
     taskAt(1).finish(redacted);
 
     expect(reported.done).toEqual(["a"]);

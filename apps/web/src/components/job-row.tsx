@@ -60,6 +60,7 @@ type JobRowProps = {
   job: Job;
   onApply: (id: string) => void;
   onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
+  onKeptChange: (id: string, kept: ReadonlyArray<string>) => void;
   onLanguageChange: (id: string, choice: DocumentLanguageChoice) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
@@ -71,13 +72,15 @@ const JobRow = ({
   job,
   onApply,
   onDismissedChange,
+  onKeptChange,
   onLanguageChange,
   onRemove,
   onSelect,
   selected,
 }: JobRowProps) => {
   const { t } = useTranslations();
-  const { analysis, dismissed, error, file, id, language, progress, result, stage, status } = job;
+  const { analysis, dismissed, error, file, id, kept, language, progress, result, stage, status } =
+    job;
 
   const busy = status === "running";
   const inFlight = status === "queued" || busy;
@@ -193,11 +196,15 @@ const JobRow = ({
                   <DetectionReview
                     detections={analysis.detections}
                     dismissed={dismissed}
+                    kept={kept}
                     onApply={() => {
                       onApply(id);
                     }}
                     onDismissedChange={(next) => {
                       onDismissedChange(id, next);
+                    }}
+                    onKeptChange={(next) => {
+                      onKeptChange(id, next);
                     }}
                   />
                 ) : null}

@@ -51,3 +51,4 @@ tools/model-export/build/
 tools/model-export/prompts.json
 
 apps/web/public/candidate.onnx
+apps/web/public/candidate-tokenizer.json

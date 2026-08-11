@@ -56,6 +56,9 @@ const pt: Messages = {
   "review.kept": "{count} de {total} serão cobertos",
   "review.nothing": "Nada foi encontrado neste arquivo.",
   "review.page": "Página {number}",
+  "review.suggestions": "Mais {count} em que o modelo ficou na dúvida",
+  "review.suggestionsHint":
+    "Estes ficam abaixo do limite para cobrir automaticamente. Marque os que forem dados pessoais.",
   "review.toggle": "Cobrir {preview}",
   "stage.assembling": "Remontando o arquivo",
   "stage.detecting": "Procurando dados pessoais",
