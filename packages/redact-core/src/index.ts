@@ -41,6 +41,7 @@ export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-erro
 export { survivingSpans } from "./verify.ts";
 export type { Survivor } from "./verify.ts";
 export { spansToRects } from "./rects.ts";
+export { tightenToVerified } from "./tighten.ts";
 export { buildWordIndex } from "./word-index.ts";
 export type { WordIndex, WordInput } from "./word-index.ts";
 export { buildZip, toArrayBuffer, uniqueFilename } from "./zip.ts";

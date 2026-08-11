@@ -97,6 +97,25 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
+// Spain's DNI and NIE carry a check letter over the number modulo 23, so they can be verified
+// rather than guessed at, like a CPF or an IBAN. A NIE swaps its leading X, Y or Z for 0, 1
+// or 2 before the arithmetic.
+const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
+
+const isSpanishId = (value: string) => {
+  const compact = value.replaceAll(/[\s\-.]/gv, "").toUpperCase();
+  const match = /^(?<lead>[XYZ]?)(?<digits>\d{7,8})(?<check>[A-Z])$/v.exec(compact);
+
+  if (match?.groups === undefined) {
+    return false;
+  }
+
+  const { check, digits, lead } = match.groups;
+  const prefix = lead === "" ? "" : String("XYZ".indexOf(lead));
+
+  return DNI_LETTERS[Number(`${prefix}${digits}`) % 23] === check;
+};
+
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
 // A reference like 2024-0817 has the shape of a NANP number and is not one. Rejecting a
@@ -141,6 +160,11 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     label: "account_number",
     matcher: /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b/gv,
     verify: isIban,
+  },
+  {
+    label: "account_number",
+    matcher: /\b[XYZ]?\d{7,8}[\-\s]?[A-Z]\b/gv,
+    verify: isSpanishId,
   },
   {
     label: "account_number",
@@ -200,4 +224,4 @@ const patternSpans = (text: string): Array<Span> => {
   return [...found.values()].toSorted((left, right) => left.start - right.start);
 };
 
-export { isCnpj, isCpf, isIban, luhn, patternSpans };
+export { isCnpj, isCpf, isIban, isSpanishId, luhn, patternSpans };

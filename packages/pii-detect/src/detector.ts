@@ -1,6 +1,12 @@
 import { AutoTokenizer, env } from "@huggingface/transformers";
 import type { ChunkSpans, Detect, ModelProgress, Span } from "@repo/redact-core";
-import { describeError, mergeChunkSpans, patternSpans, serialiseDetect } from "@repo/redact-core";
+import {
+  describeError,
+  mergeChunkSpans,
+  patternSpans,
+  serialiseDetect,
+  tightenToVerified,
+} from "@repo/redact-core";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
@@ -272,7 +278,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     }
     /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-    return [...mergeChunkSpans(parts), ...patternSpans(text)];
+    return tightenToVerified([...mergeChunkSpans(parts), ...patternSpans(text)], text);
   });
 };
 

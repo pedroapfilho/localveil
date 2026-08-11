@@ -27,7 +27,7 @@ least one character. The exact table repeats the pass with boundary equality req
 ```
 label             prec    rec     f1     tp     fp     fn
 ---------------------------------------------------------
-account_number    94.4   94.4   94.4     17      1      1
+account_number    94.7  100.0   97.3     18      1      0
 private_address   92.9  100.0   96.3     13      1      0
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
@@ -35,7 +35,7 @@ private_person    97.4  100.0   98.7     37      1      0
 private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0   40.0   57.1      2      0      3
 secret           100.0   60.0   75.0      3      0      2
-TOTAL             96.9   95.3   96.1    123      4      6
+TOTAL             96.9   96.1   96.5    124      4      5
 ```
 
 ## Detection, exact boundaries
@@ -43,15 +43,15 @@ TOTAL             96.9   95.3   96.1    123      4      6
 ```
 label             prec    rec     f1     tp     fp     fn
 ---------------------------------------------------------
-account_number    88.9   88.9   88.9     16      2      2
-private_address   85.7   92.3   88.9     12      2      1
+account_number    94.7  100.0   97.3     18      1      0
+private_address   92.9  100.0   96.3     13      1      0
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
 private_person    97.4  100.0   98.7     37      1      0
 private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0   40.0   57.1      2      0      3
 secret            66.7   40.0   50.0      2      1      3
-TOTAL             94.5   93.0   93.8    120      7      9
+TOTAL             96.1   95.3   95.7    123      5      6
 ```
 
 ## By language, overlap matching
@@ -60,7 +60,7 @@ TOTAL             94.5   93.0   93.8    120      7      9
 label   prec    rec     f1     tp     fp     fn
 -----------------------------------------------
 en      97.2   89.7   93.3     35      1      4
-es     100.0   94.3   97.1     33      0      2
+es     100.0   97.1   98.6     34      0      1
 pt      94.8  100.0   97.3     55      3      0
 ```
 
@@ -69,7 +69,7 @@ pt      94.8  100.0   97.3     55      3      0
 ```
 label             prec    rec     f1     tp     fp     fn
 ---------------------------------------------------------
-account_number   100.0   94.4   97.1     17      0      1
+account_number   100.0  100.0  100.0     18      0      0
 private_address  100.0    7.7   14.3      1      0     12
 private_date     100.0  100.0  100.0     15      0      0
 private_email    100.0  100.0  100.0     21      0      0
@@ -77,7 +77,7 @@ private_person   100.0    0.0    0.0      0      0     37
 private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0    0.0    0.0      0      0      5
 secret           100.0    0.0    0.0      0      0      5
-TOTAL            100.0   53.5   69.7     69      0     60
+TOTAL            100.0   54.3   70.4     70      0     59
 ```
 
 ## Detection plus the structural layer, overlap matching
@@ -88,7 +88,7 @@ only applies to documents whose id ends in `csv` or `json`, so most rows are unc
 ```
 label             prec    rec     f1     tp     fp     fn
 ---------------------------------------------------------
-account_number    94.4   94.4   94.4     17      1      1
+account_number    94.7  100.0   97.3     18      1      0
 private_address   92.9  100.0   96.3     13      1      0
 private_date      93.8  100.0   96.8     15      1      0
 private_email    100.0  100.0  100.0     21      0      0
@@ -96,7 +96,7 @@ private_person    97.4  100.0   98.7     37      1      0
 private_phone    100.0  100.0  100.0     15      0      0
 private_url      100.0  100.0  100.0      5      0      0
 secret           100.0  100.0  100.0      5      0      0
-TOTAL             97.0   99.2   98.1    128      4      1
+TOTAL             97.0  100.0   98.5    129      4      0
 ```
 
 ## Reading it
@@ -417,3 +417,32 @@ pattern total     97.0 / 50.8 / 66.7   100.0 /  53.5 /  69.7
 The pattern layer now runs at **100% precision with zero false positives**, which is what a
 checksummed layer beneath a statistical one should look like. End to end that is F1 97.3 to 98.1
 with recall unchanged at 99.2.
+
+## Recall reaches 100%, and account numbers stop drifting
+
+Two more defects, both found by asking which spans differ between overlap and exact-boundary
+matching rather than by reading the aggregate.
+
+**A Spanish DNI was missed** because no pattern knew about one, and the model would not carry it
+alone. DNI and NIE numbers carry a check letter over the number modulo 23, so they belong in the
+checksummed layer next to CPF and IBAN rather than in the model's guesswork. The corpus's own
+DNI turned out to be invalid while writing the pattern: `54127903X` should end in `W`, which the
+corpus README's rule about generating valid check digits would have caught if it had been
+followed.
+
+**`CNPJ 45.448.325/0001-70` was covered whole**, label word included, because the model's span
+enclosed the pattern's and merging kept the wider one. The README is explicit that the label
+should stay readable, so a licence keeps the word RG beside the blacked-out number.
+`tightenToVerified` now drops a model span that encloses a checksum-verified one, but only when
+everything it adds is free of digits, so no part of a number can be lost to the rule and two
+account numbers under one loose span keep the loose span.
+
+```
+                       before                after
+account_number, overlap   94.4 / 94.4 / 94.4   94.7 / 100.0 / 97.3
+account_number, exact     88.9 / 88.9 / 88.9   94.7 / 100.0 / 97.3
+end to end                97.0 /  99.2 / 98.1  97.0 / 100.0 / 98.5
+```
+
+Overlap and exact now agree on `account_number`, which means not one account-number span is off
+by a character, and **end-to-end recall is 100%**: every labelled span in the corpus is covered.
