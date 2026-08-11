@@ -25,6 +25,7 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "localveil" })).toBeInTheDocument();
     expect(screen.getByLabelText(/choose files/iv)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose a folder" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
     expect(screen.queryByRole("button", { name: /download zip/iv })).toBeNull();
   });

@@ -7,7 +7,7 @@
   <br />
 </div>
 
-localveil blacks out personal data in your files without uploading them. Drop in text, a PDF, or a photo of a document, and a named-entity model finds the names, emails, phone numbers, addresses, dates, account numbers and secrets, then paints over them. The model runs in a Web Worker on your own machine, the files never leave the tab, and the result comes back as a ZIP.
+localveil blacks out personal data in your files without uploading them. Choose files or a whole folder, or drop in text, a PDF, or a photo of a document, and a named-entity model finds the names, emails, phone numbers, addresses, dates, account numbers and secrets, then paints over them. The model runs in a Web Worker on your own machine, the files never leave the tab, and the result comes back as a ZIP.
 
 There is no account and no server. Once the model is cached, the page works offline. The same pipeline runs in a terminal through the CLI.
 
@@ -25,7 +25,7 @@ pnpm install
 pnpm dev --filter=web
 ```
 
-Open `http://localhost:5173` and drop a file on the page.
+Open `http://localhost:5173` and choose files or a folder, or drop files and folders on the page. Folder selections keep their relative paths in the output ZIP and are capped at 200 files so one accidental drop cannot exhaust the tab's memory.
 
 The first run downloads the detection model, which is large and takes a while. It is fetched as six ranges at a time and each one is written to browser storage as it lands, so a refresh part way through picks up the ranges it is missing rather than starting again. Every run after that loads from cache in a few seconds.
 

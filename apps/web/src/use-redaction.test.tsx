@@ -1,3 +1,4 @@
+import type * as RedactCore from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -6,6 +7,21 @@ import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
 import type { RedactionPoolOptions } from "./worker-pool";
+
+const archives = vi.hoisted(() => [] as Array<Array<{ blob: Blob; name: string }>>);
+
+vi.mock("@repo/redact-core", async (importOriginal) => {
+  const original = await importOriginal<typeof RedactCore>();
+
+  return {
+    ...original,
+    buildZip: vi.fn((entries: Array<{ blob: Blob; name: string }>) => {
+      archives.push(entries);
+
+      return Promise.resolve(new Blob(["zip"]));
+    }),
+  };
+});
 
 const cancelled: Array<string> = [];
 const submitted: Array<{ file: File; id: string; language?: string }> = [];
@@ -44,7 +60,7 @@ const pool = () => {
 const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
 
 const Harness = () => {
-  const { clear, remove, removeMany, setLanguage, submit } = useRedaction();
+  const { clear, downloadZip, remove, removeMany, setLanguage, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
@@ -62,6 +78,15 @@ const Harness = () => {
 
   const handleClickForced = () => {
     submit([new File(["um"], "um.txt", { type: "text/plain" })], "pt");
+  };
+
+  const handleClickFolder = () => {
+    submit([
+      {
+        file: new File(["report"], "report.txt", { type: "text/plain" }),
+        path: "cases/august/report.txt",
+      },
+    ]);
   };
 
   const handleSetPortuguese = () => {
@@ -94,6 +119,10 @@ const Harness = () => {
         submit-forced
       </button>
 
+      <button onClick={handleClickFolder} type="button">
+        submit-folder
+      </button>
+
       <button onClick={handleClickScans} type="button">
         submit-scans
       </button>
@@ -116,6 +145,15 @@ const Harness = () => {
 
       <button onClick={clear} type="button">
         clear
+      </button>
+
+      <button
+        onClick={() => {
+          void downloadZip();
+        }}
+        type="button"
+      >
+        download
       </button>
     </>
   );
@@ -149,6 +187,7 @@ const setPortuguese = () => {
 
 beforeEach(() => {
   cancelled.length = 0;
+  archives.length = 0;
   submitted.length = 0;
   destroyed = 0;
   pools = 0;
@@ -156,6 +195,10 @@ beforeEach(() => {
   useJobStore.getState().reset();
   vi.spyOn(toast, "error").mockImplementation(() => "");
   vi.spyOn(toast, "warning").mockImplementation(() => "");
+
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:localveil");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
   vi.spyOn(toast, "promise").mockImplementation(() => ({ unwrap: () => Promise.resolve() }));
 });
@@ -182,6 +225,25 @@ describe("useRedaction", () => {
     submitTwo();
 
     expect(pool().maxWorkers).toBeGreaterThanOrEqual(1);
+  });
+
+  it("retains a folder path in the output archive", async () => {
+    renderWithI18n(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "submit-folder" }));
+
+    act(() => {
+      pool().onDone(jobsNow()[0].id, {
+        blob: new Blob(["redacted"]),
+        redactionCount: 1,
+        warnings: [],
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "download" }));
+
+    await vi.waitFor(() => {
+      expect(archives[0]?.[0]?.name).toBe("cases/august/report.txt");
+    });
   });
 
   it("says the model is loading before the worker says anything", () => {

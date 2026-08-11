@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
+import type { JobInput } from "./store";
 import { usesLanguage } from "./uses-language";
 import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
@@ -84,8 +85,11 @@ const useRedaction = () => {
       return running;
     }
 
-    const nameOf = (id: string) =>
-      useJobStore.getState().jobs.find((job) => job.id === id)?.file.name ?? "";
+    const nameOf = (id: string) => {
+      const job = useJobStore.getState().jobs.find((entry) => entry.id === id);
+
+      return job?.path ?? job?.file.name ?? "";
+    };
 
     const pool = createRedactionPool({
       maxWorkers: probeCapacity().maxWorkers,
@@ -195,7 +199,7 @@ const useRedaction = () => {
   }, [ensurePool]);
 
   const submit = useCallback(
-    (files: Array<File>, language?: DocumentLanguage) => {
+    (files: Array<JobInput>, language?: DocumentLanguage) => {
       const pool = ensurePool();
       const { addFiles, updateJob } = useJobStore.getState();
 
@@ -311,7 +315,7 @@ const useRedaction = () => {
     const ready = completedJobs(useJobStore.getState().jobs);
 
     const blob = await buildZip(
-      ready.map((job) => ({ blob: job.result.blob, name: job.file.name })),
+      ready.map((job) => ({ blob: job.result.blob, name: job.path ?? job.file.name })),
     );
 
     triggerDownload(blob);

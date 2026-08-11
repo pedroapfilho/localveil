@@ -58,6 +58,14 @@ describe("useJobStore", () => {
     expect(jobsOf().every((job) => job.status === "queued" && job.progress === 0)).toBe(true);
   });
 
+  it("retains a selected folder path for the list and output archive", () => {
+    const file = textFile("report.txt");
+
+    useJobStore.getState().addFiles([{ file, path: "cases/august/report.txt" }]);
+
+    expect(jobsOf()[0]).toMatchObject({ file, path: "cases/august/report.txt" });
+  });
+
   it("gives every job its own id", () => {
     const created = useJobStore.getState().addFiles([textFile("a.txt"), textFile("a.txt")]);
 

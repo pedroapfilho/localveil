@@ -2,6 +2,7 @@ import { useTranslations } from "@repo/i18n";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
+import type { SelectedFile } from "@repo/ui/lib/dropped-files";
 import { AnimatePresence, motion } from "motion/react";
 
 import { DownloadPanel } from "./components/download-panel";
@@ -65,7 +66,7 @@ const App = () => {
     void runDownload();
   };
 
-  const handleFilesSelected = (files: Array<File>) => {
+  const handleFilesSelected = (files: Array<SelectedFile>) => {
     submit(files);
   };
 
@@ -102,10 +103,17 @@ const App = () => {
         <main className="flex flex-col gap-8" id="main">
           <FileDropzone
             accept={ACCEPTED_FILES}
+            folderLabel={t("dropzone.folder")}
             formats={t("dropzone.formats")}
             hint={t("dropzone.hint")}
             label={t("dropzone.label")}
+            onError={() => {
+              toast.error(t("toast.folderFailed"));
+            }}
             onFilesSelected={handleFilesSelected}
+            onLimitReached={() => {
+              toast.warning(t("toast.fileLimit", { count: 200 }));
+            }}
           />
 
           <label className="text-muted-foreground mx-auto flex items-center gap-2 text-sm">
