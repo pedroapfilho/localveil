@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 
 import { createDetector } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
-import { patternSpans } from "@repo/redact-core";
+import { APPLY_SCORE, patternSpans } from "@repo/redact-core";
 import { structuralSpans } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus.ts";
@@ -102,8 +102,11 @@ const run = async () => {
 
   const floor = process.env.EVAL_MIN_SCORE;
 
+  // The detector's own default reads far below the apply floor to feed the suggestion band.
+  // BASELINE.md scores what gets covered without a reviewer, so the eval floor follows
+  // APPLY_SCORE rather than the detector default.
   const detect = await createDetector({
-    ...(floor === undefined ? {} : { minScore: Number(floor) }),
+    minScore: floor === undefined ? APPLY_SCORE : Number(floor),
     onProgress: (fraction, stage) => {
       if (stage === "model.downloading") {
         note(`  ${stage} ${(fraction * 100).toFixed(0)}%`);

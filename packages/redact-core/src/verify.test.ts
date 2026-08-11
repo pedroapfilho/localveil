@@ -27,6 +27,16 @@ describe("survivingSpans", () => {
     expect(survivors).toEqual([{ label: "private_person", score: 0.9, text: "Ana Lima" }]);
   });
 
+  it("does not report a span under the apply floor", async () => {
+    const low: Detect = vi.fn((text: string) =>
+      Promise.resolve<Array<Span>>([
+        { end: text.length, label: "private_person", score: 0.2, start: 0 },
+      ]),
+    );
+
+    expect(await survivingSpans("Maybe Name stayed", low)).toEqual([]);
+  });
+
   it("does not report a run of blocks as a survivor", async () => {
     expect(await survivingSpans("Signed by ████████", finding("████████"))).toEqual([]);
   });

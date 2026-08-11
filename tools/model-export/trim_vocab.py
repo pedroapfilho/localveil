@@ -10,9 +10,10 @@ existing vocabulary held NER performance in the baseline range while replacing t
 dropped it below every baseline, and the reason is mechanical: pruning only deletes rows, so
 every piece that survives keeps the embedding it was trained with.
 
-UNVALIDATED. Read tools/model-export/README.md before trusting its output: the fp32 export
-this builds on does not yet reproduce the shipped model's behaviour, so a trimmed model cannot
-be compared against packages/eval/BASELINE.md until that gate passes.
+Validated 2026-08-11: trimmed to these ranges and quantized to 4 bits, the export scores the
+same F1 as the shipped model with identical spans on all 30 corpus documents, at 539 MB
+against 853. tools/model-export/README.md holds the measurements and the publishing steps
+that remain before the app can fetch it.
 """
 
 import argparse

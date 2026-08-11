@@ -163,7 +163,12 @@ const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options
     const spans = await detect(text);
 
     for (const token of tokensFromSpans(text, spans)) {
-      tokens.set(token.text.toLowerCase(), token);
+      const key = token.text.toLowerCase();
+      const existing = tokens.get(key);
+
+      if (existing === undefined || existing.score < token.score) {
+        tokens.set(key, token);
+      }
     }
 
     pages.push({ spans, text, words });
