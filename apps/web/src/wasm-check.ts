@@ -5,7 +5,12 @@ const MODEL_REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
 
 const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/model_q4.onnx`;
 
+const TOKENIZER_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/tokenizer.json`;
+
 const TEXT = "Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.";
+
+// Long enough to chunk, so a batch size above one has something to batch.
+const LONG = `${TEXT} `.repeat(120);
 
 const out = document.querySelector("#out");
 
@@ -15,29 +20,51 @@ const say = (line: string) => {
   }
 };
 
-const seed = async () => {
+const seedFrom = async (local: string, url: string, label: string) => {
   const cache = await caches.open(CACHE_KEY);
-  const already = await cache.match(MODEL_URL);
+  const already = await cache.match(url);
 
   if (already !== undefined) {
-    say("candidate already seeded in CacheStorage");
+    say(`${label} already seeded`);
+
+    return;
+  }
+
+  const response = await fetch(local);
+  const type = response.headers.get("content-type") ?? "";
+
+  // A dev server answers a missing path with index.html rather than a 404, so a 200 is not
+  // enough: caching that as weights or a tokenizer fails much later and much more confusingly.
+  if (!response.ok || type.includes("text/html")) {
+    say(`no ${local} to seed, so ${label} comes from Hugging Face`);
 
     return;
   }
 
   const started = performance.now();
-  const response = await fetch("/candidate.onnx");
   const bytes = await response.arrayBuffer();
 
   say(
-    `fetched ${(bytes.byteLength / 1024 / 1024).toFixed(0)} MB in ${(performance.now() - started).toFixed(0)} ms`,
+    `${label} ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB in ${(performance.now() - started).toFixed(0)} ms`,
   );
 
-  await cache.put(MODEL_URL, new Response(bytes));
-  say("seeded the candidate under the pinned model URL");
+  await cache.put(url, new Response(bytes));
+};
+
+// A trimmed model needs the tokenizer it was trimmed with, or the ids it is fed name rows in a
+// vocabulary it no longer has. Both go in under the URLs the app would fetch, so the app's own
+// loading and device selection run unchanged.
+const seed = async () => {
+  await seedFrom("/candidate-tokenizer.json", TOKENIZER_URL, "tokenizer");
+  await seedFrom("/candidate.onnx", MODEL_URL, "weights");
 };
 
 const run = async () => {
+  if (new URLSearchParams(location.search).get("reset") === "1") {
+    await caches.delete(CACHE_KEY);
+    say("cleared CacheStorage, so nothing stale is reused");
+  }
+
   if (new URLSearchParams(location.search).get("device") === "wasm") {
     Object.defineProperty(navigator, "gpu", { configurable: true, value: undefined });
     say("forced the wasm path by hiding navigator.gpu");
@@ -47,7 +74,10 @@ const run = async () => {
 
   await seed();
 
+  const batchSize = Number(new URLSearchParams(location.search).get("batch") ?? "1");
+
   const detect = await createDetector({
+    batchSize,
     minScore: 0.05,
     onProgress: (fraction, stage) => {
       if (stage !== "model.downloading") {
@@ -56,7 +86,20 @@ const run = async () => {
     },
   });
 
-  say("session created");
+  say(`session created, batchSize ${String(batchSize)}`);
+
+  if (new URLSearchParams(location.search).get("bench") === "1") {
+    await detect(TEXT);
+
+    const started = performance.now();
+
+    await detect(LONG);
+    await detect(LONG);
+
+    say(
+      `bench: ${((performance.now() - started) / 2).toFixed(0)} ms per pass over ${String(LONG.length)} chars`,
+    );
+  }
 
   const spans = await detect(TEXT);
 

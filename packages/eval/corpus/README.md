@@ -37,6 +37,14 @@ failure.
    is used enough, and that nothing the pattern layer finds is left unlabelled.
 4. Run `pnpm --filter @repo/eval start` to see what it does to the scores.
 
+## Label what is personal, not what looks technical
+
+`private_url` means a link that identifies a person: a social profile, a personal site. It does
+not mean every URL. A file-share link, an admin panel and a login page were labelled here once
+and the model was right to skip all three; the corpus was wrong, and it read as a 25% recall
+hole for weeks. When adding a span, ask whether it identifies somebody rather than whether it
+looks like the sort of string a tool redacts.
+
 ## Negative material
 
 Documents whose id ends in `negatives` or `negativos` carry no spans at all. They exist to

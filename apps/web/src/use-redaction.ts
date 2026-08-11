@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
+import type { JobInput } from "./store";
 import { usesLanguage } from "./uses-language";
 import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
@@ -84,8 +85,11 @@ const useRedaction = () => {
       return running;
     }
 
-    const nameOf = (id: string) =>
-      useJobStore.getState().jobs.find((job) => job.id === id)?.file.name ?? "";
+    const nameOf = (id: string) => {
+      const job = useJobStore.getState().jobs.find((entry) => entry.id === id);
+
+      return job?.path ?? job?.file.name ?? "";
+    };
 
     const pool = createRedactionPool({
       maxWorkers: probeCapacity().maxWorkers,
@@ -98,12 +102,17 @@ const useRedaction = () => {
         }
 
         if (!reviewingRef.current) {
-          poolRef.current?.apply({ analysis, decisions: { dismissed: [] }, file: job.file, id });
+          poolRef.current?.apply({
+            analysis,
+            decisions: { dismissed: [], kept: [] },
+            file: job.file,
+            id,
+          });
 
           return;
         }
 
-        updateJob(id, { analysis, dismissed: [], progress: 0.5, status: "reviewing" });
+        updateJob(id, { analysis, dismissed: [], kept: [], progress: 0.5, status: "reviewing" });
       },
       onDone: (id, result) => {
         useJobStore.getState().updateJob(id, {
@@ -190,7 +199,7 @@ const useRedaction = () => {
   }, [ensurePool]);
 
   const submit = useCallback(
-    (files: Array<File>, language?: DocumentLanguage) => {
+    (files: Array<JobInput>, language?: DocumentLanguage) => {
       const pool = ensurePool();
       const { addFiles, updateJob } = useJobStore.getState();
 
@@ -269,7 +278,7 @@ const useRedaction = () => {
     updateJob(id, { progress: 0.6, status: "running" });
     poolRef.current?.apply({
       analysis: job.analysis,
-      decisions: { dismissed: job.dismissed },
+      decisions: { dismissed: job.dismissed, kept: job.kept },
       file: job.file,
       id,
     });
@@ -277,6 +286,10 @@ const useRedaction = () => {
 
   const setDismissed = useCallback((id: string, dismissed: ReadonlyArray<string>) => {
     useJobStore.getState().updateJob(id, { dismissed });
+  }, []);
+
+  const setKept = useCallback((id: string, kept: ReadonlyArray<string>) => {
+    useJobStore.getState().updateJob(id, { kept });
   }, []);
 
   const setReviewing = useCallback((on: boolean) => {
@@ -302,7 +315,7 @@ const useRedaction = () => {
     const ready = completedJobs(useJobStore.getState().jobs);
 
     const blob = await buildZip(
-      ready.map((job) => ({ blob: job.result.blob, name: job.file.name })),
+      ready.map((job) => ({ blob: job.result.blob, name: job.path ?? job.file.name })),
     );
 
     triggerDownload(blob);
@@ -316,6 +329,7 @@ const useRedaction = () => {
     removeMany,
     reviewing,
     setDismissed,
+    setKept,
     setLanguage,
     setReviewing,
     submit,

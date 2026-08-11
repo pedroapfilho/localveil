@@ -2,5 +2,5 @@
   "id": "es-01-factura",
   "language": "es",
   "source": "synthetic",
-  "marked": "Factura 2024/0817\n\nCliente: [[private_person|Alejandra Ibarra Mendoza]]\nDireccion: [[private_address|Calle Alcala 214, 3 B, Madrid]]\nCorreo: [[private_email|alejandra.ibarra@ejemplo.es]]\nTelefono: [[private_phone|+34 915 220 148]]\n\nEmitida el [[private_date|14/03/2024]] y abonada mediante transferencia al IBAN [[account_number|ES9121000418450200051332]].\n\nLos importes del periodo 2019-2024 figuran en el anexo."
+  "marked": "Factura 2024/0817\n\nCliente: [[private_person|Alejandra Ibarra Mendoza]]\nDireccion: [[private_address|Calle Alcala 214, 3 B, Madrid]]\nCorreo: [[private_email|alejandra.ibarra@ejemplo.es]]\nTelefono: [[private_phone|+34 915 220 148]]\n\nEmitida el [[private_date|14/03/2024]] y abonada mediante transferencia al IBAN [[account_number|ES9121000418450200051332]].\n\nEl perfil publico de la clienta es [[private_url|https://social.ejemplo.es/alejandra-ibarra]].\n\nLos importes del periodo 2019-2024 figuran en el anexo."
 }

@@ -35,6 +35,13 @@ describe("tokensFromSpans", () => {
     expect(tokensFromSpans(TEXT, [span(0, 4), span(26, 30)]).length).toBe(1);
   });
 
+  it("keeps the highest score a token was seen with, in either order", () => {
+    const low: Span = { end: 30, label: "private_person", score: 0.2, start: 26 };
+
+    expect(tokensFromSpans(TEXT, [span(0, 4), low])[0].score).toBe(0.9);
+    expect(tokensFromSpans(TEXT, [low, span(0, 4)])[0].score).toBe(0.9);
+  });
+
   it("returns nothing when nothing was tagged", () => {
     expect(tokensFromSpans(TEXT, [])).toEqual([]);
   });

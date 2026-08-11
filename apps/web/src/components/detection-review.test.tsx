@@ -14,23 +14,31 @@ const detection = (patch: Partial<Detection> = {}): Detection => ({
   preview: "Ana Lima",
   source: "model",
   start: 0,
+  suggested: false,
   ...patch,
 });
 
-const setup = (detections: Array<Detection>, dismissed: ReadonlyArray<string> = []) => {
+const setup = (
+  detections: Array<Detection>,
+  dismissed: ReadonlyArray<string> = [],
+  kept: ReadonlyArray<string> = [],
+) => {
   const onApply = vi.fn<() => void>();
   const onDismissedChange = vi.fn<(next: ReadonlyArray<string>) => void>();
+  const onKeptChange = vi.fn<(next: ReadonlyArray<string>) => void>();
 
   renderWithI18n(
     <DetectionReview
       detections={detections}
       dismissed={dismissed}
+      kept={kept}
       onApply={onApply}
       onDismissedChange={onDismissedChange}
+      onKeptChange={onKeptChange}
     />,
   );
 
-  return { onApply, onDismissedChange };
+  return { onApply, onDismissedChange, onKeptChange };
 };
 
 describe("DetectionReview", () => {
@@ -126,6 +134,43 @@ describe("DetectionReview", () => {
 
     expect(screen.getByText("Nothing was found in this file.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply redactions" })).toBeInTheDocument();
+  });
+
+  it("keeps suggestions out of the main list and behind a summary", () => {
+    setup([
+      detection(),
+      detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
+    ]);
+
+    expect(screen.getByText("1 more the model was unsure about")).toBeInTheDocument();
+    expect(screen.getByText("1 of 2 will be covered")).toBeInTheDocument();
+  });
+
+  it("leaves a suggestion unchecked until it is ticked", () => {
+    const { onKeptChange } = setup([
+      detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
+    ]);
+
+    const box = screen.getByRole("checkbox", { name: "Cover Maybe Name" });
+
+    expect(box).not.toBeChecked();
+
+    fireEvent.click(box);
+
+    expect(onKeptChange).toHaveBeenCalledWith(["b"]);
+  });
+
+  it("counts a ticked suggestion towards what will be covered", () => {
+    setup(
+      [
+        detection(),
+        detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
+      ],
+      [],
+      ["b"],
+    );
+
+    expect(screen.getByText("2 of 2 will be covered")).toBeInTheDocument();
   });
 
   it("labels each box with what it covers, for a screen reader", () => {

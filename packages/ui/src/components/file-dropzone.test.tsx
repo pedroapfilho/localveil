@@ -1,14 +1,16 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { FileDropzone } from "./file-dropzone";
 
 const textFile = (name = "notes.txt") => new File(["hello"], name, { type: "text/plain" });
 
-const withFiles = (files: Array<File>) => ({ dataTransfer: { files, types: ["Files"] } });
+const withFiles = (files: Array<File>) => ({
+  dataTransfer: { files, items: [], types: ["Files"] },
+});
 
 const setup = (props: Partial<Parameters<typeof FileDropzone>[0]> = {}) => {
-  const onFilesSelected = vi.fn<(files: Array<File>) => void>();
+  const onFilesSelected = vi.fn<(files: Array<{ file: File; path: string }>) => void>();
 
   render(
     <FileDropzone
@@ -62,23 +64,51 @@ describe("FileDropzone", () => {
     expect(zone.dataset.dragging).toBeUndefined();
   });
 
-  it("reports dropped files and clears the dragging flag", () => {
+  it("reports dropped files and clears the dragging flag", async () => {
     const { onFilesSelected, zone } = setup();
     const dropped = textFile();
 
     fireEvent.dragOver(zone, withFiles([dropped]));
     fireEvent.drop(zone, withFiles([dropped]));
 
-    expect(onFilesSelected).toHaveBeenCalledWith([dropped]);
+    await waitFor(() => {
+      expect(onFilesSelected).toHaveBeenCalledWith([{ file: dropped, path: "notes.txt" }]);
+    });
     expect(zone.dataset.dragging).toBeUndefined();
   });
 
-  it("ignores a drop that carries no files", () => {
+  it("ignores a drop that carries no files", async () => {
     const { onFilesSelected, zone } = setup();
 
     fireEvent.drop(zone, withFiles([]));
 
-    expect(onFilesSelected).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onFilesSelected).not.toHaveBeenCalled();
+    });
+  });
+
+  it("reports a folder that the browser could not read", async () => {
+    const onError = vi.fn<() => void>();
+    const { zone } = setup({ onError });
+
+    fireEvent.drop(zone, {
+      dataTransfer: {
+        files: [],
+        items: [
+          {
+            kind: "file",
+            webkitGetAsEntry: () => {
+              throw new DOMException("Unreadable", "NotReadableError");
+            },
+          },
+        ],
+        types: ["Files"],
+      },
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalled();
+    });
   });
 
   it("reports files chosen through the input", () => {
@@ -87,7 +117,7 @@ describe("FileDropzone", () => {
 
     fireEvent.change(input, { target: { files: [chosen] } });
 
-    expect(onFilesSelected).toHaveBeenCalledWith([chosen]);
+    expect(onFilesSelected).toHaveBeenCalledWith([{ file: chosen, path: "notes.txt" }]);
   });
 
   it("clears the input so the same file can be chosen twice in a row", () => {
@@ -117,5 +147,25 @@ describe("FileDropzone", () => {
     const { input } = setup({ accept: ".txt,.pdf" });
 
     expect(input.accept).toBe(".txt,.pdf");
+  });
+
+  it("falls back to a directory input when the modern picker is unavailable", async () => {
+    const { onFilesSelected } = setup({ folderLabel: "Choose a folder" });
+    const directory = document.querySelectorAll('input[type="file"]')[1];
+
+    if (!(directory instanceof HTMLInputElement)) {
+      throw new TypeError("The directory fallback input was not rendered");
+    }
+
+    const opened = vi.spyOn(directory, "click");
+
+    expect(directory.webkitdirectory).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose a folder" }));
+
+    await waitFor(() => {
+      expect(opened).toHaveBeenCalled();
+    });
+    expect(onFilesSelected).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import type { ImageReading } from "@repo/ocr";
 import { legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
 import type { Detect, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
+  APPLY_SCORE,
   buildWordIndex,
   dedupeDetections,
   describeSpans,
@@ -141,7 +142,13 @@ const imageRedactor: Redactor = {
     return {
       detections: dedupeDetections(
         read.flatMap((reading, page) =>
-          describeSpans({ page, source: "model", spans: reading.spans, text: reading.text }),
+          describeSpans({
+            applyAbove: APPLY_SCORE,
+            page,
+            source: "model",
+            spans: reading.spans,
+            text: reading.text,
+          }),
         ),
       ),
       handle: { best: readings.indexOf(chosen), readings: read } satisfies ImageHandle,

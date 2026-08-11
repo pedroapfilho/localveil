@@ -10,6 +10,7 @@ const job = (patch: Partial<Job> = {}): Job => ({
   dismissed: [],
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
+  kept: [],
   progress: 0,
   status: "queued",
   ...patch,
@@ -26,6 +27,7 @@ const setup = (jobs: Array<Job>) => {
   const onApply = vi.fn<(id: string) => void>();
   const onClear = vi.fn<() => void>();
   const onDismissedChange = vi.fn<(id: string, dismissed: ReadonlyArray<string>) => void>();
+  const onKeptChange = vi.fn<(id: string, kept: ReadonlyArray<string>) => void>();
   const onLanguage = vi.fn<(ids: ReadonlyArray<string>, language?: "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onRemoveMany = vi.fn<(ids: ReadonlyArray<string>) => void>();
@@ -36,6 +38,7 @@ const setup = (jobs: Array<Job>) => {
       onApply={onApply}
       onClear={onClear}
       onDismissedChange={onDismissedChange}
+      onKeptChange={onKeptChange}
       onLanguage={onLanguage}
       onRemove={onRemove}
       onRemoveMany={onRemoveMany}
@@ -49,6 +52,7 @@ const setup = (jobs: Array<Job>) => {
         onApply={onApply}
         onClear={onClear}
         onDismissedChange={onDismissedChange}
+        onKeptChange={onKeptChange}
         onLanguage={onLanguage}
         onRemove={onRemove}
         onRemoveMany={onRemoveMany}

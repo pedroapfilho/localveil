@@ -60,6 +60,7 @@ type JobRowProps = {
   job: Job;
   onApply: (id: string) => void;
   onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
+  onKeptChange: (id: string, kept: ReadonlyArray<string>) => void;
   onLanguageChange: (id: string, choice: DocumentLanguageChoice) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
@@ -71,13 +72,28 @@ const JobRow = ({
   job,
   onApply,
   onDismissedChange,
+  onKeptChange,
   onLanguageChange,
   onRemove,
   onSelect,
   selected,
 }: JobRowProps) => {
   const { t } = useTranslations();
-  const { analysis, dismissed, error, file, id, language, progress, result, stage, status } = job;
+  const {
+    analysis,
+    dismissed,
+    error,
+    file,
+    id,
+    kept,
+    language,
+    path,
+    progress,
+    result,
+    stage,
+    status,
+  } = job;
+  const name = path ?? file.name;
 
   const busy = status === "running";
   const inFlight = status === "queued" || busy;
@@ -128,7 +144,7 @@ const JobRow = ({
           <div className="flex w-full gap-3">
             <span className="flex h-lh items-center text-base sm:text-sm">
               <Checkbox
-                aria-label={t("files.select", { name: file.name })}
+                aria-label={t("files.select", { name })}
                 checked={selected}
                 onChange={handleSelect}
               />
@@ -139,7 +155,7 @@ const JobRow = ({
             </AttachmentMedia>
 
             <AttachmentContent>
-              <AttachmentTitle title={file.name}>{file.name}</AttachmentTitle>
+              <AttachmentTitle title={name}>{name}</AttachmentTitle>
 
               <AttachmentDescription
                 className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}
@@ -161,13 +177,13 @@ const JobRow = ({
                 )}
               </AttachmentDescription>
 
-              {inFlight ? <Progress className="mt-1.5" label={file.name} value={progress} /> : null}
+              {inFlight ? <Progress className="mt-1.5" label={name} value={progress} /> : null}
             </AttachmentContent>
 
             <AttachmentActions>
               {hasDetails ? (
                 <CollapsibleTrigger
-                  aria-label={t("files.details", { name: file.name })}
+                  aria-label={t("files.details", { name })}
                   className="text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md"
                 >
                   <ChevronDownIcon
@@ -177,10 +193,7 @@ const JobRow = ({
                 </CollapsibleTrigger>
               ) : null}
 
-              <AttachmentAction
-                aria-label={t("files.remove", { name: file.name })}
-                onClick={handleRemove}
-              >
+              <AttachmentAction aria-label={t("files.remove", { name })} onClick={handleRemove}>
                 <XIcon aria-hidden />
               </AttachmentAction>
             </AttachmentActions>
@@ -193,11 +206,15 @@ const JobRow = ({
                   <DetectionReview
                     detections={analysis.detections}
                     dismissed={dismissed}
+                    kept={kept}
                     onApply={() => {
                       onApply(id);
                     }}
                     onDismissedChange={(next) => {
                       onDismissedChange(id, next);
+                    }}
+                    onKeptChange={(next) => {
+                      onKeptChange(id, next);
                     }}
                   />
                 ) : null}

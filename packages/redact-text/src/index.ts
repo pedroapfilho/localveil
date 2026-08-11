@@ -1,5 +1,6 @@
 import type { Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
+  APPLY_SCORE,
   dedupeDetections,
   describeSpans,
   keptSpans,
@@ -22,6 +23,19 @@ const extensionOf = (name: string) => {
 };
 
 const hasTextExtension = (name: string) => TEXT_EXTENSIONS.has(extensionOf(name));
+
+// A CSV header is never redacted: the column names are what the structural layer reads, and
+// covering them would destroy the file's shape for no privacy gain. The verify pass has to skip
+// it, or a column called email is reported as a surviving email on every structured file.
+const verifiable = (name: string, text: string) => {
+  if (extensionOf(name) !== ".csv") {
+    return text;
+  }
+
+  const firstBreak = text.indexOf("\n");
+
+  return firstBreak === -1 ? "" : text.slice(firstBreak + 1);
+};
 
 const structuralSpans = (name: string, text: string) => {
   const extension = extensionOf(name);
@@ -60,13 +74,19 @@ const textRedactor: Redactor = {
     return {
       detections: dedupeDetections([
         ...describeSpans({
+          applyAbove: APPLY_SCORE,
           source: "model",
           spans: found.filter((span) => !isPattern(span)),
           text,
         }),
-        ...describeSpans({ source: "pattern", spans: found.filter(isPattern), text }),
-        ...describeSpans({ source: "structure", spans: structural, text }),
-        ...describeSpans({ source: "repeat", spans: repeated, text }),
+        ...describeSpans({
+          applyAbove: APPLY_SCORE,
+          source: "pattern",
+          spans: found.filter(isPattern),
+          text,
+        }),
+        ...describeSpans({ applyAbove: APPLY_SCORE, source: "structure", spans: structural, text }),
+        ...describeSpans({ applyAbove: APPLY_SCORE, source: "repeat", spans: repeated, text }),
       ]),
       handle: text,
       warnings: [],
@@ -78,7 +98,7 @@ const textRedactor: Redactor = {
     const text = typeof analysis.handle === "string" ? analysis.handle : await file.text();
     const spans = keptSpans(analysis.detections, decisions);
     const masked = maskSpans(text, spans);
-    const survivors = await survivingSpans(masked, detect);
+    const survivors = await survivingSpans(verifiable(file.name, masked), detect);
     const warnings: Array<WarningKey> = [...analysis.warnings];
 
     if (survivors.length > 0) {

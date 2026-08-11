@@ -1,6 +1,6 @@
 import type { Detect, FileProgress, RedactionResult, RedactOptions, Redactor } from "./types.ts";
 
-const NOTHING_DISMISSED = { dismissed: [] };
+const NOTHING_DISMISSED = { dismissed: [], kept: [] };
 
 type WholeFile = {
   detect: Detect;

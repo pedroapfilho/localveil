@@ -11,8 +11,10 @@ type Job = {
   error?: string;
   file: File;
   id: string;
+  kept: ReadonlyArray<string>;
 
   language?: DocumentLanguage;
+  path?: string;
   progress: number;
   result?: JobResult;
   stage?: FileStageKey;
@@ -22,7 +24,7 @@ type Job = {
 type JobPatch = Partial<Omit<Job, "file" | "id">>;
 
 type JobStore = {
-  addFiles: (files: Array<File>, language?: DocumentLanguage) => Array<Job>;
+  addFiles: (files: Array<JobInput>, language?: DocumentLanguage) => Array<Job>;
   jobs: Array<Job>;
   removeJob: (id: string) => void;
   removeJobs: (ids: ReadonlyArray<string>) => void;
@@ -31,10 +33,18 @@ type JobStore = {
   updateJob: (id: string, patch: JobPatch) => void;
 };
 
+type JobInput = File | { file: File; path: string };
+
+const sourceOf = (input: JobInput) =>
+  input instanceof File
+    ? { file: input, path: input.webkitRelativePath || input.name }
+    : { file: input.file, path: input.path };
+
 const REQUEUED = {
   analysis: undefined,
   dismissed: [],
   error: undefined,
+  kept: [],
   progress: 0,
   result: undefined,
   stage: undefined,
@@ -43,14 +53,20 @@ const REQUEUED = {
 
 const useJobStore = create<JobStore>((set) => ({
   addFiles: (files, language) => {
-    const created = files.map((file) => ({
-      dismissed: [] as ReadonlyArray<string>,
-      file,
-      id: crypto.randomUUID(),
-      language,
-      progress: 0,
-      status: "queued" as const,
-    }));
+    const created = files.map((input) => {
+      const { file, path } = sourceOf(input);
+
+      return {
+        dismissed: [] as ReadonlyArray<string>,
+        file,
+        id: crypto.randomUUID(),
+        kept: [] as ReadonlyArray<string>,
+        language,
+        path,
+        progress: 0,
+        status: "queued" as const,
+      };
+    });
 
     set((state) => ({ jobs: [...state.jobs, ...created] }));
 
@@ -111,4 +127,4 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
 export { completedJobs, failedJobs, hasCompletedJobs, isFinished, isReviewing, useJobStore };
-export type { CompletedJob, Job, JobResult, JobStatus };
+export type { CompletedJob, Job, JobInput, JobResult, JobStatus };

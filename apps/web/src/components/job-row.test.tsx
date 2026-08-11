@@ -10,6 +10,7 @@ const text = (patch: Partial<Job> = {}): Job => ({
   dismissed: [],
   file: new File(["hello"], "notes.txt", { type: "text/plain" }),
   id: "job-1",
+  kept: [],
   progress: 0,
   status: "queued",
   ...patch,
@@ -21,6 +22,7 @@ const pdf = (patch: Partial<Job> = {}): Job =>
 const setup = (job: Job, selected = false) => {
   const onApply = vi.fn<(id: string) => void>();
   const onDismissedChange = vi.fn<(id: string, dismissed: ReadonlyArray<string>) => void>();
+  const onKeptChange = vi.fn<(id: string, kept: ReadonlyArray<string>) => void>();
   const onLanguageChange = vi.fn<(id: string, choice: "auto" | "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onSelect = vi.fn<(id: string, next: boolean) => void>();
@@ -32,6 +34,7 @@ const setup = (job: Job, selected = false) => {
         job={job}
         onApply={onApply}
         onDismissedChange={onDismissedChange}
+        onKeptChange={onKeptChange}
         onLanguageChange={onLanguageChange}
         onRemove={onRemove}
         onSelect={onSelect}
@@ -48,6 +51,7 @@ const setup = (job: Job, selected = false) => {
           job={next}
           onApply={onApply}
           onDismissedChange={onDismissedChange}
+          onKeptChange={onKeptChange}
           onLanguageChange={onLanguageChange}
           onRemove={onRemove}
           onSelect={onSelect}

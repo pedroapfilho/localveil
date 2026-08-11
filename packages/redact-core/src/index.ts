@@ -1,7 +1,7 @@
 export { chunkText } from "./chunk.ts";
 export { isCovered } from "./covered.ts";
 export { describeError } from "./describe-error.ts";
-export { dedupeDetections, describeSpans, keptSpans } from "./detections.ts";
+export { APPLY_SCORE, dedupeDetections, describeSpans, keptSpans } from "./detections.ts";
 export type { TextChunk } from "./chunk.ts";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
 export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";
@@ -41,6 +41,7 @@ export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-erro
 export { survivingSpans } from "./verify.ts";
 export type { Survivor } from "./verify.ts";
 export { spansToRects } from "./rects.ts";
+export { tightenToVerified } from "./tighten.ts";
 export { buildWordIndex } from "./word-index.ts";
 export type { WordIndex, WordInput } from "./word-index.ts";
 export { buildZip, toArrayBuffer, uniqueFilename } from "./zip.ts";

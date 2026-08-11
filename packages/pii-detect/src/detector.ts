@@ -1,6 +1,12 @@
 import { AutoTokenizer, env } from "@huggingface/transformers";
 import type { ChunkSpans, Detect, ModelProgress, Span } from "@repo/redact-core";
-import { describeError, mergeChunkSpans, patternSpans, serialiseDetect } from "@repo/redact-core";
+import {
+  describeError,
+  mergeChunkSpans,
+  patternSpans,
+  serialiseDetect,
+  tightenToVerified,
+} from "@repo/redact-core";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
@@ -37,20 +43,23 @@ const MAX_WIDTH = 12;
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
 
-// Batching costs time on native CPU rather than saving it, because onnxruntime-node already
-// spreads one inference across every core. Measured on the eval corpus, darwin arm64:
-// 2030 ms at 1, 2913 ms at 2, 3151 ms at 4, and the same ordering on uniform chunks with no
-// shouting retries, so it is not padding waste. Raise it only against a measurement on a
-// runtime that leaves cores idle between submissions.
-const BATCH_SIZE = 1;
+// Batching pays on a GPU and costs on a CPU, so the size follows the device.
+//
+// onnxruntime-node already spreads one inference across every core, and batching only adds
+// padded work: measured on the eval corpus, darwin arm64, 2030 ms at 1, 2913 ms at 2 and
+// 3151 ms at 4. WebGPU is the opposite case, because tiny submissions leave it idle between
+// dispatches: measured in Chrome over 8280 characters, about 3200 ms at 1 against 2920 ms at
+// 4, with 8 no better than 4. Spans are identical either way.
+const CPU_BATCH = 1;
+const GPU_BATCH = 4;
 
 const BATCH_TOKENS = 4096;
 
-// Swept against the labelled corpus in packages/eval: 0.35 scores 92.5 F1 and 0.65 scores
-// 95.3, with Portuguese going 91.7 to 94.8 and its recall unchanged at 96.5. The floor sat at
-// 0.35 while the only options were cover or miss; the review step means an unwanted box is now
-// one click to dismiss, so the six points of precision are worth the one true positive in 128.
-const MIN_SCORE = 0.65;
+// Detection returns everything down to here. What actually gets covered is decided later, by
+// APPLY_SCORE in @repo/redact-core: at or above it a span is covered unless dismissed, below it
+// the span is offered as a suggestion and covered only if somebody ticks it. Reading this far
+// down is only affordable because nothing under the apply floor reaches a file on its own.
+const MIN_SCORE = 0.15;
 
 type DetectorOptions = {
   batchSize?: number;
@@ -97,7 +106,7 @@ const frameOf = (tokenizer: Tokenizer): TokenFrame => {
 
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
-    batchSize = BATCH_SIZE,
+    batchSize,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
     onProgress,
@@ -144,6 +153,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   const device = await pickDevice();
+  const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
   if (device !== "webgpu") {
     report(0, "model.slowDevice");
@@ -247,7 +257,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const jobs = jobsFor(text);
     const batches = batchInputs(
       jobs.map((job) => job.encoded),
-      batchSize,
+      batching,
       BATCH_TOKENS,
     );
     const parts: Array<ChunkSpans> = [];
@@ -268,7 +278,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     }
     /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-    return [...mergeChunkSpans(parts), ...patternSpans(text)];
+    return tightenToVerified([...mergeChunkSpans(parts), ...patternSpans(text)], text);
   });
 };
 

@@ -2,5 +2,5 @@
   "id": "en-03-customers-csv",
   "language": "en",
   "source": "synthetic",
-  "marked": "full_name,email,phone,city\n[[private_person|Priya Raghunathan]],[[private_email|priya.r@example.com]],[[private_phone|555-0142]],Leeds\n[[private_person|Tomas Bergstrom]],[[private_email|tomas.bergstrom@example.se]],[[private_phone|555-0198]],Malmo\n[[private_person|Ana Lucia Ferreira]],[[private_email|ana.ferreira@example.pt]],[[private_phone|555-0126]],Porto"
+  "marked": "full_name,email,phone,city,profile_url\n[[private_person|Priya Raghunathan]],[[private_email|priya.r@example.com]],[[private_phone|555-0142]],Leeds,[[private_url|https://social.example.com/priya-raghunathan]]\n[[private_person|Tomas Bergstrom]],[[private_email|tomas.bergstrom@example.se]],[[private_phone|555-0198]],Malmo,[[private_url|https://social.example.com/tbergstrom]]\n[[private_person|Ana Lucia Ferreira]],[[private_email|ana.ferreira@example.pt]],[[private_phone|555-0126]],Porto,[[private_url|https://social.example.com/ana-l-ferreira]]"
 }

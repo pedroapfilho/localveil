@@ -148,3 +148,55 @@ describe("patternSpans", () => {
     expect(patternSpans("just some ordinary prose here")).toEqual([]);
   });
 });
+
+describe("written dates", () => {
+  it("covers a whole English date, not just its year", () => {
+    expect(covered("Issued 2 April 2024 by hand")).toContain("2 April 2024");
+  });
+
+  it("covers the day and month when no year follows", () => {
+    expect(covered("Signed 14 March and filed")).toContain("14 March");
+  });
+
+  it("covers a Portuguese date written out", () => {
+    expect(covered("Emitida em 14 de março de 2024")).toContain("14 de março de 2024");
+  });
+
+  it("covers it without the accent, which OCR often drops", () => {
+    expect(covered("Emitida em 14 de marco de 2024")).toContain("14 de marco de 2024");
+  });
+
+  it("covers a Spanish date written out", () => {
+    expect(covered("Emitida el 2 de abril de 2024")).toContain("2 de abril de 2024");
+  });
+
+  it("covers an ordinal day", () => {
+    expect(covered("Due 1st April 2024")).toContain("1st April 2024");
+  });
+
+  it("covers a month-first date", () => {
+    expect(covered("Due April 2, 2024 at noon")).toContain("April 2, 2024");
+  });
+
+  it("leaves a bare month alone", () => {
+    expect(covered("Every April we review the terms")).toEqual([]);
+  });
+});
+
+describe("references that look like phone numbers", () => {
+  it("leaves an order number beginning with a year alone", () => {
+    expect(covered("Pedido 2024-0817 cancelado")).toEqual([]);
+  });
+
+  it("still covers a NANP-style number", () => {
+    expect(covered("Call 555-0181 today")).toContain("555-0181");
+  });
+
+  it("still covers a Brazilian mobile", () => {
+    expect(covered("Ligue 11 98765-4321")).toContain("11 98765-4321");
+  });
+
+  it("leaves a year range alone", () => {
+    expect(covered("The 2019-2024 report")).toEqual([]);
+  });
+});
