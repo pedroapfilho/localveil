@@ -87,6 +87,27 @@ describe("JobRow", () => {
     expect(screen.getByText(LOW_CONFIDENCE)).toBeInTheDocument();
   });
 
+  it("spins the status marker while the file is being worked on", () => {
+    const { container } = setup(text({ stage: "stage.reading", status: "running" }));
+
+    expect(screen.getByText("Working")).toBeInTheDocument();
+    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+  });
+
+  it("explains OCR inside the warning that mentions it", async () => {
+    setup(
+      pdf({
+        result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: ["warning.scannedPages"] },
+        status: "done",
+      }),
+    );
+
+    fireEvent.click(screen.getByLabelText("Details for card.pdf"));
+    fireEvent.click(screen.getByRole("button", { name: "OCR" }));
+
+    expect(await screen.findByText(/optical character recognition/iv)).toBeInTheDocument();
+  });
+
   it("opens a failed row without being asked", () => {
     setup(text({ error: "The worker gave up", status: "error" }));
 

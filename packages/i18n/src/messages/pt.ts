@@ -29,6 +29,12 @@ const pt: Messages = {
   "footer.offline": "Funciona sem internet depois que o modelo é baixado.",
   "footer.summary":
     "O localveil encontra nomes, e-mails, telefones, endereços, datas e números de conta nos seus arquivos e cobre tudo isso. A detecção roda nesta aba, na sua própria máquina, então nada do que você solta aqui é enviado.",
+  "glossary.ocr.description":
+    "Reconhecimento óptico de caracteres: ler as letras de uma imagem da página, para que um arquivo digitalizado possa ser pesquisado e ocultado como texto digitado.",
+  "glossary.ocr.label": "OCR",
+  "glossary.searchable.description":
+    "Um PDF guarda uma camada de texto invisível atrás da imagem da página, e é essa camada que a busca e o copiar e colar leem. Onde um caractere não pôde ser gravado de volta, a camada fica com uma falha.",
+  "glossary.searchable.label": "pesquisáveis",
   "label.account_number": "Número de conta",
   "label.private_address": "Endereço",
   "label.private_date": "Data",

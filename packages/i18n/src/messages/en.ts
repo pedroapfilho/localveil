@@ -27,6 +27,12 @@ const en = {
   "footer.offline": "Works offline once the model is cached.",
   "footer.summary":
     "localveil finds names, emails, phone numbers, addresses, dates and account numbers in your files and paints over them. Detection runs in this tab on your own machine, so nothing you drop here is uploaded.",
+  "glossary.ocr.description":
+    "Optical character recognition: reading the letters out of a picture of a page, so a scan can be searched and redacted like typed text.",
+  "glossary.ocr.label": "OCR",
+  "glossary.searchable.description":
+    "A PDF carries an invisible layer of text behind the page image, and that layer is what search and copy-paste read. Where a character could not be written back, the layer has a gap.",
+  "glossary.searchable.label": "searchable",
   "label.account_number": "Account number",
   "label.private_address": "Address",
   "label.private_date": "Date",
