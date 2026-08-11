@@ -7,15 +7,15 @@ plan fully before starting, honor its STOP conditions, and update your row when 
 
 ## Execution order & status
 
-| Plan | Title                                              | Priority | Effort | Depends on | Status                                                            |
-| ---- | -------------------------------------------------- | -------- | ------ | ---------- | ----------------------------------------------------------------- |
-| 001  | Build a PT-BR/EN/ES detection eval harness         | P1       | M      | none       | DONE                                                              |
-| 002  | Cut the model download by re-exporting the weights | P1       | L      | 001        | PARTIAL: measured, see BASELINE.md; blocked on a browser wasm run |
-| 003  | Add a review-before-export step                    | P1       | L      | none       | DONE                                                              |
-| 004  | Stop rasterising PDF pages that carry no redaction | P1       | S      | none       | DONE                                                              |
-| 005  | Batch chunk inference into one session run         | P2       | M      | 001        | DONE (negative result: off by default)                            |
-| 006  | Verify the redacted output before handing it back  | P2       | S      | none       | DONE                                                              |
-| 007  | Redact CSV and JSON by structure, not by prose     | P2       | M      | 001        | DONE                                                              |
+| Plan | Title                                              | Priority | Effort | Depends on | Status                                                             |
+| ---- | -------------------------------------------------- | -------- | ------ | ---------- | ------------------------------------------------------------------ |
+| 001  | Build a PT-BR/EN/ES detection eval harness         | P1       | M      | none       | DONE                                                               |
+| 002  | Cut the model download by re-exporting the weights | P1       | L      | 001        | REJECTED: int8 collapses in-browser at any recipe; see BASELINE.md |
+| 003  | Add a review-before-export step                    | P1       | L      | none       | DONE                                                               |
+| 004  | Stop rasterising PDF pages that carry no redaction | P1       | S      | none       | DONE                                                               |
+| 005  | Batch chunk inference into one session run         | P2       | M      | 001        | DONE (negative result: off by default)                             |
+| 006  | Verify the redacted output before handing it back  | P2       | S      | none       | DONE                                                               |
+| 007  | Redact CSV and JSON by structure, not by prose     | P2       | M      | 001        | DONE                                                               |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

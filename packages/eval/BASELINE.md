@@ -197,3 +197,35 @@ the browser's wasm integer kernels, and the README already records that the old 
 "scores correctly on native CPU". So this measurement confirms on node what was already known
 and leaves the real question open. Whether per-channel quantization survives wasm has to be
 measured in a browser, and until it is, no download change is justified.
+
+## Per-channel quantization does not fix the browser collapse
+
+Measured 2026-08-11 in a real browser against the dev server, using the self-exported
+per-channel int8 from `tools/model-export/`. One sentence, the same one in every run:
+`Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.` The number that matters
+is the model's score for the name, because that is the head the README records as collapsing.
+
+```
+runtime                              score for "Mariana Duarte Rocha"
+-------------------------------------------------------------------
+onnxruntime-node, native CPU                                  0.9972
+browser, WebGPU                                               0.0911
+browser, wasm                                                 0.2084
+```
+
+The wasm figure lands where the README's account said it would, at 0.17. So the hypothesis
+behind plan 002, that the collapse was an artifact of per-tensor quantization and that
+`per_channel=True` would fix it, is **wrong**. Per-channel changes nothing in the browser, and
+WebGPU is worse than wasm rather than better.
+
+Two things follow. The README's line about the collapse should say "in the browser" rather than
+"on the browser's wasm integer kernels", since WebGPU fails at least as badly. And int8 is off
+the table as a way to shrink the download, whatever the recipe, which leaves vocabulary
+trimming as the only untested lever: it deletes embedding rows rather than reducing precision,
+so it does not touch the arithmetic that is breaking here.
+
+The page that produced these numbers is `apps/web/wasm-check.html`. Drop a candidate at
+`apps/web/public/candidate.onnx`, run `pnpm dev --filter=web`, and open `/wasm-check.html` for
+the default device or `/wasm-check.html?device=wasm` to force the fallback path. It seeds the
+candidate into CacheStorage under the pinned model URL, so it exercises the app's own loading
+and device-selection code rather than a parallel copy of it.

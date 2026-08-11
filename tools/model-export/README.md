@@ -7,6 +7,11 @@ run by hand when someone wants to change what the app fetches.
 The weights the app uses today come from `onnx-community/gliner_multi_pii-v1`, quantized by
 somebody else. Two levers are available on our own export and they compose:
 
+**Result so far: int8 is dead, trimming is untested.** Both quantization recipes below collapse
+in the browser exactly as the shipped README describes, so lever 2 is closed. Lever 1 remains
+open and is now the only one, because it deletes embedding rows rather than reducing precision
+and so does not touch the arithmetic that breaks.
+
 1. **Vocabulary trimming.** mDeBERTa-v3-base is 86M parameters of transformer and 190M of
    embedding matrix for a 250K-token multilingual vocabulary, so roughly two thirds of the
    download is a lookup table for scripts localveil never reads. `trim_vocab.py` keeps only the
@@ -57,6 +62,13 @@ pnpm --filter @repo/eval swap /tmp/lv-export/build/model_int8_embeddings.onnx
 EVAL_MIN_SCORE=0.65 pnpm --filter @repo/eval start
 pnpm --filter @repo/eval swap --restore
 ```
+
+**Check the browser before believing a CPU number.** `apps/web/wasm-check.html` runs a
+candidate through the app's own loading and device selection and prints the model's score for a
+known name. Drop the file at `apps/web/public/candidate.onnx`, run `pnpm dev --filter=web`, and
+open `/wasm-check.html`, or `?device=wasm` to force the fallback path. This is not optional:
+the per-channel int8 recipe below scores 0.9972 on native CPU and 0.09 on WebGPU for the same
+input, which is the whole reason int8 was rejected.
 
 **Sweep the floor, do not fix it.** Quantization shifts the score distribution, so two exports
 compared at one threshold are being compared on calibration rather than accuracy. Measured on

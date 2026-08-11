@@ -49,3 +49,5 @@ playwright/.cache/
 # model export scratch
 tools/model-export/build/
 tools/model-export/prompts.json
+
+apps/web/public/candidate.onnx
