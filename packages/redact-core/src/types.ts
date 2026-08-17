@@ -48,8 +48,6 @@ type RedactionResult = {
   warnings: Array<WarningKey>;
 };
 
-type DetectionSource = "model" | "pattern" | "repeat" | "structure";
-
 type Detection = {
   confidence: number;
   end: number;
@@ -57,9 +55,7 @@ type Detection = {
   label: PiiLabel;
   page?: number;
   preview: string;
-  source: DetectionSource;
   start: number;
-  suggested: boolean;
 };
 
 type Analysis = {
@@ -68,7 +64,8 @@ type Analysis = {
   warnings: Array<WarningKey>;
 };
 
-type Decisions = { dismissed: ReadonlyArray<string>; kept: ReadonlyArray<string> };
+/** The ids that will be painted. Anything not named here is left showing. */
+type Decisions = { covered: ReadonlyArray<string> };
 
 type ApplyRequest = {
   analysis: Analysis;
@@ -102,7 +99,6 @@ export type {
   Decisions,
   Detect,
   Detection,
-  DetectionSource,
   DocumentLanguage,
   FileProgress,
   FileStageKey,

@@ -48,6 +48,7 @@ const pooled = {
   connected: [] as Array<string>,
   disconnected: [] as Array<string>,
   host: undefined as ModelHostOptions | undefined,
+  modelGone: false,
   overflowAfter: Number.POSITIVE_INFINITY,
   tasks: [] as Array<FakeTask>,
   terminated: 0,
@@ -68,7 +69,13 @@ const modelHostDouble = {
 
     return {
       connect: (channel: string) => {
+        if (pooled.modelGone) {
+          return false;
+        }
+
         pooled.connected.push(channel);
+
+        return true;
       },
       destroy: () => {},
       disconnect: (channel: string) => {
@@ -128,6 +135,7 @@ const resetFixture = () => {
   pooled.tasks.length = 0;
   pooled.connected.length = 0;
   pooled.disconnected.length = 0;
+  pooled.modelGone = false;
   pooled.overflowAfter = Number.POSITIVE_INFINITY;
   pooled.terminated = 0;
   pooled.host = undefined;

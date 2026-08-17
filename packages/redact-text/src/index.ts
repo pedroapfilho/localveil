@@ -1,6 +1,5 @@
-import type { Redactor, Span, WarningKey } from "@repo/redact-core";
+import type { Redactor, WarningKey } from "@repo/redact-core";
 import {
-  APPLY_SCORE,
   dedupeDetections,
   describeSpans,
   keptSpans,
@@ -10,7 +9,7 @@ import {
   tokensFromSpans,
 } from "@repo/redact-core";
 
-import { maskSpans } from "./mask.ts";
+import { maskRanges } from "./mask.ts";
 import { csvFieldSpans } from "./structured-csv.ts";
 import { jsonFieldSpans } from "./structured-json.ts";
 
@@ -47,7 +46,16 @@ const structuralSpans = (name: string, text: string) => {
   return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
-const isPattern = (span: Span) => span.score === 1;
+// The offsets in the analysis index this exact string. Re-reading the File would substitute a
+// different one, and a same-length edit would then cover the wrong bytes while leaving the real
+// ones showing, so a missing snapshot has to fail rather than fall back.
+const analysedText = (handle: unknown): string => {
+  if (typeof handle !== "string") {
+    throw new TypeError("The text analysis carried no source text to mask");
+  }
+
+  return handle;
+};
 
 const textRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("text/") || hasTextExtension(file.name),
@@ -72,22 +80,7 @@ const textRedactor: Redactor = {
     onProgress(1, "stage.finished");
 
     return {
-      detections: dedupeDetections([
-        ...describeSpans({
-          applyAbove: APPLY_SCORE,
-          source: "model",
-          spans: found.filter((span) => !isPattern(span)),
-          text,
-        }),
-        ...describeSpans({
-          applyAbove: APPLY_SCORE,
-          source: "pattern",
-          spans: found.filter(isPattern),
-          text,
-        }),
-        ...describeSpans({ applyAbove: APPLY_SCORE, source: "structure", spans: structural, text }),
-        ...describeSpans({ applyAbove: APPLY_SCORE, source: "repeat", spans: repeated, text }),
-      ]),
+      detections: dedupeDetections(describeSpans([...detected, ...repeated], text)),
       handle: text,
       warnings: [],
     };
@@ -95,9 +88,9 @@ const textRedactor: Redactor = {
   apply: async ({ analysis, decisions, detect, file, onProgress }) => {
     onProgress(0.8, "stage.redacting");
 
-    const text = typeof analysis.handle === "string" ? analysis.handle : await file.text();
-    const spans = keptSpans(analysis.detections, decisions);
-    const masked = maskSpans(text, spans);
+    const text = analysedText(analysis.handle);
+    const ranges = mergeOverlappingRanges(keptSpans(analysis.detections, decisions));
+    const masked = maskRanges(text, ranges);
     const survivors = await survivingSpans(verifiable(file.name, masked), detect);
     const warnings: Array<WarningKey> = [...analysis.warnings];
 
@@ -109,7 +102,7 @@ const textRedactor: Redactor = {
 
     return {
       blob: new Blob([masked], { type: file.type }),
-      redactionCount: mergeOverlappingRanges(spans).length,
+      redactionCount: ranges.length,
       warnings,
     };
   },

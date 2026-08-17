@@ -43,11 +43,13 @@ type PooledTask = {
   settle: (onDone: (value: unknown) => void, onFail: (error: unknown) => void) => void;
 };
 
+// The presence of the watchdog is the phase: it is armed the moment the worker first speaks, so
+// an absent one means the job is still queued behind the model. A separate `started` flag said
+// the same thing in a second place that nothing kept in step.
 type LiveJob = {
   channel: string;
   id: string;
   restart: () => void;
-  started: boolean;
   task: PooledTask;
   watchdog?: ReturnType<typeof setTimeout>;
 };
@@ -108,44 +110,42 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
     job.watchdog = setTimeout(() => {
       // eslint-disable-next-line no-use-before-define -- mutually recursive with give
-      give(job.id, "The redaction worker stopped answering");
+      give(job, "The redaction worker stopped answering");
     }, SILENCE_LIMIT);
   };
 
-  const release = (id: string) => {
-    const job = jobs.get(id);
-
-    if (job === undefined) {
+  // Identity is the record, not the id. A resubmit under the same id replaces the entry, and
+  // keying teardown on the id alone would let the replaced job's watchdog fail its successor.
+  const release = (job: LiveJob | undefined) => {
+    if (job === undefined || jobs.get(job.id) !== job) {
       return undefined;
     }
 
     clearTimeout(job.watchdog);
-    jobs.delete(id);
+    jobs.delete(job.id);
     host.disconnect(job.channel);
 
     return job;
   };
 
-  const give = (id: string, reason: string) => {
-    const job = release(id);
-
-    if (job === undefined) {
+  const give = (job: LiveJob, reason: string) => {
+    if (release(job) === undefined) {
       return;
     }
 
     job.task.cancel();
-    onError(id, reason, false);
+    onError(job.id, reason, false);
   };
 
   host = createModelHost({
     onLost: (reason, fatal) => {
       // oxlint-disable-next-line unicorn/no-useless-spread
-      const waiting = [...jobs.values()].filter((job) => !job.started);
+      const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
 
       // oxlint-disable-next-line unicorn/no-useless-spread
       for (const job of [...jobs.values()]) {
-        if (job.started || fatal) {
-          give(job.id, reason);
+        if (job.watchdog !== undefined || fatal) {
+          give(job, reason);
         }
       }
 
@@ -156,7 +156,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       }
 
       for (const job of waiting) {
-        release(job.id);
+        release(job);
         job.task.cancel();
         job.restart();
       }
@@ -186,7 +186,6 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       return;
     }
 
-    live.started = true;
     arm(live);
     onProgress(id, payload.fraction, payload.stage);
   };
@@ -200,27 +199,27 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     const channel = crypto.randomUUID();
     const wire = new MessageChannel();
 
-    host.connect(channel, wire.port1);
+    if (!host.connect(channel, wire.port1)) {
+      onError(id, "The detection model is gone, so nothing can be redacted", false);
 
-    const mine = () => {
-      const live = jobs.get(id);
-
-      return live?.channel === channel ? live : undefined;
-    };
+      return;
+    }
 
     try {
       const task = asPooledTask(run(wire.port2));
+      const live: LiveJob = { channel, id, restart, task };
 
-      jobs.set(id, { channel, id, restart, started: false, task });
+      release(jobs.get(id))?.task.cancel();
+      jobs.set(id, live);
 
       task.settle(
         (value) => {
-          if (mine() !== undefined && release(id) !== undefined) {
+          if (release(live) !== undefined) {
             settled(value);
           }
         },
         (error) => {
-          if (mine() !== undefined && release(id) !== undefined) {
+          if (release(live) !== undefined) {
             onError(id, describeError(error), isUnsupportedFile(error));
           }
         },
@@ -281,12 +280,12 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
   return {
     apply,
     cancel: (id) => {
-      release(id)?.task.cancel();
+      release(jobs.get(id))?.task.cancel();
     },
     destroy: () => {
       // oxlint-disable-next-line unicorn/no-useless-spread
-      for (const id of [...jobs.keys()]) {
-        release(id);
+      for (const job of [...jobs.values()]) {
+        release(job);
       }
 
       host.destroy();

@@ -1,5 +1,5 @@
 import type { ImageReading, Recognition } from "@repo/ocr";
-import { legibleWords, muchWasUnreadable } from "@repo/ocr";
+import { assessReading } from "@repo/ocr";
 
 const OCR_LUMINANCE_THRESHOLD = 120;
 
@@ -33,11 +33,11 @@ const binarizeForOcr = (source: ImageBitmap) => {
 };
 
 const shouldRetryOcr = (reading: Recognition) =>
-  reading.words.length === 0 || muchWasUnreadable(reading);
+  reading.words.length === 0 || assessReading(reading).unreadable;
 
 const betterReading = (first: ImageReading, second: ImageReading) => {
-  const firstLegible = legibleWords(first).length;
-  const secondLegible = legibleWords(second).length;
+  const firstLegible = assessReading(first).legible.length;
+  const secondLegible = assessReading(second).legible.length;
 
   if (firstLegible !== secondLegible) {
     return secondLegible > firstLegible ? second : first;

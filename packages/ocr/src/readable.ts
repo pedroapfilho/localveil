@@ -4,28 +4,32 @@ import type { Recognition } from "./recognize.ts";
 
 const LEGIBLE_WORD = 60;
 
-const legibleWords = ({ words }: Recognition, floor: number = LEGIBLE_WORD): Array<WordInput> => {
-  const kept: Array<WordInput> = [];
+// Above this share of unreadable words a page is treated as gibberish rather than text. A page
+// whose fonts do not resolve renders as a wall of boxes, and a detection model will confidently
+// tag a long run of that as somebody's name.
+const UNREADABLE_SHARE = 0.25;
+
+type Readability = { legible: Array<WordInput>; unreadable: boolean };
+
+/**
+ * One pass, one answer. The words that are kept and the verdict on the page have to agree, so
+ * they are derived together from the same floor rather than recomputed by separate callers.
+ */
+const assessReading = ({ words }: Recognition): Readability => {
+  const legible: Array<WordInput> = [];
 
   for (const { bbox, confidence, text } of words) {
-    if (confidence >= floor) {
-      kept.push({ bbox, text });
+    if (confidence >= LEGIBLE_WORD) {
+      legible.push({ bbox, text });
     }
   }
 
-  return kept;
+  return {
+    legible,
+    unreadable:
+      words.length > 0 && (words.length - legible.length) / words.length > UNREADABLE_SHARE,
+  };
 };
 
-const UNREADABLE_SHARE = 0.25;
-
-const muchWasUnreadable = (reading: Recognition, floor: number = LEGIBLE_WORD) => {
-  const total = reading.words.length;
-
-  if (total === 0) {
-    return false;
-  }
-
-  return (total - legibleWords(reading, floor).length) / total > UNREADABLE_SHARE;
-};
-
-export { LEGIBLE_WORD, legibleWords, muchWasUnreadable, UNREADABLE_SHARE };
+export { assessReading, LEGIBLE_WORD, UNREADABLE_SHARE };
+export type { Readability };

@@ -1,5 +1,4 @@
-import type { Range, Span } from "@repo/redact-core";
-import { mergeOverlappingRanges } from "@repo/redact-core";
+import type { Range } from "@repo/redact-core";
 
 import { isLineBreak } from "./line-break.ts";
 
@@ -15,20 +14,33 @@ const assertInside = (range: Range, length: number) => {
   }
 };
 
-const maskSpans = (text: string, spans: Array<Span>): string => {
-  const ranges = mergeOverlappingRanges(spans);
+// One block per grapheme, so an emoji or an accented letter takes one box rather than two. A line
+// break inside a covered run survives: without it a span running off the end of a line would weld
+// two rows of a log or a CSV together.
+const blocksFor = (covered: string) =>
+  [...GRAPHEMES.segment(covered)]
+    .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
+    .join("");
+
+/**
+ * Takes the merged, sorted, non-overlapping ranges the caller already computed. Every index is
+ * read against the original text in one forward pass, so a run that collapses to fewer graphemes
+ * cannot shift the ranges behind it.
+ */
+const maskRanges = (text: string, ranges: ReadonlyArray<Range>): string => {
+  const parts: Array<string> = [];
+  let cursor = 0;
 
   for (const range of ranges) {
     assertInside(range, text.length);
+
+    parts.push(text.slice(cursor, range.start), blocksFor(text.slice(range.start, range.end)));
+    cursor = range.end;
   }
 
-  return ranges.toReversed().reduce((masked, range) => {
-    const covered = [...GRAPHEMES.segment(masked.slice(range.start, range.end))]
-      .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
-      .join("");
+  parts.push(text.slice(cursor));
 
-    return masked.slice(0, range.start) + covered + masked.slice(range.end);
-  }, text);
+  return parts.join("");
 };
 
-export { maskSpans };
+export { maskRanges };

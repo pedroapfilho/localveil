@@ -68,12 +68,12 @@ describe("patternSpans", () => {
     ]);
   });
 
-  it("covers a whole US number rather than leaving the area code beside the box", () => {
-    expect(covered("call 555-123-4567 now")).toContain("555-123-4567");
+  it("covers a whole US number once, not also its trailing subscriber number", () => {
+    expect(covered("call 555-123-4567 now")).toEqual(["555-123-4567"]);
   });
 
   it("finds a Brazilian mobile with a bare area code", () => {
-    expect(covered("Tel: 11 98765-4321")).toContain("11 98765-4321");
+    expect(covered("Tel: 11 98765-4321")).toEqual(["11 98765-4321"]);
   });
 
   it("finds a nine-digit mobile by its leading nine", () => {
@@ -189,11 +189,11 @@ describe("references that look like phone numbers", () => {
   });
 
   it("still covers a NANP-style number", () => {
-    expect(covered("Call 555-0181 today")).toContain("555-0181");
+    expect(covered("Call 555-0181 today")).toEqual(["555-0181"]);
   });
 
   it("still covers a Brazilian mobile", () => {
-    expect(covered("Ligue 11 98765-4321")).toContain("11 98765-4321");
+    expect(covered("Ligue 11 98765-4321")).toEqual(["11 98765-4321"]);
   });
 
   it("leaves a year range alone", () => {

@@ -113,7 +113,7 @@ describe("createRedactionPool", () => {
 
     pool.apply({
       analysis,
-      decisions: { dismissed: [], kept: [] },
+      decisions: { covered: [] },
       file: new File([], "a.txt"),
       id: "a",
     });
@@ -347,5 +347,33 @@ describe("destroying the pool", () => {
 
     expect(reported.errors).toEqual([]);
     expect(pooled.terminated).toBe(1);
+  });
+
+  it("fails a file at once when the model is already gone", () => {
+    const pool = build();
+
+    pooled.modelGone = true;
+    pool.submit(job("z"));
+
+    expect(reported.errors.map((entry) => entry.id)).toEqual(["z"]);
+    expect(pooled.tasks).toHaveLength(0);
+  });
+
+  it("does not let a replaced job's watchdog fail the one that took its place", () => {
+    vi.useFakeTimers();
+
+    try {
+      const pool = build();
+
+      pool.submit(job("a"));
+      taskAt(0).emit({ fraction: 0.1, stage: "stage.reading", type: "progress" });
+      pool.submit(job("a"));
+      waitOutTheSilence();
+
+      expect(reported.errors).toEqual([]);
+      expect(taskAt(0).cancelled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -174,4 +174,33 @@ describe("destroying the host", () => {
     expect(FakeWorker.instances.length).toBe(1);
     expect(lost).toEqual([]);
   });
+
+  it("refuses to connect once the host has been destroyed", () => {
+    const host = build();
+
+    host.destroy();
+
+    expect(host.connect("c", {} as MessagePort)).toBe(false);
+    expect(workerAt(0).posted).toEqual([]);
+  });
+
+  it("refuses to connect once the model is beyond recovery", () => {
+    const host = build();
+
+    for (let attempt = 0; attempt <= MAX_RESPAWNS; attempt += 1) {
+      workerAt(attempt).emit("error", {});
+    }
+
+    expect(host.connect("c", {} as MessagePort)).toBe(false);
+    expect(workerAt(MAX_RESPAWNS).posted).toEqual([]);
+  });
+
+  it("still connects while respawns remain", () => {
+    const host = build();
+
+    workerAt(0).emit("error", {});
+
+    expect(host.connect("c", {} as MessagePort)).toBe(true);
+    expect(workerAt(1).posted).toHaveLength(1);
+  });
 });

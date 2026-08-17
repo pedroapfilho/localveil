@@ -19,6 +19,9 @@ const startWorker = async (language: OcrLanguage) => {
   return tesseract.createWorker(traineddataFor(language));
 };
 
+// The cache holds workers that are starting or ready, never ones that failed. This module lives
+// in a pooled worker that outlives the job, so a cached rejection would disable a language for
+// every later file with no way to retry it.
 const workerFor = (language: OcrLanguage) => {
   const existing = workers.get(language);
 
@@ -29,6 +32,13 @@ const workerFor = (language: OcrLanguage) => {
   const started = startWorker(language);
 
   workers.set(language, started);
+
+  // oxlint-disable-next-line promise/prefer-await-to-then -- eviction must not make callers wait
+  started.catch(() => {
+    if (workers.get(language) === started) {
+      workers.delete(language);
+    }
+  });
 
   return started;
 };

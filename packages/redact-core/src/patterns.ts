@@ -1,7 +1,7 @@
+import { absorbNested } from "./merge-spans.ts";
 import type { PiiLabel, Span } from "./types.ts";
 
 type Pattern = {
-  capture?: boolean;
   label: PiiLabel;
   matcher: RegExp;
   verify?: (value: string) => boolean;
@@ -172,17 +172,14 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: luhn,
   },
   {
-    capture: true,
     label: "account_number",
     matcher: /\bRG[.:]?\s?(?<value>\d{1,2}\.?\d{3}\.?\d{3}-?[\dX])\b/dgv,
   },
   {
-    capture: true,
     label: "account_number",
     matcher: /\b(?:CNH|[Rr]egistro)[.:]?\s?(?<value>\d{9,11})\b/dgv,
   },
   {
-    capture: true,
     label: "private_address",
     matcher: /\bCEP[.:]?\s?(?<value>\d{5}-?\d{3})\b/dgv,
   },
@@ -206,22 +203,31 @@ const PATTERNS: ReadonlyArray<Pattern> = [
 ];
 
 const patternSpans = (text: string): Array<Span> => {
-  const found = new Map<string, Span>();
+  const found: Array<Span> = [];
 
-  for (const { capture, label, matcher, verify } of PATTERNS) {
+  for (const { label, matcher, verify } of PATTERNS) {
     for (const match of text.matchAll(matcher)) {
-      const range = capture === true ? match.indices?.groups?.value : undefined;
-      const [start, end] = range ?? [match.index, match.index + match[0].length];
+      // A matcher that names a `value` group scopes the span to it, so the label a document
+      // prints beside a number ("RG", "CEP") stays readable. The `d` flag is what exposes it.
+      const [start, end] = match.indices?.groups?.value ?? [
+        match.index,
+        match.index + match[0].length,
+      ];
 
       if (verify !== undefined && !verify(text.slice(start, end))) {
         continue;
       }
 
-      found.set(`${String(start)}-${String(end)}`, { end, label, score: 1, start });
+      found.push({ end, label, score: 1, start });
     }
   }
 
-  return [...found.values()].toSorted((left, right) => left.start - right.start);
+  return absorbNested(
+    found,
+    (span) => span.label,
+    (span) => span.score,
+    (span) => span,
+  ).toSorted((left, right) => left.start - right.start);
 };
 
 export { isCnpj, isCpf, isIban, isSpanishId, luhn, patternSpans };

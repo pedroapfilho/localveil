@@ -1,4 +1,5 @@
-import type { Decisions, Detection, DetectionSource, Span } from "./types.ts";
+import { absorbNested } from "./merge-spans.ts";
+import type { Decisions, Detection, Span } from "./types.ts";
 
 // Spans at or above this are covered unless somebody dismisses them; spans below it are
 // offered as suggestions and covered only if somebody ticks them. Swept in packages/eval:
@@ -8,14 +9,6 @@ const APPLY_SCORE = 0.65;
 const PREVIEW_GRAPHEMES = 80;
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-type Described = {
-  applyAbove: number;
-  page?: number;
-  source: DetectionSource;
-  spans: Array<Span>;
-  text: string;
-};
 
 const preview = (value: string) => {
   const segments = [...GRAPHEMES.segment(value)];
@@ -33,7 +26,7 @@ const preview = (value: string) => {
 const idFor = (span: Span, page?: number) =>
   `${page === undefined ? "" : String(page)}:${String(span.start)}-${String(span.end)}:${span.label}`;
 
-const describeSpans = ({ applyAbove, page, source, spans, text }: Described): Array<Detection> =>
+const describeSpans = (spans: Array<Span>, text: string, page?: number): Array<Detection> =>
   spans.map((span) => ({
     confidence: span.score,
     end: span.end,
@@ -41,38 +34,37 @@ const describeSpans = ({ applyAbove, page, source, spans, text }: Described): Ar
     label: span.label,
     ...(page === undefined ? {} : { page }),
     preview: preview(text.slice(span.start, span.end)),
-    source,
     start: span.start,
-    suggested: span.score < applyAbove,
   }));
 
-const dedupeDetections = (detections: Array<Detection>): Array<Detection> => {
-  const byId = new Map<string, Detection>();
+const dedupeDetections = (detections: Array<Detection>): Array<Detection> =>
+  absorbNested(
+    detections,
+    (detection) =>
+      `${detection.page === undefined ? "" : String(detection.page)}:${detection.label}`,
+    (detection) => detection.confidence,
+    (detection, confidence) => ({ ...detection, confidence }),
+  ).toSorted((left, right) => (left.page ?? 0) - (right.page ?? 0) || left.start - right.start);
+
+/** What gets painted when nobody reviews: everything the model was sure enough about. */
+const defaultDecisions = (detections: ReadonlyArray<Detection>): Decisions => {
+  const covered: Array<string> = [];
 
   for (const detection of detections) {
-    const existing = byId.get(detection.id);
-
-    if (existing === undefined || existing.confidence < detection.confidence) {
-      byId.set(detection.id, detection);
+    if (detection.confidence >= APPLY_SCORE) {
+      covered.push(detection.id);
     }
   }
 
-  return [...byId.values()].toSorted(
-    (left, right) => (left.page ?? 0) - (right.page ?? 0) || left.start - right.start,
-  );
+  return { covered };
 };
 
 const keptSpans = (detections: Array<Detection>, decisions: Decisions, page?: number) => {
-  const dismissed = new Set(decisions.dismissed);
-  const chosen = new Set(decisions.kept);
+  const covered = new Set(decisions.covered);
   const kept: Array<Span> = [];
 
   for (const detection of detections) {
-    if (detection.page !== page || dismissed.has(detection.id)) {
-      continue;
-    }
-
-    if (detection.suggested && !chosen.has(detection.id)) {
+    if (detection.page !== page || !covered.has(detection.id)) {
       continue;
     }
 
@@ -87,5 +79,4 @@ const keptSpans = (detections: Array<Detection>, decisions: Decisions, page?: nu
   return kept;
 };
 
-export { APPLY_SCORE, dedupeDetections, describeSpans, keptSpans };
-export type { Described };
+export { APPLY_SCORE, dedupeDetections, defaultDecisions, describeSpans, keptSpans };

@@ -1,8 +1,7 @@
 import type { ImageReading, OcrLanguage } from "@repo/ocr";
-import { detectLanguage, legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
+import { assessReading, detectLanguage, readImageText } from "@repo/ocr";
 import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
 import {
-  APPLY_SCORE,
   buildWordIndex,
   dedupeDetections,
   describeSpans,
@@ -34,7 +33,10 @@ const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
 type Page = { spans: Array<Span>; text: string; words: Array<PositionedWord> };
 
-type PdfHandle = { pages: Array<Page> };
+// Only the word geometry crosses into apply. The spans analyse found are deliberately left
+// behind: apply must paint what the reviewer decided (keptSpans), and a pre-decision span list
+// sitting beside that call is an invitation to paint the wrong one.
+type PdfHandle = { pages: Array<{ words: Array<PositionedWord> }> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -88,12 +90,53 @@ const openPdf = async (file: File) => {
 
   const opened = pdfjs.getDocument(documentOptions(new Uint8Array(source)));
 
-  return { pdf: await opened.promise, pdfLib };
+  return { loading: opened, pdf: await opened.promise, pdfLib };
 };
 
-const renderer = (pdf: Awaited<ReturnType<typeof openPdf>>["pdf"]) => async (number: number) => {
+type OpenedPdf = Awaited<ReturnType<typeof openPdf>>;
+
+type PdfDocument = OpenedPdf["pdf"];
+
+type PdfPage = Awaited<ReturnType<PdfDocument["getPage"]>>;
+
+type PdfViewport = ReturnType<PdfPage["getViewport"]>;
+
+/** Owns the parsed document for one pass. Both passes open their own and must release it. */
+const withPdf = async <T>(
+  file: File,
+  work: (pdf: PdfDocument, pdfLib: OpenedPdf["pdfLib"]) => Promise<T>,
+): Promise<T> => {
+  const { loading, pdf, pdfLib } = await openPdf(file);
+
+  try {
+    return await work(pdf, pdfLib);
+  } finally {
+    try {
+      // Destroying the loading task tears down the worker transport and the parsed document.
+      await loading.destroy();
+    } catch {
+      // Releasing the document must not mask whatever the work threw, and a cancelled job
+      // unwinds through here with in-flight render tasks that destroy will reject.
+    }
+  }
+};
+
+/** Fetches a page once, hands out both it and its viewport, and always releases it. */
+const withPage = async <T>(
+  pdf: PdfDocument,
+  number: number,
+  body: (page: PdfPage, viewport: PdfViewport) => Promise<T>,
+): Promise<T> => {
   const page = await pdf.getPage(number);
-  const viewport = page.getViewport({ scale: SCALE });
+
+  try {
+    return await body(page, page.getViewport({ scale: SCALE }));
+  } finally {
+    page.cleanup();
+  }
+};
+
+const render = async (page: PdfPage, viewport: PdfViewport) => {
   const canvas = new OffscreenCanvas(viewport.width, viewport.height);
 
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -106,127 +149,123 @@ const renderer = (pdf: Awaited<ReturnType<typeof openPdf>>["pdf"]) => async (num
     viewport,
   }).promise;
 
-  return { canvas, page, viewport };
+  return canvas;
 };
 
-const isHandle = (value: unknown): value is PdfHandle =>
-  typeof value === "object" && value !== null && Array.isArray(Reflect.get(value, "pages"));
+const hasWords = (page: unknown) =>
+  typeof page === "object" && page !== null && Array.isArray(Reflect.get(page, "words"));
 
-const analysePdf: Redactor["analyse"] = async (file, detect, onProgress, options) => {
-  onProgress(0, "stage.reading");
+const isHandle = (value: unknown): value is PdfHandle => {
+  const pages: unknown =
+    typeof value === "object" && value !== null ? Reflect.get(value, "pages") : undefined;
 
-  const { pdf } = await openPdf(file);
-  const renderPage = renderer(pdf);
-
-  const warnings = new Set<WarningKey>();
-  const pages: Array<Page> = [];
-  const tokens = new Map<string, PiiToken>();
-
-  let language: OcrLanguage | undefined = options?.language;
-  let anyText = false;
-
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
-  for (let number = 1; number <= pdf.numPages; number += 1) {
-    const progress = ((number - 1) / pdf.numPages) * 0.9;
-
-    onProgress(progress, "stage.extracting");
-
-    const page = await pdf.getPage(number);
-    const viewport = page.getViewport({ scale: SCALE });
-    const content = await page.getTextContent();
-    const layerText = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ")
-      .trim();
-
-    if (language === undefined && layerText.split(/\s+/v).length >= MIN_TEXT_WORDS) {
-      const guess = detectLanguage(layerText);
-
-      language = guess.confidence >= MIN_LANGUAGE_CONFIDENCE ? guess.language : undefined;
-    }
-
-    if (layerText.length === 0) {
-      warnings.add("warning.scannedPages");
-    }
-
-    const typed = textLayerWords({ items: content.items, viewport });
-    const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
-
-    let reading: ImageReading;
-
-    if (readable === undefined) {
-      onProgress(progress, "stage.rendering");
-
-      const { canvas } = await renderPage(number);
-
-      onProgress(progress, "stage.recognising");
-
-      reading = await readImageText(canvas, language === undefined ? {} : { known: language });
-      language ??= reading.language;
-
-      if (muchWasUnreadable(reading)) {
-        warnings.add("warning.lowConfidence");
-      }
-    } else {
-      reading = {
-        confidence: 100,
-        language: language ?? "en",
-        words: readable.map((word) => ({ bbox: word.bbox, confidence: 100, text: word.text })),
-      };
-    }
-
-    anyText ||= reading.words.length > 0;
-
-    onProgress(progress, "stage.detecting");
-
-    const { text, words } = buildWordIndex(legibleWords(reading));
-    const spans = await detect(text);
-
-    for (const token of tokensFromSpans(text, spans)) {
-      const key = token.text.toLowerCase();
-      const existing = tokens.get(key);
-
-      if (existing === undefined || existing.score < token.score) {
-        tokens.set(key, token);
-      }
-    }
-
-    pages.push({ spans, text, words });
-    page.cleanup();
-  }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
-
-  if (!anyText) {
-    warnings.add("warning.noText");
-  }
-
-  const everyToken = [...tokens.values()];
-
-  onProgress(1, "stage.finished");
-
-  return {
-    detections: dedupeDetections(
-      pages.flatMap((page, at) => [
-        ...describeSpans({
-          applyAbove: APPLY_SCORE,
-          page: at,
-          source: "model",
-          spans: page.spans,
-          text: page.text,
-        }),
-        ...describeSpans({
-          applyAbove: APPLY_SCORE,
-          page: at,
-          source: "repeat",
-          spans: spansForTokens(page.text, everyToken),
-          text: page.text,
-        }),
-      ]),
-    ),
-    handle: { pages } satisfies PdfHandle,
-    warnings: [...warnings],
-  };
+  return Array.isArray(pages) && pages.every((page: unknown) => hasWords(page));
 };
+
+const analysePdf: Redactor["analyse"] = (file, detect, onProgress, options) =>
+  withPdf(file, async (pdf) => {
+    onProgress(0, "stage.reading");
+
+    const warnings = new Set<WarningKey>();
+    const pages: Array<Page> = [];
+    const tokens = new Map<string, PiiToken>();
+
+    let language: OcrLanguage | undefined = options?.language;
+    let anyText = false;
+
+    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const progress = ((number - 1) / pdf.numPages) * 0.9;
+
+      onProgress(progress, "stage.extracting");
+
+      // The pages are read one at a time, so the language and warnings this body accumulates
+      // cannot be written by two iterations at once.
+      // oxlint-disable-next-line eslint/no-loop-func
+      const built = await withPage(pdf, number, async (proxy, viewport) => {
+        const content = await proxy.getTextContent();
+        const layerText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ")
+          .trim();
+
+        if (language === undefined && layerText.split(/\s+/v).length >= MIN_TEXT_WORDS) {
+          const guess = detectLanguage(layerText);
+
+          language = guess.confidence >= MIN_LANGUAGE_CONFIDENCE ? guess.language : undefined;
+        }
+
+        if (layerText.length === 0) {
+          warnings.add("warning.scannedPages");
+        }
+
+        const typed = textLayerWords({ items: content.items, viewport });
+        const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
+
+        let reading: ImageReading;
+
+        if (readable === undefined) {
+          onProgress(progress, "stage.rendering");
+
+          const canvas = await render(proxy, viewport);
+
+          onProgress(progress, "stage.recognising");
+
+          reading = await readImageText(canvas, language === undefined ? {} : { known: language });
+          language ??= reading.language;
+
+          if (assessReading(reading).unreadable) {
+            warnings.add("warning.lowConfidence");
+          }
+        } else {
+          reading = {
+            confidence: 100,
+            language: language ?? "en",
+            words: readable.map((word) => ({ bbox: word.bbox, confidence: 100, text: word.text })),
+          };
+        }
+
+        anyText ||= reading.words.length > 0;
+
+        onProgress(progress, "stage.detecting");
+
+        const { text, words } = buildWordIndex(assessReading(reading).legible);
+        const spans = await detect(text);
+
+        for (const token of tokensFromSpans(text, spans)) {
+          const key = token.text.toLowerCase();
+          const existing = tokens.get(key);
+
+          if (existing === undefined || existing.score < token.score) {
+            tokens.set(key, token);
+          }
+        }
+
+        return { spans, text, words };
+      });
+
+      pages.push(built);
+    }
+    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+
+    if (!anyText) {
+      warnings.add("warning.noText");
+    }
+
+    const everyToken = [...tokens.values()];
+
+    onProgress(1, "stage.finished");
+
+    return {
+      detections: dedupeDetections(
+        pages.flatMap((page, at) =>
+          describeSpans([...page.spans, ...spansForTokens(page.text, everyToken)], page.text, at),
+        ),
+      ),
+      handle: { pages: pages.map(({ words }) => ({ words })) } satisfies PdfHandle,
+      warnings: [...warnings],
+    };
+  });
 
 const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, onProgress }) => {
   if (!isHandle(analysis.handle)) {
@@ -234,107 +273,113 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
   }
 
   const { pages } = analysis.handle;
-  const { pdf, pdfLib } = await openPdf(file);
-  const renderPage = renderer(pdf);
-  const out = await pdfLib.PDFDocument.create();
-  const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
+  // Awaited rather than returned directly so a bad handle rejects instead of throwing
+  // synchronously at a caller that has not awaited yet.
+  const built = await withPdf(file, async (pdf, pdfLib) => {
+    const out = await pdfLib.PDFDocument.create();
+    const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
 
-  const warnings = new Set<WarningKey>(analysis.warnings);
-  const survived: Array<string> = [];
+    const warnings = new Set<WarningKey>(analysis.warnings);
+    const survived: Array<string> = [];
 
-  let original: Promise<PDFDocument> | undefined;
-  let copying = true;
-  let redactionCount = 0;
+    let original: Promise<PDFDocument> | undefined;
+    let copying = true;
+    let redactionCount = 0;
 
-  const copyPage = async (number: number) => {
-    if (!copying) {
-      return false;
-    }
-
-    try {
-      const from = await (original ??= file
-        .arrayBuffer()
-        .then((bytes) => pdfLib.PDFDocument.load(bytes)));
-      const [copied] = await out.copyPages(from, [number - 1]);
-
-      out.addPage(copied);
-
-      return true;
-    } catch (error) {
-      copying = false;
-
-      // oxlint-disable-next-line eslint/no-console
-      console.warn("Could not copy an untouched page, so it is painted instead", error);
-
-      return false;
-    }
-  };
-
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
-  for (let number = 1; number <= pages.length; number += 1) {
-    const progress = ((number - 1) / pages.length) * 0.9;
-    const page = pages[number - 1];
-
-    onProgress(progress, "stage.redacting");
-
-    const spans = keptSpans(analysis.detections, decisions, number - 1);
-    const rects = spansToRects(spans, page.words);
-    const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
-
-    redactionCount += mergeOverlappingRanges(spans).length;
-    survived.push(...showing.map((word) => word.text));
-
-    if (rects.length === 0 && (await copyPage(number))) {
-      continue;
-    }
-
-    const { canvas, viewport } = await renderPage(number);
-
-    paint(canvas, rects);
-
-    onProgress(progress, "stage.assembling");
-
-    const encoded = await canvas.convertToBlob({ type: "image/png" });
-    const png = await out.embedPng(await encoded.arrayBuffer());
-    const sheet = out.addPage([viewport.width / SCALE, viewport.height / SCALE]);
-
-    sheet.drawImage(png, {
-      height: viewport.height / SCALE,
-      width: viewport.width / SCALE,
-      x: 0,
-      y: 0,
-    });
-
-    for (const word of showing) {
-      try {
-        sheet.drawText(word.text, {
-          font,
-          opacity: 0,
-          size: (word.bbox.y1 - word.bbox.y0) / SCALE,
-          x: word.bbox.x0 / SCALE,
-
-          y: (viewport.height - word.bbox.y1) / SCALE,
-        });
-      } catch {
-        warnings.add("warning.droppedCharacters");
+    const copyPage = async (number: number) => {
+      if (!copying) {
+        return false;
       }
+
+      try {
+        const from = await (original ??= file
+          .arrayBuffer()
+          .then((bytes) => pdfLib.PDFDocument.load(bytes)));
+        const [copied] = await out.copyPages(from, [number - 1]);
+
+        out.addPage(copied);
+
+        return true;
+      } catch (error) {
+        copying = false;
+
+        // oxlint-disable-next-line eslint/no-console
+        console.warn("Could not copy an untouched page, so it is painted instead", error);
+
+        return false;
+      }
+    };
+
+    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+    for (let number = 1; number <= pages.length; number += 1) {
+      const progress = ((number - 1) / pages.length) * 0.9;
+      const page = pages[number - 1];
+
+      onProgress(progress, "stage.redacting");
+
+      const spans = keptSpans(analysis.detections, decisions, number - 1);
+      const rects = spansToRects(spans, page.words);
+      const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
+
+      redactionCount += mergeOverlappingRanges(spans).length;
+      survived.push(...showing.map((word) => word.text));
+
+      if (rects.length === 0 && (await copyPage(number))) {
+        continue;
+      }
+
+      await withPage(pdf, number, async (proxy, viewport) => {
+        const canvas = await render(proxy, viewport);
+
+        paint(canvas, rects);
+
+        onProgress(progress, "stage.assembling");
+
+        const encoded = await canvas.convertToBlob({ type: "image/png" });
+        const png = await out.embedPng(await encoded.arrayBuffer());
+        const sheet = out.addPage([viewport.width / SCALE, viewport.height / SCALE]);
+
+        sheet.drawImage(png, {
+          height: viewport.height / SCALE,
+          width: viewport.width / SCALE,
+          x: 0,
+          y: 0,
+        });
+
+        for (const word of showing) {
+          try {
+            sheet.drawText(word.text, {
+              font,
+              opacity: 0,
+              size: (word.bbox.y1 - word.bbox.y0) / SCALE,
+              x: word.bbox.x0 / SCALE,
+
+              y: (viewport.height - word.bbox.y1) / SCALE,
+            });
+          } catch {
+            warnings.add("warning.droppedCharacters");
+          }
+        }
+      });
     }
-  }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
+    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-  const survivors = await survivingSpans(survived.join(" "), detect);
+    const survivors = await survivingSpans(survived.join(" "), detect);
 
-  if (survivors.length > 0) {
-    warnings.add("warning.notFullyRedacted");
-  }
+    if (survivors.length > 0) {
+      warnings.add("warning.notFullyRedacted");
+    }
 
-  onProgress(1, "stage.finished");
+    onProgress(1, "stage.finished");
 
-  return {
-    blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
-    redactionCount,
-    warnings: [...warnings],
-  };
+    return {
+      blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
+      redactionCount,
+      warnings: [...warnings],
+    };
+  });
+
+  return built;
 };
 
 const pdfRedactor: Redactor = {
