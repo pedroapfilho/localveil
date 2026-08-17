@@ -6,14 +6,10 @@ type LayerItem = { height: number; str: string; transform: Matrix; width: number
 
 type Layer = { items: ReadonlyArray<unknown>; viewport: { transform?: Matrix } };
 
-// A run's box is split between its words by character count, which drifts on a proportional
-// font because an "i" is not an "m". The drift is bounded by roughly one character width, so
-// every box is grown by that much on each side. Over-covering by a character is a wider black
-// rectangle; under-covering by a character leaves the first letter of a name showing.
+// A run's box is split between its words by character count, which drifts by up to about one
+// character width on a proportional font, so every box is grown by that much on each side.
 const BLEED = 1;
 
-// Boxes are spaced by grapheme, matching how redact-text masks, so an emoji or an accented
-// letter takes one slot rather than several.
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 const countGraphemes = (value: string) => [...GRAPHEMES.segment(value)].length;
@@ -42,8 +38,6 @@ const wordsIn = (item: LayerItem, placed: Matrix, pageScale: number): Array<Word
     return [];
   }
 
-  // pdf.js reports width in page units, so it takes the page scale. The composed matrix also
-  // carries the font size, which would count the glyph height twice.
   const height = Math.hypot(placed[2], placed[3]) || item.height * pageScale;
   const per = (item.width * pageScale) / glyphs;
   const baseline = placed[5];
@@ -77,8 +71,6 @@ const wordsIn = (item: LayerItem, placed: Matrix, pageScale: number): Array<Word
 const textLayerWords = ({ items, viewport }: Layer): Array<WordInput> => {
   const { transform } = viewport;
 
-  // Without a page transform there is no way to place a run, so the caller falls back to
-  // recognising the page. Refusing here is safer than guessing at coordinates.
   if (transform === undefined || transform.length < 6) {
     return [];
   }

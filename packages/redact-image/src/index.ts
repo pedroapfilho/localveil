@@ -64,7 +64,6 @@ const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>)
   }
 };
 
-/** Decoded pixels are large and the paths that use them can throw, so the close goes in finally. */
 const withBitmap = async <T>(file: Blob, body: (bitmap: ImageBitmap) => Promise<T>): Promise<T> => {
   const bitmap = await createImageBitmap(file);
 
@@ -97,22 +96,16 @@ const keyOf = (value: string) =>
     .replaceAll(/[^\p{Letter}\p{Number}]/gv, "")
     .toLowerCase();
 
-// An image is one page read more than once, so the same value comes back at different offsets
-// from each reading. Keying a detection by the value it covers, rather than by which reading
-// found it, is what lets one decision govern every copy of it.
 const idFor = (label: string, value: string) => `${label}:${keyOf(value)}`;
 
 const valueDetections = (readings: Array<Reading>): Array<Detection> => {
   const byId = new Map<string, Detection>();
 
   for (const reading of readings) {
-    // describeSpans hands back fresh objects, so the id is rewritten in place.
     for (const detection of describeSpans(reading.spans, reading.text)) {
       const id = idFor(detection.label, reading.text.slice(detection.start, detection.end));
       const existing = byId.get(id);
 
-      // Two readings put the same value at different offsets, so the id is the only identity
-      // there is; whichever copy the model was surest of stands for both.
       if (existing === undefined || existing.confidence < detection.confidence) {
         byId.set(id, Object.assign(detection, { id }));
       }
@@ -167,8 +160,6 @@ const imageRedactor: Redactor = {
     const readings = [first];
 
     if (shouldRetryOcr(first)) {
-      // Only the retry needs the pixels, and decoding a phone photo costs tens of megabytes,
-      // so the common legible path never pays for it.
       readings.push(
         await withBitmap(file, (bitmap) => readImageText(binarizeForOcr(bitmap), known)),
       );

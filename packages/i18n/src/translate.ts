@@ -1,13 +1,8 @@
 type TranslationValues = Record<string, number | string>;
 
-/** The `{name}` placeholders a message carries, read off the message text itself. */
 type PlaceholdersIn<Message extends string> =
   Message extends `${string}{${infer Name}}${infer Rest}` ? Name | PlaceholdersIn<Rest> : never;
 
-/**
- * The values a message needs, and only those. A message with no placeholders takes no second
- * argument at all, so forgetting one stops being a throw at render time.
- */
 type ValuesFor<Message extends string> = [PlaceholdersIn<Message>] extends [never]
   ? Record<string, never>
   : Record<PlaceholdersIn<Message>, number | string>;

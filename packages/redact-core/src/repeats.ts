@@ -20,9 +20,6 @@ const tokensFromSpans = (text: string, spans: Array<Span>): Array<PiiToken> => {
         continue;
       }
 
-      // A token can sit in both a certain span and a low-score suggestion. The repeats it
-      // seeds inherit this score, and a suggestion-scored repeat is not covered by default,
-      // so letting the lower score win would silently uncover mentions of a confirmed span.
       const key = token.toLowerCase();
       const existing = byText.get(key);
 

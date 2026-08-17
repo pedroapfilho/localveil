@@ -280,7 +280,6 @@ describe("shouting text", () => {
     const detect = await createDetector();
     const [span] = await detect("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
 
-    // The span may not swallow "quantity 4", which sits between the two shouted lines.
     expect(span).toEqual({ end: 14, label: "private_person", score: 1, start: 0 });
   });
 

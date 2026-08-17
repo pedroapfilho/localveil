@@ -6,7 +6,6 @@ const MODEL_HOST = "huggingface.co";
 type PurgeOptions = {
   keepFiles: Array<string>;
   revision: string;
-  /** The chunk store to sweep as well, so a half-finished old download is not left behind. */
   store?: ChunkStore;
 };
 
@@ -41,11 +40,6 @@ const purgeCache = async (options: PurgeOptions) => {
   await Promise.allSettled(stale.map((request) => cache.delete(request)));
 };
 
-/**
- * Model bytes live in two places: finished files in the Cache, partial downloads in IndexedDB.
- * Both are swept against the same staleness rule, or a superseded revision's abandoned partial
- * download, which is the larger of the two, would sit there forever.
- */
 const purgeStaleModels = async (options: PurgeOptions): Promise<void> => {
   const sweeps: Array<Promise<void>> = [];
 

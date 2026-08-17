@@ -24,18 +24,12 @@ const SCALE = 2;
 
 const MIN_TEXT_WORDS = 4;
 
-// A page whose own text layer carries at least this many words is read from that layer instead
-// of being recognised. Recognition is the dominant cost of a PDF and it is pure loss on a page
-// that was typed rather than scanned: it re-derives, worse, text the file already holds.
 const MIN_LAYER_WORDS = 12;
 
 const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
 type Page = { spans: Array<Span>; text: string; words: Array<PositionedWord> };
 
-// Only the word geometry crosses into apply. The spans analyse found are deliberately left
-// behind: apply must paint what the reviewer decided (keptSpans), and a pre-decision span list
-// sitting beside that call is an invitation to paint the wrong one.
 type PdfHandle = { pages: Array<{ words: Array<PositionedWord> }> };
 
 let parserInstalled: Promise<void> | undefined;
@@ -101,7 +95,6 @@ type PdfPage = Awaited<ReturnType<PdfDocument["getPage"]>>;
 
 type PdfViewport = ReturnType<PdfPage["getViewport"]>;
 
-/** Owns the parsed document for one pass. Both passes open their own and must release it. */
 const withPdf = async <T>(
   file: File,
   work: (pdf: PdfDocument, pdfLib: OpenedPdf["pdfLib"]) => Promise<T>,
@@ -112,16 +105,14 @@ const withPdf = async <T>(
     return await work(pdf, pdfLib);
   } finally {
     try {
-      // Destroying the loading task tears down the worker transport and the parsed document.
       await loading.destroy();
     } catch {
-      // Releasing the document must not mask whatever the work threw, and a cancelled job
-      // unwinds through here with in-flight render tasks that destroy will reject.
+      // A cancelled job unwinds through here with renders in flight, which destroy rejects.
+      // Releasing must not mask whatever the work threw.
     }
   }
 };
 
-/** Fetches a page once, hands out both it and its viewport, and always releases it. */
 const withPage = async <T>(
   pdf: PdfDocument,
   number: number,
@@ -179,8 +170,6 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress, options) =>
 
       onProgress(progress, "stage.extracting");
 
-      // The pages are read one at a time, so the language and warnings this body accumulates
-      // cannot be written by two iterations at once.
       // oxlint-disable-next-line eslint/no-loop-func
       const built = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
@@ -273,8 +262,6 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
   }
 
   const { pages } = analysis.handle;
-  // Awaited rather than returned directly so a bad handle rejects instead of throwing
-  // synchronously at a caller that has not awaited yet.
   const built = await withPdf(file, async (pdf, pdfLib) => {
     const out = await pdfLib.PDFDocument.create();
     const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);

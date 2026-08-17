@@ -64,7 +64,6 @@ type Analysis = {
   warnings: Array<WarningKey>;
 };
 
-/** The ids that will be painted. Anything not named here is left showing. */
 type Decisions = { covered: ReadonlyArray<string> };
 
 type ApplyRequest = {

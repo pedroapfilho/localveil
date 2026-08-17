@@ -1,14 +1,8 @@
-/**
- * The conditions the stored chunks are valid under. `chunkSize` belongs here because offsets
- * banked at one size are not resumable at another: they would pass an alignment check and then
- * assemble into overlapping bytes.
- */
 type Manifest = { chunkSize: number; etag: string; total: number };
 
 type ChunkStore = {
   append: (url: string, start: number, bytes: ArrayBuffer) => Promise<void>;
   clear: (url: string) => Promise<void>;
-  /** Every url the store is holding chunks for, so a sweep can reach the ones nobody asks for. */
   listUrls: () => Promise<Array<string>>;
   readManifest: (url: string) => Promise<Manifest | undefined>;
   readOffsets: (url: string) => Promise<Array<number>>;

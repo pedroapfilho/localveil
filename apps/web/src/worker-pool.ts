@@ -43,9 +43,6 @@ type PooledTask = {
   settle: (onDone: (value: unknown) => void, onFail: (error: unknown) => void) => void;
 };
 
-// The presence of the watchdog is the phase: it is armed the moment the worker first speaks, so
-// an absent one means the job is still queued behind the model. A separate `started` flag said
-// the same thing in a second place that nothing kept in step.
 type LiveJob = {
   channel: string;
   id: string;
@@ -114,8 +111,6 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     }, SILENCE_LIMIT);
   };
 
-  // Identity is the record, not the id. A resubmit under the same id replaces the entry, and
-  // keying teardown on the id alone would let the replaced job's watchdog fail its successor.
   const release = (job: LiveJob | undefined) => {
     if (job === undefined || jobs.get(job.id) !== job) {
       return undefined;

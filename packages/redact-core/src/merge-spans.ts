@@ -9,15 +9,6 @@ const widestFirst = (left: Range, right: Range) => left.start - right.start || r
 const encloses = (outer: Range, inner: Range) =>
   outer.start <= inner.start && outer.end >= inner.end;
 
-/**
- * Keeps the widest item of each group and folds anything nested inside it away, carrying the
- * best score of the pair forward. Exact duplicates are the degenerate case of nesting, so this
- * subsumes keying on the range. Partial overlaps are left alone: two account numbers under one
- * loose span are two findings, and only the apply step unions them into one painted range.
- *
- * Sorting widest first means the running container of a group is always the last one kept, so a
- * single pass suffices.
- */
 const absorbNested = <T extends Range>(
   items: ReadonlyArray<T>,
   groupOf: (item: T) => string,

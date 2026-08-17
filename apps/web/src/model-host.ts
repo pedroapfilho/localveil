@@ -10,14 +10,11 @@ type ModelHostOptions = {
 };
 
 type ModelHost = {
-  /** False once the model is gone for good, so the caller can fail the job now rather than wait. */
   connect: (channel: string, port: MessagePort) => boolean;
   destroy: () => void;
   disconnect: (channel: string) => void;
 };
 
-// Past MAX_RESPAWNS, and after destroy, there is no worker to talk to. Without a state for that,
-// `current` kept pointing at a terminated worker and connect went on posting into it.
 type HostState =
   | { kind: "gone" }
   | { kind: "live"; listeners: AbortController; respawns: number; worker: Worker };

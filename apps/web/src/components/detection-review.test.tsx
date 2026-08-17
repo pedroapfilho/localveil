@@ -16,7 +16,6 @@ const detection = (patch: Partial<Detection> = {}): Detection => ({
   ...patch,
 });
 
-// Review opens with everything certain already covered, which is what the app seeds it with.
 const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) => {
   const onApply = vi.fn<() => void>();
   const onCoveredChange = vi.fn<(next: ReadonlyArray<string>) => void>();

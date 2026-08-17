@@ -1,9 +1,7 @@
 import { absorbNested } from "./merge-spans.ts";
 import type { Decisions, Detection, Span } from "./types.ts";
 
-// Spans at or above this are covered unless somebody dismisses them; spans below it are
-// offered as suggestions and covered only if somebody ticks them. Swept in packages/eval:
-// see BASELINE.md for what each floor costs.
+// Swept in packages/eval; BASELINE.md records what each floor costs.
 const APPLY_SCORE = 0.65;
 
 const PREVIEW_GRAPHEMES = 80;
@@ -46,7 +44,6 @@ const dedupeDetections = (detections: Array<Detection>): Array<Detection> =>
     (detection, confidence) => ({ ...detection, confidence }),
   ).toSorted((left, right) => (left.page ?? 0) - (right.page ?? 0) || left.start - right.start);
 
-/** What gets painted when nobody reviews: everything the model was sure enough about. */
 const defaultDecisions = (detections: ReadonlyArray<Detection>): Decisions => {
   const covered: Array<string> = [];
 

@@ -33,12 +33,6 @@ const collectShouting = (text: string): Shouting => {
   return { segments, text: lines.join("\n") };
 };
 
-/**
- * Puts the words of a recased block back where they came from, once, at the point they are read.
- * The shift each segment carries is known per word here, so nothing downstream has to re-derive
- * it per span. `line` is the segment the word came from, which is what keeps a decoded span from
- * running across the newline joining two lines that are not adjacent in the source.
- */
 const positionShouted = (
   words: Array<SourceWord>,
   segments: Array<Segment>,

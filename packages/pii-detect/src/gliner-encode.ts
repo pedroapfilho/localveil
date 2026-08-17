@@ -2,21 +2,12 @@ type EncodeWord = (word: string) => Array<number>;
 
 type TokenFrame = { cls: number; sep: number };
 
-/**
- * A word with the character range it came from, already absolute. `line` is set only for words
- * recovered from a shouted block, where a decoded span must not run across the join between two
- * lines that are not adjacent in the source.
- */
 type SpanWord = { end: number; line?: number; start: number; text: string };
 
 type GlinerInput = {
   attentionMask: Array<number>;
   inputIds: Array<number>;
 
-  /**
-   * The words the tokenizer could voice, in order, carrying their own positions. The decoder
-   * indexes into this, so there is no second array to keep in step with it.
-   */
   keptWords: Array<SpanWord>;
   spanIdx: Array<number>;
   spanMask: Array<number>;

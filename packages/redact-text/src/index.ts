@@ -23,9 +23,8 @@ const extensionOf = (name: string) => {
 
 const hasTextExtension = (name: string) => TEXT_EXTENSIONS.has(extensionOf(name));
 
-// A CSV header is never redacted: the column names are what the structural layer reads, and
-// covering them would destroy the file's shape for no privacy gain. The verify pass has to skip
-// it, or a column called email is reported as a surviving email on every structured file.
+// A CSV header is never redacted, so the verify pass must skip it or a column called email is
+// reported as a surviving email on every structured file.
 const verifiable = (name: string, text: string) => {
   if (extensionOf(name) !== ".csv") {
     return text;
@@ -46,9 +45,6 @@ const structuralSpans = (name: string, text: string) => {
   return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
-// The offsets in the analysis index this exact string. Re-reading the File would substitute a
-// different one, and a same-length edit would then cover the wrong bytes while leaving the real
-// ones showing, so a missing snapshot has to fail rather than fall back.
 const analysedText = (handle: unknown): string => {
   if (typeof handle !== "string") {
     throw new TypeError("The text analysis carried no source text to mask");

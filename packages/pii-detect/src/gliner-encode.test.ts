@@ -4,7 +4,6 @@ import { encodeGlinerInput } from "./gliner-encode.ts";
 
 const FRAME = { cls: 1, sep: 2 };
 
-// The encoder positions the words it keeps, so the fixtures carry offsets rather than bare text.
 const at = (...texts: Array<string>) => {
   let start = 0;
 

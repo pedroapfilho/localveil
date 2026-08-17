@@ -6,16 +6,13 @@ type Selection = {
 };
 
 declare global {
-  // Window declarations require an interface so this experimental API can merge with lib.dom.
   // oxlint-disable-next-line typescript/consistent-type-definitions
   interface Window {
     showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
   }
 }
 
-// A folder of scans is easy to choose and expensive to redact, and every file becomes a job the
-// pool holds until it is downloaded. Past this many the browser is likelier to run out of memory
-// than the user is to have meant it.
+// Past this many the browser is likelier to run out of memory than the user is to have meant it.
 const MOST_FILES = 200;
 
 const cleanPath = (parts: Array<string>) => {
@@ -64,8 +61,6 @@ const fileOf = (entry: FileSystemFileEntry) =>
     });
   });
 
-// readEntries hands back a page at a time and signals the end with an empty page. Yielding those
-// pages instead of collecting them all lets the walk stop at its file cap even for a huge folder.
 const childrenOf = async function* (entry: FileSystemDirectoryEntry) {
   const reader = entry.createReader();
 
@@ -81,11 +76,6 @@ const childrenOf = async function* (entry: FileSystemDirectoryEntry) {
   /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
 };
 
-/**
- * Walks one tree of files, whichever API exposes it, and stops as soon as the cap is passed. The
- * two directory APIs differ only in how children are listed and how a file is opened, so that is
- * all each one supplies.
- */
 type Tree<Node> = {
   childrenOf: (node: Node) => AsyncIterable<Node> | Iterable<Node>;
   fileOf: (node: Node) => Promise<File | undefined>;
@@ -152,10 +142,7 @@ const asEntry = (item: DataTransferItem): FileSystemEntry | undefined => {
   return typeof get === "function" ? (get.call(item) ?? undefined) : undefined;
 };
 
-/** Reads what was dropped, walking into folders where the browser exposes directory entries. */
 const droppedFiles = async (transfer: DataTransfer): Promise<Selection> => {
-  // These entries have to be captured synchronously, before the drop event is recycled. The walk
-  // can then continue asynchronously. Browsers without the entry API keep the flat file behavior.
   const entries = [...transfer.items].flatMap((item) => {
     const entry = item.kind === "file" ? asEntry(item) : undefined;
 
@@ -183,7 +170,6 @@ const droppedFiles = async (transfer: DataTransfer): Promise<Selection> => {
   return capped(found);
 };
 
-/** Opens the modern directory picker, or returns undefined so the caller can use an input. */
 const pickedDirectoryFiles = async (): Promise<Selection | undefined> => {
   const picker = window.showDirectoryPicker;
 

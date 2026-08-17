@@ -5,7 +5,6 @@ type JobStatus = "done" | "error" | "queued" | "reviewing" | "running";
 
 type JobResult = { blob: Blob; redactionCount: number; warnings: Array<WarningKey> };
 
-/** What the job is, independent of how far it has got. Requeueing keeps exactly this. */
 type JobSource = {
   file: File;
   id: string;
@@ -13,10 +12,6 @@ type JobSource = {
   path?: string;
 };
 
-/**
- * Each status carries the fields that status has and no others, so a finished job with no result,
- * or a queued job still holding the previous run's error, cannot be built at all.
- */
 type JobState =
   | { analysis: Analysis; covered: ReadonlyArray<string>; progress: number; status: "reviewing" }
   | { error: string; status: "error" }
@@ -89,8 +84,6 @@ const useJobStore = create<JobStore>((set) => {
             return job;
           }
 
-          // Passing no language means auto-detect, so it replaces the old one rather than
-          // falling back to it.
           const next: Job = { ...justTheSource(job), language, status: "queued" };
 
           queued.push(next);

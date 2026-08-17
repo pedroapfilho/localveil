@@ -6,16 +6,6 @@ const encloses = (outer: Span, inner: Span) => outer.start <= inner.start && out
 
 const digitsIn = (value: string) => /\d/v.test(value);
 
-/**
- * A span whose check digits agree knows where it starts and ends; a span the model guessed at
- * does not. Where the model's span swallows a verified one, the extra text is almost always the
- * label a document prints beside the number, and the README is explicit that the label should
- * stay readable: a licence keeps the word RG next to the blacked-out number.
- *
- * The model's span is only dropped when everything it adds is free of digits, so no part of a
- * number can be lost to this. "CNPJ 45.448.325/0001-70" narrows to the number; two account
- * numbers under one loose span keep the loose span.
- */
 const tightenToVerified = (spans: Array<Span>, text: string): Array<Span> => {
   const verified = spans.filter((span) => span.score === VERIFIED);
 

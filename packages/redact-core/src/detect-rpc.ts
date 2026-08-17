@@ -23,11 +23,6 @@ const isDetectResponse = (value: unknown): value is DetectResponse =>
   "type" in value &&
   (value.type === "spans" || value.type === "detect-error");
 
-/**
- * One inference at a time, in call order. The chain is the queue: each call starts only once the
- * previous has settled, and the tail swallows rejections so a failed detection cannot poison the
- * calls behind it. The caller still sees the real rejection, because that is the promise returned.
- */
 const serialiseDetect = (detect: Detect): Detect => {
   let tail: Promise<unknown> = Promise.resolve();
 
@@ -36,7 +31,6 @@ const serialiseDetect = (detect: Detect): Detect => {
        here would need an externally settled promise per call, which is what this replaced. */
     const spans = tail.then(() => detect(text));
 
-    // The tail swallows the failure so the next call still runs; the caller keeps the real one.
     // oxlint-disable-next-line promise/prefer-await-to-then
     tail = spans.catch(() => {});
 
@@ -110,8 +104,6 @@ const createDetectClient = (port: EventPort): Detect => {
     waiting.reject(new Error(response.message));
   });
 
-  // Terminal: a closed port cannot reopen. Without this, a request issued after the close would
-  // join `pending`, never be answered, and park the job until the pool's watchdog gave up.
   let closed = false;
 
   port.addEventListener("close", () => {

@@ -16,8 +16,6 @@ const HELP = "up/down move  space pick  enter open folder or confirm  esc quit";
 
 const NO_SELECTION: ReadonlyArray<string> = [];
 
-// Reading, read, or failed: three states, not two nullable fields whose fourth combination
-// would render "Reading the folder…" and the error at the same time.
 type Listing = { directory: string } & (
   | { entries: Array<DirectoryEntry>; status: "ready" }
   | { reason: string; status: "failed" }

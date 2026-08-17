@@ -14,19 +14,11 @@ const assertInside = (range: Range, length: number) => {
   }
 };
 
-// One block per grapheme, so an emoji or an accented letter takes one box rather than two. A line
-// break inside a covered run survives: without it a span running off the end of a line would weld
-// two rows of a log or a CSV together.
 const blocksFor = (covered: string) =>
   [...GRAPHEMES.segment(covered)]
     .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
     .join("");
 
-/**
- * Takes the merged, sorted, non-overlapping ranges the caller already computed. Every index is
- * read against the original text in one forward pass, so a run that collapses to fewer graphemes
- * cannot shift the ranges behind it.
- */
 const maskRanges = (text: string, ranges: ReadonlyArray<Range>): string => {
   const parts: Array<string> = [];
   let cursor = 0;

@@ -36,22 +36,13 @@ const MAX_WIDTH = 12;
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
 
-// Batching pays on a GPU and costs on a CPU, so the size follows the device.
-//
-// onnxruntime-node already spreads one inference across every core, and batching only adds
-// padded work: measured on the eval corpus, darwin arm64, 2030 ms at 1, 2913 ms at 2 and
-// 3151 ms at 4. WebGPU is the opposite case, because tiny submissions leave it idle between
-// dispatches: measured in Chrome over 8280 characters, about 3200 ms at 1 against 2920 ms at
-// 4, with 8 no better than 4. Spans are identical either way.
 const CPU_BATCH = 1;
 const GPU_BATCH = 4;
 
+// Measured on the eval corpus: onnxruntime-node 2030 ms at batch 1 against 3151 ms at 4;
+// WebGPU in Chrome 3200 ms at 1 against 2920 ms at 4. Spans are identical either way.
 const BATCH_TOKENS = 4096;
 
-// Detection returns everything down to here. What actually gets covered is decided later, by
-// APPLY_SCORE in @repo/redact-core: at or above it a span is covered unless dismissed, below it
-// the span is offered as a suggestion and covered only if somebody ticks it. Reading this far
-// down is only affordable because nothing under the apply floor reaches a file on its own.
 const MIN_SCORE = 0.15;
 
 type DetectorOptions = {
@@ -112,8 +103,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     onProgress?.(fraction, stage);
   };
 
-  // One store instance, so the download and the later sweep of superseded revisions agree on
-  // what is in there.
   const chunks = createIndexedDbChunkStore();
   const cache = resumableCache ? installResumableCache(report, chunks) : undefined;
   const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, { revision: MODEL_REVISION });
@@ -210,8 +199,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
       const first = keptWords[candidate.start];
       let last = keptWords[candidate.end];
 
-      // A recased block is several source lines joined by a newline, so a span the model runs
-      // across that join has to stop at the end of the line it started on.
       for (let at = candidate.end; at > candidate.start && last.line !== first.line; at -= 1) {
         last = keptWords[at - 1];
       }
@@ -225,8 +212,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     });
   };
 
-  // Every job speaks in absolute source offsets, whether it came from the chunk itself or from
-  // its recased lines, so nothing downstream has to shift anything back.
   const jobsFor = (text: string): Array<GlinerInput> => {
     const jobs: Array<GlinerInput> = [];
 

@@ -34,8 +34,6 @@ const writeReviewPreference = (on: boolean) => {
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
-// `null` used to mean idle, ready and lost all at once, which is why a model lost after it had
-// already loaded rejected nothing and told the user nothing.
 type ModelState =
   | { deferred: Deferred; kind: "loading" }
   | { kind: "idle" }
@@ -160,8 +158,6 @@ const useRedaction = () => {
           return;
         }
 
-        // The model can be lost after it has already loaded, and there is no toast in flight to
-        // carry the message then; without this the only sign is whatever job fails next.
         toast.error(reason);
       },
 

@@ -348,7 +348,6 @@ describe("downloadResumable", () => {
     const body = bodyOf(10);
     const { manifests, store } = memoryStore();
 
-    // Chunks that pass every resume check and still assemble short.
     await store.append(URL_UNDER_TEST, 0, body.slice(0, 4).buffer);
     await store.append(URL_UNDER_TEST, 4, body.slice(4, 8).buffer);
     await store.append(URL_UNDER_TEST, 8, new Uint8Array([]).buffer);

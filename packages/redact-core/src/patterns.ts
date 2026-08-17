@@ -97,9 +97,8 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
-// Spain's DNI and NIE carry a check letter over the number modulo 23, so they can be verified
-// rather than guessed at, like a CPF or an IBAN. A NIE swaps its leading X, Y or Z for 0, 1
-// or 2 before the arithmetic.
+// Spain's DNI and NIE check letter is the number modulo 23; a NIE maps its leading X, Y or Z
+// to 0, 1 or 2 first.
 const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
 
 const isSpanishId = (value: string) => {
@@ -118,14 +117,11 @@ const isSpanishId = (value: string) => {
 
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
-// A reference like 2024-0817 has the shape of a NANP number and is not one. Rejecting a
-// year-like first group keeps 555-0181 while dropping an invoice or order number, which the
-// eval corpus pins as the pattern layer's one false positive.
+// The eval corpus pins order numbers like 2024-0817 as the pattern layer's one false positive.
 const startsWithAYear = (value: string) => /^(?:19|20)\d{2}[\s\-]/v.test(value);
 
-// Month names in the three languages the app reads, with and without the accent on março,
-// because OCR drops accents often enough that requiring one loses real dates. A written date is
-// matched whole: the model tends to cover only the year, which leaves "2 April" readable.
+// Accented and unaccented spellings both, because OCR drops accents often enough that
+// requiring one loses real dates.
 const MONTHS =
   "january|february|march|april|may|june|july|august|september|october|november|december|" +
   "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|" +
@@ -207,8 +203,6 @@ const patternSpans = (text: string): Array<Span> => {
 
   for (const { label, matcher, verify } of PATTERNS) {
     for (const match of text.matchAll(matcher)) {
-      // A matcher that names a `value` group scopes the span to it, so the label a document
-      // prints beside a number ("RG", "CEP") stays readable. The `d` flag is what exposes it.
       const [start, end] = match.indices?.groups?.value ?? [
         match.index,
         match.index + match[0].length,

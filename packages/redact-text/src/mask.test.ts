@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import { maskRanges } from "./mask.ts";
 
-// The redactor merges before masking; these cases are written in spans, so merge here too.
 const maskSpans = (text: string, spans: Array<Span>) =>
   maskRanges(text, mergeOverlappingRanges(spans));
 

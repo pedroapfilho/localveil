@@ -45,8 +45,6 @@ type RunProgress = {
   stage: FileStageKey;
 };
 
-// One record per file, so a name can carry a reason or an output but never both, and the
-// aggregates below are derived rather than accumulated in four arrays that must stay in step.
 type FileOutcome =
   | { blob: Blob; kind: "done"; name: string; redactionCount: number; warnings: Array<WarningKey> }
   | { kind: "failed"; name: string; reason: string };
@@ -179,8 +177,6 @@ const runRedaction = async ({
 
   for (const outcome of outcomes) {
     if (outcome.kind === "failed") {
-      // A cancelled run reports no failures: every outstanding task rejects because the pool was
-      // torn down, and naming those would blame the files for the user's own Ctrl-C.
       if (!cancelled) {
         failures.push({ name: outcome.name, reason: outcome.reason });
       }
