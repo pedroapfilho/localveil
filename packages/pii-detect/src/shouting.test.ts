@@ -1,14 +1,7 @@
-import type { Span } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { collectShouting, titleCased, toSourceSpans } from "./shouting.ts";
-
-const span = (start: number, end: number): Span => ({
-  end,
-  label: "private_person",
-  score: 0.9,
-  start,
-});
+import { collectShouting, positionShouted, titleCased } from "./shouting.ts";
+import { splitWords } from "./split-words.ts";
 
 describe("titleCased", () => {
   it("lowers every letter of a shouted word but the first", () => {
@@ -68,36 +61,46 @@ describe("collectShouting", () => {
   });
 });
 
-describe("toSourceSpans", () => {
-  it("shifts a span onto the line it came from", () => {
-    const { segments, text } = collectShouting("header\nPEDRO AFONSO\n");
+const position = (source: string, base = 0) => {
+  const { segments, text } = collectShouting(source);
+
+  return positionShouted(splitWords(text), segments, base);
+};
+
+describe("positionShouted", () => {
+  it("puts a word back on the line it came from", () => {
+    const { text } = collectShouting("header\nPEDRO AFONSO\n");
 
     expect(text).toBe("Pedro Afonso");
-    expect(toSourceSpans([span(0, 12)], segments)).toEqual([span(7, 19)]);
+    expect(position("header\nPEDRO AFONSO\n")).toEqual([
+      { end: 12, line: 0, start: 7, text: "Pedro" },
+      { end: 19, line: 0, start: 13, text: "Afonso" },
+    ]);
   });
 
-  it("shifts spans on the second joined line by that line's own offset", () => {
-    const { segments } = collectShouting("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
+  it("uses each joined line's own offset", () => {
+    const positioned = position("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
 
-    expect(toSourceSpans([span(15, 23)], segments)).toEqual([span(26, 34)]);
+    expect(positioned.at(0)).toEqual({ end: 3, line: 0, start: 0, text: "Rua" });
+    expect(positioned.at(-1)).toEqual({ end: 40, line: 1, start: 35, text: "Souza" });
   });
 
-  it("cuts a span back when the model runs it across the join", () => {
-    const { segments } = collectShouting("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
+  it("marks words from different source lines as different lines", () => {
+    const positioned = position("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
 
-    expect(toSourceSpans([span(0, 20)], segments)).toEqual([span(0, 14)]);
+    expect(new Set(positioned.map((word) => word.line))).toEqual(new Set([0, 1]));
   });
 
-  it("drops a span that starts in no segment at all", () => {
-    expect(toSourceSpans([span(400, 410)], [{ at: 0, end: 12, start: 0 }])).toEqual([]);
+  it("shifts every word by the base offset of its chunk", () => {
+    expect(position("PEDRO AFONSO", 100).at(0)).toEqual({
+      end: 105,
+      line: 0,
+      start: 100,
+      text: "Pedro",
+    });
   });
 
-  it("keeps the label and score the model gave", () => {
-    const mapped = toSourceSpans(
-      [{ end: 5, label: "private_address", score: 0.42, start: 0 }],
-      [{ at: 100, end: 12, start: 0 }],
-    );
-
-    expect(mapped).toEqual([{ end: 105, label: "private_address", score: 0.42, start: 100 }]);
+  it("returns nothing when no line was shouted", () => {
+    expect(position("nothing shouted here")).toEqual([]);
   });
 });

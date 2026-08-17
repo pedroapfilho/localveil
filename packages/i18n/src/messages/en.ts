@@ -91,5 +91,8 @@ type MessageKey = keyof typeof en;
 
 type Messages = Record<MessageKey, string>;
 
+/** The English catalogue with its message text intact, so placeholders can be read off it. */
+type EnglishMessages = typeof en;
+
 export { en };
-export type { MessageKey, Messages };
+export type { EnglishMessages, MessageKey, Messages };

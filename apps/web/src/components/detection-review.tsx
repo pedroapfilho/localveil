@@ -7,7 +7,7 @@ import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { useMemo } from "react";
 
-const LABEL_KEYS: Record<PiiLabel, MessageKey> = {
+const LABEL_KEYS = {
   account_number: "label.account_number",
   private_address: "label.private_address",
   private_date: "label.private_date",
@@ -16,7 +16,7 @@ const LABEL_KEYS: Record<PiiLabel, MessageKey> = {
   private_phone: "label.private_phone",
   private_url: "label.private_url",
   secret: "label.secret",
-};
+} as const satisfies Record<PiiLabel, MessageKey>;
 
 type DetectionReviewProps = {
   covered: ReadonlyArray<string>;

@@ -43,10 +43,12 @@ const isRejected = (outcome: PromiseSettledResult<void>): outcome is PromiseReje
 const chunkStarts = (total: number, chunkSize: number) =>
   Array.from({ length: Math.ceil(total / chunkSize) }, (_entry, index) => index * chunkSize);
 
+// Resuming is only safe when the download is still the same file, fetched the same way. Any
+// mismatch, and the banked chunks are not chunks of what is being asked for now.
 const storedOffsets = async ({ chunkSize, etag, store, total, url }: Resume) => {
   const manifest = await store.readManifest(url);
 
-  if (manifest?.etag === etag) {
+  if (manifest?.etag === etag && manifest.chunkSize === chunkSize && manifest.total === total) {
     const stored = await store.readOffsets(url);
 
     if (stored.every((start) => start % chunkSize === 0 && start < total)) {
@@ -69,7 +71,9 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   let loaded = [...held].reduce((sum, start) => sum + spanOf(start), 0);
   let stopped = false;
 
-  await store.writeManifest(url, { etag, loaded, total });
+  // Written once, before the first chunk lands. It records the terms of the download, not its
+  // progress, and progress is recomputed from the chunks actually banked.
+  await store.writeManifest(url, { chunkSize, etag, total });
 
   onProgress(loaded, total);
 
@@ -93,8 +97,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
     await store.append(url, start, bytes);
 
     loaded += bytes.byteLength;
-
-    await store.writeManifest(url, { etag, loaded, total });
 
     onProgress(loaded, total);
   };
@@ -134,6 +136,10 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   const blob = new Blob(parts);
 
   if (blob.size !== total) {
+    // Clearing first matters: the same chunks would otherwise satisfy every resume check on the
+    // next attempt, leave the queue empty, and assemble to the same wrong size forever.
+    await store.clear(url);
+
     throw new Error(
       `${url} assembled to ${String(blob.size)} bytes but should be ${String(total)}; the stored chunks are corrupt`,
     );

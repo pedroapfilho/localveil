@@ -6,7 +6,7 @@ import type { GlinerInput } from "./gliner-encode.ts";
 const input = (tokens: number): GlinerInput => ({
   attentionMask: Array.from<number>({ length: tokens }).fill(1),
   inputIds: Array.from<number>({ length: tokens }).fill(1),
-  keptWords: [0],
+  keptWords: [{ end: 1, start: 0, text: "a" }],
   spanIdx: [0, 0],
   spanMask: [1],
   wordsMask: Array.from<number>({ length: tokens }).fill(0),

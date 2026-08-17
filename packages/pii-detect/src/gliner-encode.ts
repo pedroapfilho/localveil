@@ -2,11 +2,22 @@ type EncodeWord = (word: string) => Array<number>;
 
 type TokenFrame = { cls: number; sep: number };
 
+/**
+ * A word with the character range it came from, already absolute. `line` is set only for words
+ * recovered from a shouted block, where a decoded span must not run across the join between two
+ * lines that are not adjacent in the source.
+ */
+type SpanWord = { end: number; line?: number; start: number; text: string };
+
 type GlinerInput = {
   attentionMask: Array<number>;
   inputIds: Array<number>;
 
-  keptWords: Array<number>;
+  /**
+   * The words the tokenizer could voice, in order, carrying their own positions. The decoder
+   * indexes into this, so there is no second array to keep in step with it.
+   */
+  keptWords: Array<SpanWord>;
   spanIdx: Array<number>;
   spanMask: Array<number>;
   wordsMask: Array<number>;
@@ -20,7 +31,7 @@ type EncodeOptions = {
   frame: TokenFrame;
   maxWidth: number;
   prompts: Array<string>;
-  words: Array<string>;
+  words: Array<SpanWord>;
 };
 
 const encodeGlinerInput = ({
@@ -49,16 +60,16 @@ const encodeGlinerInput = ({
 
   pushPrompt(SEP_TOKEN);
 
-  const keptWords: Array<number> = [];
+  const keptWords: Array<SpanWord> = [];
 
-  words.forEach((word, index) => {
-    const ids = encodeWord(word);
+  for (const word of words) {
+    const ids = encodeWord(word.text);
 
     if (ids.length === 0) {
-      return;
+      continue;
     }
 
-    keptWords.push(index);
+    keptWords.push(word);
 
     ids.forEach((id, at) => {
       attentionMask.push(1);
@@ -66,7 +77,7 @@ const encodeGlinerInput = ({
 
       wordsMask.push(at === 0 ? keptWords.length : 0);
     });
-  });
+  }
 
   attentionMask.push(1);
   inputIds.push(frame.sep);
@@ -87,4 +98,4 @@ const encodeGlinerInput = ({
 };
 
 export { encodeGlinerInput };
-export type { EncodeOptions, EncodeWord, GlinerInput, TokenFrame };
+export type { EncodeOptions, EncodeWord, GlinerInput, SpanWord, TokenFrame };

@@ -16,11 +16,13 @@ const HELP = "up/down move  space pick  enter open folder or confirm  esc quit";
 
 const NO_SELECTION: ReadonlyArray<string> = [];
 
-type Listing = {
-  directory: string;
-  entries: Array<DirectoryEntry> | null;
-  failure: string | null;
-};
+// Reading, read, or failed: three states, not two nullable fields whose fourth combination
+// would render "Reading the folder…" and the error at the same time.
+type Listing = { directory: string } & (
+  | { entries: Array<DirectoryEntry>; status: "ready" }
+  | { reason: string; status: "failed" }
+  | { status: "reading" }
+);
 
 type Props = {
   initialDirectory: string;
@@ -61,8 +63,7 @@ const FileBrowser = ({
 
   const [listing, setListing] = useState<Listing>(() => ({
     directory: initialDirectory,
-    entries: null,
-    failure: null,
+    status: "reading",
   }));
 
   useEffect(() => {
@@ -73,11 +74,11 @@ const FileBrowser = ({
         const found = await readDirectory(directory);
 
         if (!pending.signal.aborted) {
-          setListing({ directory, entries: found, failure: null });
+          setListing({ directory, entries: found, status: "ready" });
         }
       } catch (error) {
         if (!pending.signal.aborted) {
-          setListing({ directory, entries: [], failure: describeError(error) });
+          setListing({ directory, reason: describeError(error), status: "failed" });
         }
       }
     };
@@ -89,12 +90,12 @@ const FileBrowser = ({
     };
   }, [directory]);
 
-  const current = listing.directory === directory ? listing : null;
+  const current = listing.directory === directory ? listing : { status: "reading" as const };
 
-  const entries = current === null ? null : current.entries;
+  const entries = current.status === "ready" ? current.entries : undefined;
 
   const rows = useMemo(() => {
-    if (entries === null) {
+    if (entries === undefined) {
       return [];
     }
 
@@ -208,11 +209,11 @@ const FileBrowser = ({
       </Box>
 
       <Box flexDirection="column">
-        {entries === null ? <Text>Reading the folder…</Text> : null}
+        {current.status === "reading" ? <Text>Reading the folder…</Text> : null}
 
-        {current === null || current.failure === null ? null : (
-          <Text>{`This folder could not be read: ${current.failure}`}</Text>
-        )}
+        {current.status === "failed" ? (
+          <Text>{`This folder could not be read: ${current.reason}`}</Text>
+        ) : null}
 
         {visible.map((entry, index) => {
           const focused = start + index === row;
@@ -226,7 +227,9 @@ const FileBrowser = ({
           );
         })}
 
-        {entries !== null && rows.length === 0 ? <Text>This folder is empty.</Text> : null}
+        {current.status === "ready" && rows.length === 0 ? (
+          <Text>This folder is empty.</Text>
+        ) : null}
 
         {rows.length > VISIBLE_ROWS ? (
           <Text dimColor>{`Showing ${start + 1}–${start + visible.length} of ${rows.length}`}</Text>

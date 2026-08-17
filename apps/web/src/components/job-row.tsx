@@ -32,13 +32,13 @@ import type { DocumentLanguageChoice } from "./document-language-picker";
 import { asChoice, DocumentLanguagePicker } from "./document-language-picker";
 import { GlossaryText } from "./glossary-text";
 
-const STATUS_KEYS: Record<JobStatus, MessageKey> = {
+const STATUS_KEYS = {
   done: "status.done",
   error: "status.error",
   queued: "status.queued",
   reviewing: "status.reviewing",
   running: "status.running",
-};
+} as const satisfies Record<JobStatus, MessageKey>;
 
 const ATTACHMENT_STATES = {
   done: "done",

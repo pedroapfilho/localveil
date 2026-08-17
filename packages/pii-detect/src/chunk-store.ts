@@ -1,8 +1,15 @@
-type Manifest = { etag: string; loaded: number; total: number };
+/**
+ * The conditions the stored chunks are valid under. `chunkSize` belongs here because offsets
+ * banked at one size are not resumable at another: they would pass an alignment check and then
+ * assemble into overlapping bytes.
+ */
+type Manifest = { chunkSize: number; etag: string; total: number };
 
 type ChunkStore = {
   append: (url: string, start: number, bytes: ArrayBuffer) => Promise<void>;
   clear: (url: string) => Promise<void>;
+  /** Every url the store is holding chunks for, so a sweep can reach the ones nobody asks for. */
+  listUrls: () => Promise<Array<string>>;
   readManifest: (url: string) => Promise<Manifest | undefined>;
   readOffsets: (url: string) => Promise<Array<number>>;
   readParts: (url: string) => Promise<Array<Blob>>;
@@ -66,8 +73,8 @@ const openDatabase = () =>
 const isManifest = (value: unknown): value is Manifest =>
   typeof value === "object" &&
   value !== null &&
+  typeof Reflect.get(value, "chunkSize") === "number" &&
   typeof Reflect.get(value, "etag") === "string" &&
-  typeof Reflect.get(value, "loaded") === "number" &&
   typeof Reflect.get(value, "total") === "number";
 
 const isChunkRecord = (value: unknown): value is ChunkRecord =>
@@ -109,6 +116,13 @@ const createIndexedDbChunkStore = (): ChunkStore => {
       transaction.objectStore(MANIFESTS).delete(url);
 
       await settled(transaction);
+    },
+    listUrls: async () => {
+      const db = await database();
+      const transaction = db.transaction(MANIFESTS, "readonly");
+      const keys: unknown = await promisify(transaction.objectStore(MANIFESTS).getAllKeys());
+
+      return Array.isArray(keys) ? keys.filter((key) => typeof key === "string") : [];
     },
     readManifest: async (url) => {
       const db = await database();

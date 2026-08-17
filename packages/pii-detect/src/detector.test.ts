@@ -270,6 +270,20 @@ describe("shouting text", () => {
     ]);
   });
 
+  it("cuts a span back when the model runs it across the join between two shouted lines", async () => {
+    setup((words) =>
+      words.join(" ") === "Rua Das Flores Ana Lima Souza"
+        ? [{ end: 5, prompt: "person", start: 0 }]
+        : [],
+    );
+
+    const detect = await createDetector();
+    const [span] = await detect("RUA DAS FLORES\nquantity 4\nANA LIMA SOUZA");
+
+    // The span may not swallow "quantity 4", which sits between the two shouted lines.
+    expect(span).toEqual({ end: 14, label: "private_person", score: 1, start: 0 });
+  });
+
   it("keeps what the first pass found as well as what the second did", async () => {
     setup((words) => {
       if (words[0] === "PEDRO") {

@@ -1,3 +1,4 @@
+import type { FileStageKey } from "@repo/redact-core";
 import { Box, Text, useWindowSize } from "ink";
 
 import { describeKey } from "./messages";
@@ -12,7 +13,7 @@ type Props = {
   fileName: string;
   fraction: number;
   modelFraction: number | null;
-  stage: string | null;
+  stage: FileStageKey | null;
   stopping: boolean;
   total: number;
 };

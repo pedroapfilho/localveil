@@ -28,6 +28,7 @@ const memoryStore = (): ChunkStore => {
 
       return Promise.resolve();
     },
+    listUrls: () => Promise.resolve([...manifests.keys()]),
     readManifest: (url) => Promise.resolve(manifests.get(url)),
     readOffsets: (url) =>
       Promise.resolve([...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).keys()]),

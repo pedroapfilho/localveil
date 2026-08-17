@@ -1,4 +1,4 @@
-import type { Detect, RedactOptions } from "@repo/redact-core";
+import type { Detect, FileStageKey, RedactOptions, WarningKey } from "@repo/redact-core";
 import { createRedactorRegistry, redactFile } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
@@ -7,12 +7,12 @@ import { textRedactor } from "@repo/redact-text";
 import { installCanvas } from "./canvas.ts";
 import { readFileAsFile } from "./read-file.ts";
 
-type NodeRedactionProgress = (fraction: number, stage: string) => void;
+type NodeRedactionProgress = (fraction: number, stage: FileStageKey) => void;
 
 type NodeRedactionOutput = {
   bytes: Uint8Array;
   redactionCount: number;
-  warnings: Array<string>;
+  warnings: Array<WarningKey>;
 };
 
 const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
