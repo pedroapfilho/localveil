@@ -1,9 +1,4 @@
-"""Export a GLiNER checkpoint to ONNX and quantize it.
-
-The input names and output shape below are the contract
-`packages/pii-detect/src/gliner-feeds.ts` and `gliner-decode.ts` read, and are asserted
-before anything is written.
-"""
+"""Export a GLiNER checkpoint to ONNX and quantize it."""
 
 import argparse
 import json
@@ -80,10 +75,8 @@ def main() -> None:
     if args.skip_quantize:
         return
 
-    # Per-tensor weight quantization collapsed scores from 0.999 to 0.17 on this graph.
     quantize(fp32, args.out / "model_int8_perchannel.onnx", None)
 
-    # A Gather is a lookup rather than an accumulation, so it tolerates 4 bits where attention does not.
     quantize(fp32, args.out / "model_int8_embeddings.onnx", ["Gather"])
 
 

@@ -23,8 +23,6 @@ const extensionOf = (name: string) => {
 
 const hasTextExtension = (name: string) => TEXT_EXTENSIONS.has(extensionOf(name));
 
-// A CSV header is never redacted, so the verify pass must skip it or a column called email is
-// reported as a surviving email on every structured file.
 const verifiable = (name: string, text: string) => {
   if (extensionOf(name) !== ".csv") {
     return text;

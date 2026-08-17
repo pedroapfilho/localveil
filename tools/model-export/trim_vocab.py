@@ -1,12 +1,4 @@
-"""Trim a GLiNER checkpoint's vocabulary to the scripts localveil reads.
-
-Two thirds of mDeBERTa-v3-base is its 250,105 by 768 embedding matrix, and localveil only
-ever sees eng, por or spa from Tesseract. This prunes rows rather than retokenizing, so every
-surviving piece keeps the embedding it was trained with.
-
-Validated 2026-08-11: trimmed and quantized to 4 bits, the export scores the same F1 with
-identical spans on all 30 corpus documents, at 539 MB against 853.
-"""
+"""Trim a GLiNER checkpoint's vocabulary to the scripts localveil reads."""
 
 import argparse
 import json
@@ -23,8 +15,6 @@ KEPT_RANGES = [
     (0x0300, 0x036F),  # Combining diacritics
     (0x1E00, 0x1EFF),  # Latin Extended Additional
     (0x2000, 0x206F),  # General punctuation
-    # U+2581 is SentencePiece's word-initial marker. Dropping it splits every word-initial
-    # token in two, which cost 5 F1 with no unknown tokens to hint at why.
     (0x2580, 0x259F),  # Block elements
     (0x20A0, 0x20CF),  # Currency symbols
     (0x2100, 0x214F),  # Letterlike symbols
@@ -36,10 +26,6 @@ def is_latin_piece(piece: str) -> bool:
 
 
 def prompt_pieces(tokenizer, prompts: list[str]) -> set[str]:
-    """Every piece the entity prompts tokenize into.
-
-    A prompt piece that falls back to UNK silently stops asking for that entity type.
-    """
     pieces: set[str] = set()
 
     for prompt in prompts:
@@ -123,8 +109,6 @@ def main() -> None:
     rows = embeddings.weight.shape[0]
     width = embeddings.weight.shape[1]
 
-    # GLiNER's added tokens sit past the Unigram vocabulary and are absent from the vocab list,
-    # so they are kept by position rather than by name.
     order = keep + list(range(unigram, rows))
 
     with torch.no_grad():
@@ -139,8 +123,6 @@ def main() -> None:
     encoder.config.vocab_size = len(order)
     model.config.vocab_size = len(order)
 
-    # GLiNER stores the absolute id of <<ENT>> and refuses to load if it points past the
-    # tokenizer, so it is recounted from the trimmed length.
     added = {name: unigram + at for at, name in enumerate(added_names)}
     ent = added.get(spec_ent_token)
 

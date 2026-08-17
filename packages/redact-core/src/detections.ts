@@ -1,7 +1,6 @@
 import { absorbNested } from "./merge-spans.ts";
 import type { Decisions, Detection, Span } from "./types.ts";
 
-// Swept in packages/eval; BASELINE.md records what each floor costs.
 const APPLY_SCORE = 0.65;
 
 const PREVIEW_GRAPHEMES = 80;

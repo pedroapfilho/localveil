@@ -104,12 +104,7 @@ const withPdf = async <T>(
   try {
     return await work(pdf, pdfLib);
   } finally {
-    try {
-      await loading.destroy();
-    } catch {
-      // A cancelled job unwinds through here with renders in flight, which destroy rejects.
-      // Releasing must not mask whatever the work threw.
-    }
+    await loading.destroy().catch(() => undefined);
   }
 };
 

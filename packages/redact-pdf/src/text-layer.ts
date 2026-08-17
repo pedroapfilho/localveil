@@ -6,8 +6,6 @@ type LayerItem = { height: number; str: string; transform: Matrix; width: number
 
 type Layer = { items: ReadonlyArray<unknown>; viewport: { transform?: Matrix } };
 
-// A run's box is split between its words by character count, which drifts by up to about one
-// character width on a proportional font, so every box is grown by that much on each side.
 const BLEED = 1;
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });

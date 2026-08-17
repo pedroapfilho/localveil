@@ -132,8 +132,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   const blob = new Blob(parts);
 
   if (blob.size !== total) {
-    // Clearing first: the same chunks would otherwise satisfy every resume check on the next
-    // attempt, leave the queue empty, and assemble to the same wrong size forever.
     await store.clear(url);
 
     throw new Error(

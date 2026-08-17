@@ -12,7 +12,6 @@ declare global {
   }
 }
 
-// Past this many the browser is likelier to run out of memory than the user is to have meant it.
 const MOST_FILES = 200;
 
 const cleanPath = (parts: Array<string>) => {

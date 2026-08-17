@@ -39,8 +39,6 @@ const OVERLAP_WORDS = 24;
 const CPU_BATCH = 1;
 const GPU_BATCH = 4;
 
-// Measured on the eval corpus: onnxruntime-node 2030 ms at batch 1 against 3151 ms at 4;
-// WebGPU in Chrome 3200 ms at 1 against 2920 ms at 4. Spans are identical either way.
 const BATCH_TOKENS = 4096;
 
 const MIN_SCORE = 0.15;

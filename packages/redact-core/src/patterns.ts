@@ -97,8 +97,6 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
-// Spain's DNI and NIE check letter is the number modulo 23; a NIE maps its leading X, Y or Z
-// to 0, 1 or 2 first.
 const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
 
 const isSpanishId = (value: string) => {
@@ -117,11 +115,8 @@ const isSpanishId = (value: string) => {
 
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
-// The eval corpus pins order numbers like 2024-0817 as the pattern layer's one false positive.
 const startsWithAYear = (value: string) => /^(?:19|20)\d{2}[\s\-]/v.test(value);
 
-// Accented and unaccented spellings both, because OCR drops accents often enough that
-// requiring one loses real dates.
 const MONTHS =
   "january|february|march|april|may|june|july|august|september|october|november|december|" +
   "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|" +
