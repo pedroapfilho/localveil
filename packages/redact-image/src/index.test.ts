@@ -71,6 +71,23 @@ const file = () => new File(["image"], "identity.jpg", { type: "image/jpeg" });
 
 const noSpans: Detect = () => Promise.resolve([]);
 
+const detectEitherSpelling: Detect = (text) => {
+  const start = text.indexOf("108");
+
+  return Promise.resolve(
+    start === -1
+      ? []
+      : [
+          {
+            end: start + (text.includes(".") ? 14 : 11),
+            label: "account_number" as const,
+            score: 1,
+            start,
+          },
+        ],
+  );
+};
+
 const detectCpf: Detect = (text) => {
   const start = text.indexOf("108");
 
@@ -280,6 +297,8 @@ describe("image OCR retry", () => {
     const first = reading("pt", 40, [
       ["CPF", 95],
       ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
     ]);
     const retry = reading("pt", 80, [
       ["CPF", 96],
@@ -298,6 +317,8 @@ describe("image OCR retry", () => {
     const first = reading("pt", 40, [
       ["CPF", 95],
       ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
     ]);
     const retry = reading("pt", 80, [
       ["CPF", 96],
@@ -341,5 +362,46 @@ describe("image OCR retry", () => {
       }),
     ).rejects.toThrow(/no 2d canvas/v);
     expect(bitmap.close).toHaveBeenCalled();
+  });
+
+  it("reports one detection when the readings spell the same value differently", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["CPF", 96],
+      ["10846703645", 94],
+      ["NOME", 93],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectEitherSpelling, onProgress);
+
+    expect(analysis.detections).toHaveLength(1);
+  });
+
+  it("reports one detection when the readings put the same value at different offsets", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["DOCUMENTO", 96],
+      ["NUMERO", 95],
+      ["108.467.036-45", 94],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
+
+    expect(analysis.detections).toHaveLength(1);
+    expect(new Set(analysis.detections.map((entry) => entry.id)).size).toBe(1);
   });
 });

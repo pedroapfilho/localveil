@@ -102,17 +102,25 @@ const keyOf = (value: string) =>
 // found it, is what lets one decision govern every copy of it.
 const idFor = (label: string, value: string) => `${label}:${keyOf(value)}`;
 
-const valueDetections = (readings: Array<Reading>): Array<Detection> =>
-  dedupeDetections(
-    readings.flatMap((reading) =>
-      // describeSpans hands back fresh objects, so the id is rewritten in place.
-      describeSpans(reading.spans, reading.text).map((detection) =>
-        Object.assign(detection, {
-          id: idFor(detection.label, reading.text.slice(detection.start, detection.end)),
-        }),
-      ),
-    ),
-  );
+const valueDetections = (readings: Array<Reading>): Array<Detection> => {
+  const byId = new Map<string, Detection>();
+
+  for (const reading of readings) {
+    // describeSpans hands back fresh objects, so the id is rewritten in place.
+    for (const detection of describeSpans(reading.spans, reading.text)) {
+      const id = idFor(detection.label, reading.text.slice(detection.start, detection.end));
+      const existing = byId.get(id);
+
+      // Two readings put the same value at different offsets, so the id is the only identity
+      // there is; whichever copy the model was surest of stands for both.
+      if (existing === undefined || existing.confidence < detection.confidence) {
+        byId.set(id, Object.assign(detection, { id }));
+      }
+    }
+  }
+
+  return dedupeDetections([...byId.values()]);
+};
 
 const coveredSpans = (reading: Reading, decisions: Decisions) => {
   const covered = new Set(decisions.covered);
