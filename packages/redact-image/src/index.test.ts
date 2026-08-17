@@ -234,6 +234,36 @@ describe("image OCR retry", () => {
     expect(result.redactionCount).toBe(1);
   });
 
+  it("redacts distinct PII at nested offsets across readings", async () => {
+    mocks.readImageText
+      .mockResolvedValueOnce(
+        reading("en", 40, [
+          ["Ana", 95],
+          ["noise", 10],
+        ]),
+      )
+      .mockResolvedValueOnce(
+        reading("en", 80, [
+          ["Jose", 95],
+          ["Silva", 94],
+        ]),
+      );
+
+    const detect = vi.fn<Detect>((text) => {
+      if (text === "Ana") {
+        return Promise.resolve([{ end: 3, label: "private_person", score: 0.9, start: 0 }]);
+      }
+
+      return Promise.resolve(
+        text === "Jose Silva" ? [{ end: 10, label: "private_person", score: 0.9, start: 0 }] : [],
+      );
+    });
+
+    const result = await redact(detect);
+
+    expect(result.redactionCount).toBe(2);
+  });
+
   it("uses an improved Portuguese retry", async () => {
     mocks.readImageText
       .mockResolvedValueOnce(

@@ -84,12 +84,9 @@ const DetectionReview = ({
   };
 
   const dismissGroup = (group: Group) => {
-    const ids = group.detections.map((detection) => detection.id);
-    const everyCovered = ids.every((id) => painting.has(id));
+    const ids = new Set(group.detections.map((detection) => detection.id));
 
-    onCoveredChange(
-      everyCovered ? covered.filter((id) => !ids.includes(id)) : [...new Set([...covered, ...ids])],
-    );
+    onCoveredChange(covered.filter((id) => !ids.has(id)));
   };
 
   const rows: Array<Row> = [];

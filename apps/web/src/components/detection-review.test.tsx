@@ -87,6 +87,21 @@ describe("DetectionReview", () => {
     expect(onCoveredChange).toHaveBeenCalledWith(["c"]);
   });
 
+  it("dismisses the rest of a partially readable group", () => {
+    const { onCoveredChange } = setup(
+      [
+        detection(),
+        detection({ id: "b", preview: "Joao Reis" }),
+        detection({ id: "c", label: "secret", preview: "hunter2" }),
+      ],
+      ["a", "c"],
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Keep all Name readable/v }));
+
+    expect(onCoveredChange).toHaveBeenCalledWith(["c"]);
+  });
+
   it("counts what is still going to be covered", () => {
     setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["a"]);
 

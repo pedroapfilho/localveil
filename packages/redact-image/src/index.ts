@@ -12,7 +12,6 @@ import type {
 } from "@repo/redact-core";
 import {
   buildWordIndex,
-  dedupeDetections,
   describeSpans,
   isCovered,
   mergeOverlappingRanges,
@@ -112,7 +111,7 @@ const valueDetections = (readings: Array<Reading>): Array<Detection> => {
     }
   }
 
-  return dedupeDetections([...byId.values()]);
+  return [...byId.values()];
 };
 
 const coveredSpans = (reading: Reading, decisions: Decisions) => {
