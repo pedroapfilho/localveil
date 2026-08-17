@@ -1,10 +1,8 @@
-"""Export a GLiNER checkpoint to the ONNX graph localveil's runtime expects, and quantize it.
+"""Export a GLiNER checkpoint to ONNX and quantize it.
 
-The runtime contract is fixed by `packages/pii-detect/src/gliner-feeds.ts` and
-`gliner-decode.ts`: six inputs named input_ids, attention_mask, words_mask, text_lengths,
-span_idx and span_mask, and a primary output shaped [batch, positions, widths, entities].
-An export that changes any of those breaks the app, so this script asserts them before it
-writes anything a scoring run could waste time on.
+The input names and output shape below are the contract
+`packages/pii-detect/src/gliner-feeds.ts` and `gliner-decode.ts` read, and are asserted
+before anything is written.
 """
 
 import argparse
@@ -82,14 +80,10 @@ def main() -> None:
     if args.skip_quantize:
         return
 
-    # Every op, but per-channel. quantize_dynamic leaves per_channel off by default, and
-    # per-tensor weight quantization is a documented failure mode on attention-heavy graphs.
-    # DeBERTa's disentangled attention is close to the worst case for it, which is the most
-    # likely explanation for the 0.999 to 0.17 collapse the repo README records.
+    # Per-tensor weight quantization collapsed scores from 0.999 to 0.17 on this graph.
     quantize(fp32, args.out / "model_int8_perchannel.onnx", None)
 
-    # The embedding lookup only. Two thirds of the parameters live there and a Gather is a
-    # lookup rather than an accumulation, so it tolerates quantization where attention does not.
+    # A Gather is a lookup rather than an accumulation, so it tolerates 4 bits where attention does not.
     quantize(fp32, args.out / "model_int8_embeddings.onnx", ["Gather"])
 
 
