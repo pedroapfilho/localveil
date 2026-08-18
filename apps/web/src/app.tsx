@@ -44,8 +44,7 @@ const App = () => {
     remove,
     removeMany,
     reviewing,
-    setDismissed,
-    setKept,
+    setCovered,
     setLanguage,
     setReviewing,
     submit,
@@ -139,8 +138,7 @@ const App = () => {
                   jobs={jobs}
                   onApply={applyDecisions}
                   onClear={clear}
-                  onDismissedChange={setDismissed}
-                  onKeptChange={setKept}
+                  onCoveredChange={setCovered}
                   onLanguage={setLanguage}
                   onRemove={remove}
                   onRemoveMany={removeMany}

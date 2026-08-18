@@ -1,7 +1,11 @@
 import type { Span } from "@repo/redact-core";
+import { mergeOverlappingRanges } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { maskSpans } from "./mask.ts";
+import { maskRanges } from "./mask.ts";
+
+const maskSpans = (text: string, spans: Array<Span>) =>
+  maskRanges(text, mergeOverlappingRanges(spans));
 
 const span = (start: number, end: number): Span => ({
   end,
@@ -55,5 +59,20 @@ describe("maskSpans across lines", () => {
     const text = "a\r\nb";
 
     expect(maskSpans(text, [{ end: 4, label: "secret", score: 0.9, start: 0 }])).toBe("█\r\n█");
+  });
+});
+
+describe("scale", () => {
+  it("masks ten thousand spans over a megabyte without rebuilding the text each time", () => {
+    const row = "name,email\n";
+    const text = row.repeat(10_000);
+    const spans = Array.from({ length: 10_000 }, (_entry, index) =>
+      span(index * row.length, index * row.length + 4),
+    );
+
+    const masked = maskSpans(text, spans);
+
+    expect(masked).toHaveLength(text.length);
+    expect(masked.startsWith("████,email")).toBe(true);
   });
 });

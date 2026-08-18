@@ -102,9 +102,6 @@ const run = async () => {
 
   const floor = process.env.EVAL_MIN_SCORE;
 
-  // The detector's own default reads far below the apply floor to feed the suggestion band.
-  // BASELINE.md scores what gets covered without a reviewer, so the eval floor follows
-  // APPLY_SCORE rather than the detector default.
   const detect = await createDetector({
     minScore: floor === undefined ? APPLY_SCORE : Number(floor),
     onProgress: (fraction, stage) => {

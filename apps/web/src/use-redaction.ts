@@ -1,6 +1,6 @@
 import { useTranslations } from "@repo/i18n";
 import type { DocumentLanguage } from "@repo/redact-core";
-import { buildZip } from "@repo/redact-core";
+import { buildZip, defaultDecisions } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -33,6 +33,12 @@ const writeReviewPreference = (on: boolean) => {
 };
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
+
+type ModelState =
+  | { deferred: Deferred; kind: "loading" }
+  | { kind: "idle" }
+  | { kind: "lost"; reason: string }
+  | { kind: "ready" };
 
 const deferred = (): Deferred => {
   let resolve: Deferred["resolve"] | undefined;
@@ -72,7 +78,7 @@ const useRedaction = () => {
   const [reviewing, setReviewingState] = useState(readReviewPreference);
   const reviewingRef = useRef(reviewing);
 
-  const modelRef = useRef<Deferred | null>(null);
+  const modelRef = useRef<ModelState>({ kind: "idle" });
 
   useEffect(() => {
     translateRef.current = t;
@@ -94,7 +100,7 @@ const useRedaction = () => {
     const pool = createRedactionPool({
       maxWorkers: probeCapacity().maxWorkers,
       onAnalysed: (id, analysis) => {
-        const { jobs, updateJob } = useJobStore.getState();
+        const { jobs, setState } = useJobStore.getState();
         const job = jobs.find((entry) => entry.id === id);
 
         if (job === undefined) {
@@ -104,7 +110,7 @@ const useRedaction = () => {
         if (!reviewingRef.current) {
           poolRef.current?.apply({
             analysis,
-            decisions: { dismissed: [], kept: [] },
+            decisions: defaultDecisions(analysis.detections),
             file: job.file,
             id,
           });
@@ -112,23 +118,25 @@ const useRedaction = () => {
           return;
         }
 
-        updateJob(id, { analysis, dismissed: [], kept: [], progress: 0.5, status: "reviewing" });
+        setState(id, {
+          analysis,
+          covered: defaultDecisions(analysis.detections).covered,
+          progress: 0.5,
+          status: "reviewing",
+        });
       },
       onDone: (id, result) => {
-        useJobStore.getState().updateJob(id, {
-          analysis: undefined,
-          progress: 1,
+        useJobStore.getState().setState(id, {
           result: {
             blob: result.blob,
             redactionCount: result.redactionCount,
             warnings: result.warnings,
           },
-          stage: "stage.finished",
           status: "done",
         });
       },
       onError: (id, message, unsupported) => {
-        useJobStore.getState().updateJob(id, { error: message, status: "error" });
+        useJobStore.getState().setState(id, { error: message, status: "error" });
 
         const name = nameOf(id);
 
@@ -142,8 +150,15 @@ const useRedaction = () => {
       onModelLost: (reason) => {
         const lost = modelRef.current;
 
-        modelRef.current = null;
-        lost?.reject(new Error(reason));
+        modelRef.current = { kind: "lost", reason };
+
+        if (lost.kind === "loading") {
+          lost.deferred.reject(new Error(reason));
+
+          return;
+        }
+
+        toast.error(reason);
       },
 
       onModelProgress: (_fraction, stage) => {
@@ -159,19 +174,22 @@ const useRedaction = () => {
         const pending = modelRef.current;
 
         if (stage === "model.ready") {
-          modelRef.current = null;
-          pending?.resolve();
+          modelRef.current = { kind: "ready" };
+
+          if (pending.kind === "loading") {
+            pending.deferred.resolve();
+          }
 
           return;
         }
 
-        if (pending !== null) {
+        if (pending.kind === "loading") {
           return;
         }
 
         const started = deferred();
 
-        modelRef.current = started;
+        modelRef.current = { deferred: started, kind: "loading" };
 
         toast.promise(started.promise, {
           error: translateRef.current("model.failed"),
@@ -180,7 +198,7 @@ const useRedaction = () => {
         });
       },
       onProgress: (id, fraction, stage) => {
-        useJobStore.getState().updateJob(id, { progress: fraction, stage, status: "running" });
+        useJobStore.getState().setState(id, { progress: fraction, stage, status: "running" });
       },
     });
 
@@ -201,10 +219,10 @@ const useRedaction = () => {
   const submit = useCallback(
     (files: Array<JobInput>, language?: DocumentLanguage) => {
       const pool = ensurePool();
-      const { addFiles, updateJob } = useJobStore.getState();
+      const { addFiles, setState } = useJobStore.getState();
 
       for (const job of addFiles(files, language)) {
-        updateJob(job.id, { stage: "stage.loadingModel" });
+        setState(job.id, { stage: "stage.loadingModel", status: "queued" });
         pool.submit({ file: job.file, id: job.id, language: job.language });
       }
     },
@@ -230,7 +248,7 @@ const useRedaction = () => {
 
   const setLanguage = useCallback(
     (ids: ReadonlyArray<string>, language?: DocumentLanguage) => {
-      const { jobs, requeue, updateJob } = useJobStore.getState();
+      const { jobs, requeue, setLanguage: setJobLanguage, setState } = useJobStore.getState();
       const byId = new Map(jobs.map((job) => [job.id, job]));
 
       const rerunning = ids.filter((id) => {
@@ -244,7 +262,7 @@ const useRedaction = () => {
           return true;
         }
 
-        updateJob(id, { language });
+        setJobLanguage(id, language);
 
         return false;
       });
@@ -260,7 +278,7 @@ const useRedaction = () => {
       }
 
       for (const job of requeue(rerunning, language)) {
-        updateJob(job.id, { stage: "stage.loadingModel" });
+        setState(job.id, { stage: "stage.loadingModel", status: "queued" });
         pool.submit({ file: job.file, id: job.id, language: job.language });
       }
     },
@@ -268,28 +286,21 @@ const useRedaction = () => {
   );
 
   const applyDecisions = useCallback((id: string) => {
-    const { jobs, updateJob } = useJobStore.getState();
+    const { jobs, setState } = useJobStore.getState();
     const job = jobs.find((entry) => entry.id === id);
 
-    if (job === undefined || job.analysis === undefined) {
+    if (job?.status !== "reviewing") {
       return;
     }
 
-    updateJob(id, { progress: 0.6, status: "running" });
-    poolRef.current?.apply({
-      analysis: job.analysis,
-      decisions: { dismissed: job.dismissed, kept: job.kept },
-      file: job.file,
-      id,
-    });
+    const { analysis, covered } = job;
+
+    setState(id, { progress: 0.6, status: "running" });
+    poolRef.current?.apply({ analysis, decisions: { covered }, file: job.file, id });
   }, []);
 
-  const setDismissed = useCallback((id: string, dismissed: ReadonlyArray<string>) => {
-    useJobStore.getState().updateJob(id, { dismissed });
-  }, []);
-
-  const setKept = useCallback((id: string, kept: ReadonlyArray<string>) => {
-    useJobStore.getState().updateJob(id, { kept });
+  const setCovered = useCallback((id: string, covered: ReadonlyArray<string>) => {
+    useJobStore.getState().setCovered(id, covered);
   }, []);
 
   const setReviewing = useCallback((on: boolean) => {
@@ -328,8 +339,7 @@ const useRedaction = () => {
     remove,
     removeMany,
     reviewing,
-    setDismissed,
-    setKept,
+    setCovered,
     setLanguage,
     setReviewing,
     submit,

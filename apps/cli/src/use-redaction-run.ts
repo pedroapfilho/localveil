@@ -1,3 +1,4 @@
+import type { FileStageKey } from "@repo/redact-core";
 import { describeError } from "@repo/redact-core";
 import type { DocumentLanguage } from "@repo/redact-node";
 import { useCallback, useRef, useState } from "react";
@@ -9,7 +10,7 @@ type RunProgressState = {
   fileIndex: number;
   fraction: number;
   modelFraction: number | null;
-  stage: string | null;
+  stage: FileStageKey | null;
 };
 
 type RedactionRunOptions = {

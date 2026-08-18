@@ -68,3 +68,63 @@ describe("purgeStaleModels", () => {
     await expect(purgeStaleModels(OPTIONS)).resolves.toBeUndefined();
   });
 });
+
+const storeHolding = (urls: Array<string>) => {
+  const held = new Set(urls);
+
+  return {
+    cleared: held,
+    store: {
+      append: () => Promise.resolve(),
+      clear: (url: string) => {
+        held.delete(url);
+
+        return Promise.resolve();
+      },
+      listUrls: () => Promise.resolve([...held]),
+      readManifest: () => Promise.resolve(undefined),
+      readOffsets: () => Promise.resolve([]),
+      readParts: () => Promise.resolve([]),
+      writeManifest: () => Promise.resolve(),
+    },
+  };
+};
+
+const options = (store: ReturnType<typeof storeHolding>["store"]) => ({
+  keepFiles: ["model_q4.onnx"],
+  revision: "current",
+  store,
+});
+
+describe("sweeping the chunk store", () => {
+  it("clears a partial download of a superseded revision", async () => {
+    const { cleared, store } = storeHolding([
+      "https://huggingface.co/org/model/resolve/old/onnx/model_q4.onnx",
+      "https://huggingface.co/org/model/resolve/current/onnx/model_q4.onnx",
+    ]);
+
+    await purgeStaleModels(options(store));
+
+    expect([...cleared]).toEqual([
+      "https://huggingface.co/org/model/resolve/current/onnx/model_q4.onnx",
+    ]);
+  });
+
+  it("leaves a url that is not a model alone", async () => {
+    const { cleared, store } = storeHolding(["https://example.com/whatever.bin"]);
+
+    await purgeStaleModels(options(store));
+
+    expect([...cleared]).toEqual(["https://example.com/whatever.bin"]);
+  });
+
+  it("does not fail the sweep when one clear rejects", async () => {
+    const { store } = storeHolding([
+      "https://huggingface.co/org/model/resolve/old/onnx/model_q4.onnx",
+    ]);
+
+    await expect(
+      purgeStaleModels(options({ ...store, clear: () => Promise.reject(new Error("locked")) })),
+    ).resolves.toBeUndefined();
+  });
+});

@@ -1,5 +1,12 @@
 type TranslationValues = Record<string, number | string>;
 
+type PlaceholdersIn<Message extends string> =
+  Message extends `${string}{${infer Name}}${infer Rest}` ? Name | PlaceholdersIn<Rest> : never;
+
+type ValuesFor<Message extends string> = [PlaceholdersIn<Message>] extends [never]
+  ? Record<string, never>
+  : Record<PlaceholdersIn<Message>, number | string>;
+
 const PLACEHOLDER = /\{(?<name>\w+)\}/gv;
 
 const translate = (
@@ -21,4 +28,4 @@ const translate = (
 };
 
 export { translate };
-export type { TranslationValues };
+export type { PlaceholdersIn, TranslationValues, ValuesFor };

@@ -1,12 +1,13 @@
 import type { MessageKey } from "@repo/i18n";
 import { useTranslations } from "@repo/i18n";
 import type { Detection, PiiLabel } from "@repo/redact-core";
+import { APPLY_SCORE } from "@repo/redact-core";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { useMemo } from "react";
 
-const LABEL_KEYS: Record<PiiLabel, MessageKey> = {
+const LABEL_KEYS = {
   account_number: "label.account_number",
   private_address: "label.private_address",
   private_date: "label.private_date",
@@ -15,15 +16,13 @@ const LABEL_KEYS: Record<PiiLabel, MessageKey> = {
   private_phone: "label.private_phone",
   private_url: "label.private_url",
   secret: "label.secret",
-};
+} as const satisfies Record<PiiLabel, MessageKey>;
 
 type DetectionReviewProps = {
+  covered: ReadonlyArray<string>;
   detections: Array<Detection>;
-  dismissed: ReadonlyArray<string>;
-  kept: ReadonlyArray<string>;
   onApply: () => void;
-  onDismissedChange: (dismissed: ReadonlyArray<string>) => void;
-  onKeptChange: (kept: ReadonlyArray<string>) => void;
+  onCoveredChange: (covered: ReadonlyArray<string>) => void;
 };
 
 type Group = { detections: Array<Detection>; label: PiiLabel };
@@ -52,19 +51,22 @@ const groupByLabel = (detections: Array<Detection>): Array<Group> => {
 };
 
 const DetectionReview = ({
+  covered,
   detections,
-  dismissed,
-  kept,
   onApply,
-  onDismissedChange,
-  onKeptChange,
+  onCoveredChange,
 }: DetectionReviewProps) => {
   const { t } = useTranslations();
-  const certain = useMemo(() => detections.filter((entry) => !entry.suggested), [detections]);
-  const maybe = useMemo(() => detections.filter((entry) => entry.suggested), [detections]);
+  const certain = useMemo(
+    () => detections.filter((entry) => entry.confidence >= APPLY_SCORE),
+    [detections],
+  );
+  const maybe = useMemo(
+    () => detections.filter((entry) => entry.confidence < APPLY_SCORE),
+    [detections],
+  );
   const groups = useMemo(() => groupByLabel(certain), [certain]);
-  const dropped = useMemo(() => new Set(dismissed), [dismissed]);
-  const chosen = useMemo(() => new Set(kept), [kept]);
+  const painting = useMemo(() => new Set(covered), [covered]);
 
   if (certain.length === 0 && maybe.length === 0) {
     return (
@@ -77,27 +79,14 @@ const DetectionReview = ({
     );
   }
 
-  const covering = certain.length - dropped.size + chosen.size;
-
   const toggle = (id: string) => {
-    onDismissedChange(
-      dropped.has(id) ? dismissed.filter((other) => other !== id) : [...dismissed, id],
-    );
+    onCoveredChange(painting.has(id) ? covered.filter((other) => other !== id) : [...covered, id]);
   };
 
   const dismissGroup = (group: Group) => {
-    const ids = group.detections.map((detection) => detection.id);
-    const everyDropped = ids.every((id) => dropped.has(id));
+    const ids = new Set(group.detections.map((detection) => detection.id));
 
-    onDismissedChange(
-      everyDropped
-        ? dismissed.filter((id) => !ids.includes(id))
-        : [...new Set([...dismissed, ...ids])],
-    );
-  };
-
-  const toggleSuggestion = (id: string) => {
-    onKeptChange(chosen.has(id) ? kept.filter((other) => other !== id) : [...kept, id]);
+    onCoveredChange(covered.filter((id) => !ids.has(id)));
   };
 
   const rows: Array<Row> = [];
@@ -140,7 +129,7 @@ const DetectionReview = ({
       >
         <Checkbox
           aria-label={t("review.toggle", { preview: detection.preview })}
-          checked={!dropped.has(detection.id)}
+          checked={painting.has(detection.id)}
           onChange={() => {
             toggle(detection.id);
           }}
@@ -184,9 +173,9 @@ const DetectionReview = ({
               >
                 <Checkbox
                   aria-label={t("review.toggle", { preview: detection.preview })}
-                  checked={chosen.has(detection.id)}
+                  checked={painting.has(detection.id)}
                   onChange={() => {
-                    toggleSuggestion(detection.id);
+                    toggle(detection.id);
                   }}
                 />
                 <span className="truncate font-mono text-xs">{detection.preview}</span>
@@ -200,7 +189,7 @@ const DetectionReview = ({
       )}
 
       <p aria-live="polite" className="text-muted-foreground text-xs tabular-nums">
-        {t("review.kept", { count: String(covering), total: String(detections.length) })}
+        {t("review.kept", { count: String(painting.size), total: String(detections.length) })}
       </p>
 
       <div className="flex gap-2">
@@ -209,7 +198,9 @@ const DetectionReview = ({
         </Button>
         <Button
           onClick={() => {
-            onDismissedChange([]);
+            onCoveredChange([
+              ...new Set([...covered, ...certain.map((detection) => detection.id)]),
+            ]);
             onApply();
           }}
           size="sm"

@@ -4,6 +4,18 @@ import { encodeGlinerInput } from "./gliner-encode.ts";
 
 const FRAME = { cls: 1, sep: 2 };
 
+const at = (...texts: Array<string>) => {
+  let start = 0;
+
+  return texts.map((text) => {
+    const word = { end: start + text.length, start, text };
+
+    start = word.end + 1;
+
+    return word;
+  });
+};
+
 const encodeWord = (word: string) => {
   if (word === "<<ENT>>") {
     return [8];
@@ -24,7 +36,7 @@ describe("encodeGlinerInput", () => {
       frame: FRAME,
       maxWidth: 2,
       prompts: ["person"],
-      words: ["ab"],
+      words: at("ab"),
     });
 
     expect(input.inputIds.at(0)).toBe(1);
@@ -39,22 +51,25 @@ describe("encodeGlinerInput", () => {
       frame: FRAME,
       maxWidth: 2,
       prompts: ["id"],
-      words: ["ab", "c"],
+      words: at("ab", "c"),
     });
 
     expect(input.wordsMask).toEqual([0, 0, 0, 0, 0, 1, 0, 2, 0]);
   });
 
-  it("skips a word the tokenizer cannot voice and keeps later numbering aligned", () => {
+  it("keeps the source position of a word that survives an unvoiceable neighbour", () => {
     const input = encodeGlinerInput({
       encodeWord,
       frame: FRAME,
       maxWidth: 2,
       prompts: [],
-      words: ["ab", "", "c"],
+      words: at("ab", "", "c"),
     });
 
-    expect(input.keptWords).toEqual([0, 2]);
+    expect(input.keptWords).toEqual([
+      { end: 2, start: 0, text: "ab" },
+      { end: 5, start: 4, text: "c" },
+    ]);
 
     expect(input.wordsMask).toEqual([0, 0, 1, 0, 2, 0]);
   });
@@ -65,7 +80,7 @@ describe("encodeGlinerInput", () => {
       frame: FRAME,
       maxWidth: 3,
       prompts: [],
-      words: ["a", "b"],
+      words: at("a", "b"),
     });
 
     expect(input.spanIdx).toEqual([0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1]);

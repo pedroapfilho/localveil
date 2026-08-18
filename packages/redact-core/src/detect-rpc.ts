@@ -23,47 +23,20 @@ const isDetectResponse = (value: unknown): value is DetectResponse =>
   "type" in value &&
   (value.type === "spans" || value.type === "detect-error");
 
-/* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
 const serialiseDetect = (detect: Detect): Detect => {
-  const queue: Array<{
-    reject: (error: unknown) => void;
-    resolve: (spans: Array<Span>) => void;
-    text: string;
-  }> = [];
-  let draining = false;
+  let tail: Promise<unknown> = Promise.resolve();
 
-  const drain = async () => {
-    if (draining) {
-      return;
-    }
+  return (text) => {
+    /* oxlint-disable-next-line promise/prefer-await-to-then -- the chain is the queue: awaiting
+       here would need an externally settled promise per call, which is what this replaced. */
+    const spans = tail.then(() => detect(text));
 
-    draining = true;
+    // oxlint-disable-next-line promise/prefer-await-to-then
+    tail = spans.catch(() => {});
 
-    let next = queue.shift();
-
-    while (next !== undefined) {
-      const { reject, resolve, text } = next;
-
-      try {
-        resolve(await detect(text));
-      } catch (error) {
-        reject(error);
-      }
-
-      next = queue.shift();
-    }
-
-    draining = false;
+    return spans;
   };
-
-  return (text) =>
-    new Promise((resolve, reject) => {
-      queue.push({ reject, resolve, text });
-
-      void drain();
-    });
 };
-/* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
 
 const serveDetect = (port: EventPort, detect: Detect): void => {
   const answer = async (request: DetectRequest) => {
@@ -99,6 +72,8 @@ const serveDetect = (port: EventPort, detect: Detect): void => {
   port.start();
 };
 
+const CLOSED_EARLY = "The detection worker closed before it answered";
+
 const createDetectClient = (port: EventPort): Detect => {
   const pending = new Map<
     string,
@@ -129,9 +104,13 @@ const createDetectClient = (port: EventPort): Detect => {
     waiting.reject(new Error(response.message));
   });
 
+  let closed = false;
+
   port.addEventListener("close", () => {
+    closed = true;
+
     for (const waiting of pending.values()) {
-      waiting.reject(new Error("The detection worker closed before it answered"));
+      waiting.reject(new Error(CLOSED_EARLY));
     }
 
     pending.clear();
@@ -139,13 +118,18 @@ const createDetectClient = (port: EventPort): Detect => {
 
   port.start();
 
-  return (text) =>
-    new Promise((resolve, reject) => {
+  return (text) => {
+    if (closed) {
+      return Promise.reject(new Error(CLOSED_EARLY));
+    }
+
+    return new Promise((resolve, reject) => {
       const requestId = crypto.randomUUID();
 
       pending.set(requestId, { reject, resolve });
       port.postMessage({ requestId, text, type: "detect" } satisfies DetectRequest);
     });
+  };
 };
 
 export { createDetectClient, serialiseDetect, serveDetect };

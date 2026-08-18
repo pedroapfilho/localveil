@@ -14,7 +14,11 @@ const tensor = (
 const input = (tokens: number, spans: number, kept = tokens): GlinerInput => ({
   attentionMask: Array.from<number>({ length: tokens }).fill(1),
   inputIds: Array.from<number>({ length: tokens }).fill(7),
-  keptWords: Array.from({ length: kept }, (_unused, at) => at),
+  keptWords: Array.from({ length: kept }, (_unused, at) => ({
+    end: at + 1,
+    start: at,
+    text: "w",
+  })),
   spanIdx: Array.from({ length: spans * 2 }, () => 3),
   spanMask: Array.from<number>({ length: spans }).fill(1),
   wordsMask: Array.from<number>({ length: tokens }).fill(2),

@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { textLayerWords } from "./text-layer.ts";
 
-// pdf.js hands back a page transform that flips the y axis and scales. This is the shape it
-// produces for a 200-unit-tall page at scale 2, which is what redact-pdf renders at.
 const VIEWPORT = { transform: [2, 0, 0, -2, 0, 400] };
 
 type Placed = { baseline: number; size?: number; str: string; width: number; x: number };

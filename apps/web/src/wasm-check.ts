@@ -9,7 +9,6 @@ const TOKENIZER_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISI
 
 const TEXT = "Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.";
 
-// Long enough to chunk, so a batch size above one has something to batch.
 const LONG = `${TEXT} `.repeat(120);
 
 const out = document.querySelector("#out");
@@ -33,8 +32,6 @@ const seedFrom = async (local: string, url: string, label: string) => {
   const response = await fetch(local);
   const type = response.headers.get("content-type") ?? "";
 
-  // A dev server answers a missing path with index.html rather than a 404, so a 200 is not
-  // enough: caching that as weights or a tokenizer fails much later and much more confusingly.
   if (!response.ok || type.includes("text/html")) {
     say(`no ${local} to seed, so ${label} comes from Hugging Face`);
 
@@ -51,9 +48,6 @@ const seedFrom = async (local: string, url: string, label: string) => {
   await cache.put(url, new Response(bytes));
 };
 
-// A trimmed model needs the tokenizer it was trimmed with, or the ids it is fed name rows in a
-// vocabulary it no longer has. Both go in under the URLs the app would fetch, so the app's own
-// loading and device selection run unchanged.
 const seed = async () => {
   await seedFrom("/candidate-tokenizer.json", TOKENIZER_URL, "tokenizer");
   await seedFrom("/candidate.onnx", MODEL_URL, "weights");

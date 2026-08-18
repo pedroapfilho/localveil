@@ -10,10 +10,14 @@ type ModelHostOptions = {
 };
 
 type ModelHost = {
-  connect: (channel: string, port: MessagePort) => void;
+  connect: (channel: string, port: MessagePort) => boolean;
   destroy: () => void;
   disconnect: (channel: string) => void;
 };
+
+type HostState =
+  | { kind: "gone" }
+  | { kind: "live"; listeners: AbortController; respawns: number; worker: Worker };
 
 const post = (worker: Worker, message: ConnectRequest | DisconnectRequest) => {
   const transfer = message.type === "connect" ? [message.port] : [];
@@ -23,11 +27,9 @@ const post = (worker: Worker, message: ConnectRequest | DisconnectRequest) => {
 };
 
 const createModelHost = ({ onLost, onProgress }: ModelHostOptions): ModelHost => {
-  let respawns = 0;
-  let destroyed = false;
-  let current: { listeners: AbortController; worker: Worker };
+  let state: HostState = { kind: "gone" };
 
-  const spawn = (): { listeners: AbortController; worker: Worker } => {
+  const spawn = (respawns: number): HostState => {
     const worker = new Worker(new URL("model-worker.ts", import.meta.url), { type: "module" });
     const listeners = new AbortController();
     const { signal } = listeners;
@@ -36,16 +38,13 @@ const createModelHost = ({ onLost, onProgress }: ModelHostOptions): ModelHost =>
       listeners.abort();
       worker.terminate();
 
-      if (destroyed || current.worker !== worker) {
+      if (state.kind !== "live" || state.worker !== worker) {
         return;
       }
 
       const fatal = respawns >= MAX_RESPAWNS;
 
-      if (!fatal) {
-        respawns += 1;
-        current = spawn();
-      }
+      state = fatal ? { kind: "gone" } : spawn(respawns + 1);
 
       onLost(reason, fatal);
     };
@@ -78,22 +77,36 @@ const createModelHost = ({ onLost, onProgress }: ModelHostOptions): ModelHost =>
       { signal },
     );
 
-    return { listeners, worker };
+    return { kind: "live", listeners, respawns, worker };
   };
 
-  current = spawn();
+  state = spawn(0);
 
   return {
     connect: (channel, port) => {
-      post(current.worker, { channel, port, type: "connect" });
+      if (state.kind !== "live") {
+        return false;
+      }
+
+      post(state.worker, { channel, port, type: "connect" });
+
+      return true;
     },
     destroy: () => {
-      destroyed = true;
-      current.listeners.abort();
-      current.worker.terminate();
+      if (state.kind !== "live") {
+        return;
+      }
+
+      state.listeners.abort();
+      state.worker.terminate();
+      state = { kind: "gone" };
     },
     disconnect: (channel) => {
-      post(current.worker, { channel, type: "disconnect" });
+      if (state.kind !== "live") {
+        return;
+      }
+
+      post(state.worker, { channel, type: "disconnect" });
     },
   };
 };

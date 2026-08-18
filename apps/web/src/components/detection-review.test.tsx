@@ -12,33 +12,26 @@ const detection = (patch: Partial<Detection> = {}): Detection => ({
   id: "a",
   label: "private_person",
   preview: "Ana Lima",
-  source: "model",
   start: 0,
-  suggested: false,
   ...patch,
 });
 
-const setup = (
-  detections: Array<Detection>,
-  dismissed: ReadonlyArray<string> = [],
-  kept: ReadonlyArray<string> = [],
-) => {
+const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) => {
   const onApply = vi.fn<() => void>();
-  const onDismissedChange = vi.fn<(next: ReadonlyArray<string>) => void>();
-  const onKeptChange = vi.fn<(next: ReadonlyArray<string>) => void>();
+  const onCoveredChange = vi.fn<(next: ReadonlyArray<string>) => void>();
 
   renderWithI18n(
     <DetectionReview
+      covered={
+        covered ?? detections.filter((entry) => entry.confidence >= 0.65).map((entry) => entry.id)
+      }
       detections={detections}
-      dismissed={dismissed}
-      kept={kept}
       onApply={onApply}
-      onDismissedChange={onDismissedChange}
-      onKeptChange={onKeptChange}
+      onCoveredChange={onCoveredChange}
     />,
   );
 
-  return { onApply, onDismissedChange, onKeptChange };
+  return { onApply, onCoveredChange };
 };
 
 describe("DetectionReview", () => {
@@ -58,7 +51,7 @@ describe("DetectionReview", () => {
   });
 
   it("checks a detection that will be covered and unchecks a dismissed one", () => {
-    setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["b"]);
+    setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["a"]);
 
     const boxes = screen.getAllByRole("checkbox");
 
@@ -67,23 +60,23 @@ describe("DetectionReview", () => {
   });
 
   it("dismisses a detection when its box is unchecked", () => {
-    const { onDismissedChange } = setup([detection()]);
+    const { onCoveredChange } = setup([detection()]);
 
     fireEvent.click(screen.getByRole("checkbox"));
 
-    expect(onDismissedChange).toHaveBeenCalledWith(["a"]);
+    expect(onCoveredChange).toHaveBeenCalledWith([]);
   });
 
   it("brings a dismissed detection back when its box is checked again", () => {
-    const { onDismissedChange } = setup([detection()], ["a"]);
+    const { onCoveredChange } = setup([detection()], []);
 
     fireEvent.click(screen.getByRole("checkbox"));
 
-    expect(onDismissedChange).toHaveBeenCalledWith([]);
+    expect(onCoveredChange).toHaveBeenCalledWith(["a"]);
   });
 
   it("dismisses a whole group without touching the others", () => {
-    const { onDismissedChange } = setup([
+    const { onCoveredChange } = setup([
       detection(),
       detection({ id: "b", preview: "Joao Reis" }),
       detection({ id: "c", label: "secret", preview: "hunter2" }),
@@ -91,11 +84,26 @@ describe("DetectionReview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Keep all Name readable/v }));
 
-    expect(onDismissedChange).toHaveBeenCalledWith(["a", "b"]);
+    expect(onCoveredChange).toHaveBeenCalledWith(["c"]);
+  });
+
+  it("dismisses the rest of a partially readable group", () => {
+    const { onCoveredChange } = setup(
+      [
+        detection(),
+        detection({ id: "b", preview: "Joao Reis" }),
+        detection({ id: "c", label: "secret", preview: "hunter2" }),
+      ],
+      ["a", "c"],
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Keep all Name readable/v }));
+
+    expect(onCoveredChange).toHaveBeenCalledWith(["c"]);
   });
 
   it("counts what is still going to be covered", () => {
-    setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["b"]);
+    setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["a"]);
 
     expect(screen.getByText("1 of 2 will be covered")).toBeInTheDocument();
   });
@@ -114,12 +122,12 @@ describe("DetectionReview", () => {
     expect(onApply).toHaveBeenCalledTimes(1);
   });
 
-  it("clears every dismissal when told to cover everything", () => {
-    const { onApply, onDismissedChange } = setup([detection()], ["a"]);
+  it("covers every certain detection again when told to cover everything", () => {
+    const { onApply, onCoveredChange } = setup([detection()], []);
 
     fireEvent.click(screen.getByRole("button", { name: "Cover everything" }));
 
-    expect(onDismissedChange).toHaveBeenCalledWith([]);
+    expect(onCoveredChange).toHaveBeenCalledWith(["a"]);
     expect(onApply).toHaveBeenCalledTimes(1);
   });
 
@@ -137,18 +145,15 @@ describe("DetectionReview", () => {
   });
 
   it("keeps suggestions out of the main list and behind a summary", () => {
-    setup([
-      detection(),
-      detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
-    ]);
+    setup([detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })]);
 
     expect(screen.getByText("1 more the model was unsure about")).toBeInTheDocument();
     expect(screen.getByText("1 of 2 will be covered")).toBeInTheDocument();
   });
 
   it("leaves a suggestion unchecked until it is ticked", () => {
-    const { onKeptChange } = setup([
-      detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
+    const { onCoveredChange } = setup([
+      detection({ confidence: 0.2, id: "b", preview: "Maybe Name" }),
     ]);
 
     const box = screen.getByRole("checkbox", { name: "Cover Maybe Name" });
@@ -157,17 +162,13 @@ describe("DetectionReview", () => {
 
     fireEvent.click(box);
 
-    expect(onKeptChange).toHaveBeenCalledWith(["b"]);
+    expect(onCoveredChange).toHaveBeenCalledWith(["b"]);
   });
 
   it("counts a ticked suggestion towards what will be covered", () => {
     setup(
-      [
-        detection(),
-        detection({ confidence: 0.2, id: "b", preview: "Maybe Name", suggested: true }),
-      ],
-      [],
-      ["b"],
+      [detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })],
+      ["a", "b"],
     );
 
     expect(screen.getByText("2 of 2 will be covered")).toBeInTheDocument();

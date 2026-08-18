@@ -1,13 +1,19 @@
 import type { ImageReading } from "@repo/ocr";
-import { legibleWords, muchWasUnreadable, readImageText } from "@repo/ocr";
-import type { Detect, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
+import { assessReading, readImageText } from "@repo/ocr";
+import type {
+  Decisions,
+  Detect,
+  Detection,
+  PositionedWord,
+  Rect,
+  Redactor,
+  Span,
+  WarningKey,
+} from "@repo/redact-core";
 import {
-  APPLY_SCORE,
   buildWordIndex,
-  dedupeDetections,
   describeSpans,
   isCovered,
-  keptSpans,
   mergeOverlappingRanges,
   spansForTokens,
   spansToRects,
@@ -57,8 +63,18 @@ const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>)
   }
 };
 
+const withBitmap = async <T>(file: Blob, body: (bitmap: ImageBitmap) => Promise<T>): Promise<T> => {
+  const bitmap = await createImageBitmap(file);
+
+  try {
+    return await body(bitmap);
+  } finally {
+    bitmap.close();
+  }
+};
+
 const readingOf = async (reading: ImageReading, detect: Detect): Promise<Reading> => {
-  const { text, words } = buildWordIndex(legibleWords(reading));
+  const { text, words } = buildWordIndex(assessReading(reading).legible);
 
   if (text.length === 0) {
     return { spans: [], text, words };
@@ -78,6 +94,33 @@ const keyOf = (value: string) =>
     .normalize("NFD")
     .replaceAll(/[^\p{Letter}\p{Number}]/gv, "")
     .toLowerCase();
+
+const idFor = (label: string, value: string) => `${label}:${keyOf(value)}`;
+
+const valueDetections = (readings: Array<Reading>): Array<Detection> => {
+  const byId = new Map<string, Detection>();
+
+  for (const reading of readings) {
+    for (const detection of describeSpans(reading.spans, reading.text)) {
+      const id = idFor(detection.label, reading.text.slice(detection.start, detection.end));
+      const existing = byId.get(id);
+
+      if (existing === undefined || existing.confidence < detection.confidence) {
+        byId.set(id, Object.assign(detection, { id }));
+      }
+    }
+  }
+
+  return [...byId.values()];
+};
+
+const coveredSpans = (reading: Reading, decisions: Decisions) => {
+  const covered = new Set(decisions.covered);
+
+  return reading.spans.filter((span) =>
+    covered.has(idFor(span.label, reading.text.slice(span.start, span.end))),
+  );
+};
 
 const countRedactions = (readings: Array<Reading>, spansFor: (at: number) => Array<Span>) => {
   const maximums = new Map<string, number>();
@@ -109,9 +152,6 @@ const imageRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),
   analyse: async (file, detect, onProgress, options) => {
     onProgress(0, "stage.reading");
-
-    const bitmap = await createImageBitmap(file);
-
     onProgress(0.1, "stage.recognising");
 
     const known = options?.language === undefined ? {} : { known: options.language };
@@ -119,17 +159,17 @@ const imageRedactor: Redactor = {
     const readings = [first];
 
     if (shouldRetryOcr(first)) {
-      readings.push(await readImageText(binarizeForOcr(bitmap), known));
+      readings.push(
+        await withBitmap(file, (bitmap) => readImageText(binarizeForOcr(bitmap), known)),
+      );
     }
-
-    bitmap.close();
 
     const chosen = readings.reduce((kept, candidate) => betterReading(kept, candidate));
     const warnings: Array<WarningKey> = [];
 
     if (chosen.words.length === 0) {
       warnings.push("warning.noText");
-    } else if (muchWasUnreadable(chosen)) {
+    } else if (assessReading(chosen).unreadable) {
       warnings.push("warning.lowConfidence");
     }
 
@@ -140,17 +180,7 @@ const imageRedactor: Redactor = {
     onProgress(1, "stage.finished");
 
     return {
-      detections: dedupeDetections(
-        read.flatMap((reading, page) =>
-          describeSpans({
-            applyAbove: APPLY_SCORE,
-            page,
-            source: "model",
-            spans: reading.spans,
-            text: reading.text,
-          }),
-        ),
-      ),
+      detections: valueDetections(read),
       handle: { best: readings.indexOf(chosen), readings: read } satisfies ImageHandle,
       warnings,
     };
@@ -164,14 +194,16 @@ const imageRedactor: Redactor = {
 
     onProgress(0.85, "stage.redacting");
 
-    const spansFor = (at: number) => keptSpans(analysis.detections, decisions, at);
+    const spansFor = (at: number) => coveredSpans(readings[at], decisions);
     const rects = readings.flatMap((reading, at) => spansToRects(spansFor(at), reading.words));
 
-    const bitmap = await createImageBitmap(file);
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const canvas = await withBitmap(file, (bitmap) => {
+      const target = new OffscreenCanvas(bitmap.width, bitmap.height);
 
-    paint(canvas, bitmap, rects);
-    bitmap.close();
+      paint(target, bitmap, rects);
+
+      return Promise.resolve(target);
+    });
 
     const showing = (readings[best]?.words ?? []).filter((word) => !isCovered(word.bbox, rects));
     const survivors = await survivingSpans(showing.map((word) => word.text).join(" "), detect);

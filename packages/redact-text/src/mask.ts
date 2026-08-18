@@ -1,5 +1,4 @@
-import type { Range, Span } from "@repo/redact-core";
-import { mergeOverlappingRanges } from "@repo/redact-core";
+import type { Range } from "@repo/redact-core";
 
 import { isLineBreak } from "./line-break.ts";
 
@@ -15,20 +14,25 @@ const assertInside = (range: Range, length: number) => {
   }
 };
 
-const maskSpans = (text: string, spans: Array<Span>): string => {
-  const ranges = mergeOverlappingRanges(spans);
+const blocksFor = (covered: string) =>
+  [...GRAPHEMES.segment(covered)]
+    .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
+    .join("");
+
+const maskRanges = (text: string, ranges: ReadonlyArray<Range>): string => {
+  const parts: Array<string> = [];
+  let cursor = 0;
 
   for (const range of ranges) {
     assertInside(range, text.length);
+
+    parts.push(text.slice(cursor, range.start), blocksFor(text.slice(range.start, range.end)));
+    cursor = range.end;
   }
 
-  return ranges.toReversed().reduce((masked, range) => {
-    const covered = [...GRAPHEMES.segment(masked.slice(range.start, range.end))]
-      .map((segment) => (isLineBreak(segment.segment) ? segment.segment : BLOCK))
-      .join("");
+  parts.push(text.slice(cursor));
 
-    return masked.slice(0, range.start) + covered + masked.slice(range.end);
-  }, text);
+  return parts.join("");
 };
 
-export { maskSpans };
+export { maskRanges };

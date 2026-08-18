@@ -24,6 +24,7 @@ import { useState } from "react";
 
 import { APPEAR, staggered } from "../motion";
 import type { Job, JobStatus } from "../store";
+import { progressOf, stageOf } from "../store";
 import { usesLanguage } from "../uses-language";
 
 import { DetectionReview } from "./detection-review";
@@ -31,13 +32,13 @@ import type { DocumentLanguageChoice } from "./document-language-picker";
 import { asChoice, DocumentLanguagePicker } from "./document-language-picker";
 import { GlossaryText } from "./glossary-text";
 
-const STATUS_KEYS: Record<JobStatus, MessageKey> = {
+const STATUS_KEYS = {
   done: "status.done",
   error: "status.error",
   queued: "status.queued",
   reviewing: "status.reviewing",
   running: "status.running",
-};
+} as const satisfies Record<JobStatus, MessageKey>;
 
 const ATTACHMENT_STATES = {
   done: "done",
@@ -59,8 +60,7 @@ type JobRowProps = {
   index: number;
   job: Job;
   onApply: (id: string) => void;
-  onDismissedChange: (id: string, dismissed: ReadonlyArray<string>) => void;
-  onKeptChange: (id: string, kept: ReadonlyArray<string>) => void;
+  onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
   onLanguageChange: (id: string, choice: DocumentLanguageChoice) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
@@ -71,36 +71,22 @@ const JobRow = ({
   index,
   job,
   onApply,
-  onDismissedChange,
-  onKeptChange,
+  onCoveredChange,
   onLanguageChange,
   onRemove,
   onSelect,
   selected,
 }: JobRowProps) => {
   const { t } = useTranslations();
-  const {
-    analysis,
-    dismissed,
-    error,
-    file,
-    id,
-    kept,
-    language,
-    path,
-    progress,
-    result,
-    stage,
-    status,
-  } = job;
+  const { file, id, language, path, status } = job;
   const name = path ?? file.name;
 
   const busy = status === "running";
   const inFlight = status === "queued" || busy;
   const languageMatters = usesLanguage(file);
-  const warnings = result?.warnings ?? [];
-  const failure = status === "error" && error !== undefined;
-  const reviewing = status === "reviewing" && analysis !== undefined;
+  const warnings = job.status === "done" ? job.result.warnings : [];
+  const failure = job.status === "error";
+  const reviewing = job.status === "reviewing";
 
   const hasDetails = languageMatters || failure || reviewing || warnings.length > 0;
 
@@ -120,15 +106,16 @@ const JobRow = ({
   };
 
   const describeResult = () => {
-    if (result === undefined) {
+    if (job.status !== "done") {
       return undefined;
     }
 
-    return result.redactionCount === 0
+    return job.result.redactionCount === 0
       ? t("files.noRedactions")
-      : t("files.redactions", { count: result.redactionCount });
+      : t("files.redactions", { count: job.result.redactionCount });
   };
 
+  const stage = stageOf(job);
   const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
 
   return (
@@ -177,7 +164,9 @@ const JobRow = ({
                 )}
               </AttachmentDescription>
 
-              {inFlight ? <Progress className="mt-1.5" label={name} value={progress} /> : null}
+              {inFlight ? (
+                <Progress className="mt-1.5" label={name} value={progressOf(job)} />
+              ) : null}
             </AttachmentContent>
 
             <AttachmentActions>
@@ -202,19 +191,15 @@ const JobRow = ({
           <CollapsiblePanel className="w-full">
             <div className="pt-3">
               <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
-                {reviewing ? (
+                {job.status === "reviewing" ? (
                   <DetectionReview
-                    detections={analysis.detections}
-                    dismissed={dismissed}
-                    kept={kept}
+                    covered={job.covered}
+                    detections={job.analysis.detections}
                     onApply={() => {
                       onApply(id);
                     }}
-                    onDismissedChange={(next) => {
-                      onDismissedChange(id, next);
-                    }}
-                    onKeptChange={(next) => {
-                      onKeptChange(id, next);
+                    onCoveredChange={(next) => {
+                      onCoveredChange(id, next);
                     }}
                   />
                 ) : null}
@@ -232,9 +217,9 @@ const JobRow = ({
                   </div>
                 ) : null}
 
-                {failure ? (
+                {job.status === "error" ? (
                   <AttachmentDescription className="text-destructive text-pretty">
-                    {error}
+                    {job.error}
                   </AttachmentDescription>
                 ) : null}
 

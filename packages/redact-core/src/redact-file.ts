@@ -1,6 +1,5 @@
+import { defaultDecisions } from "./detections.ts";
 import type { Detect, FileProgress, RedactionResult, RedactOptions, Redactor } from "./types.ts";
-
-const NOTHING_DISMISSED = { dismissed: [], kept: [] };
 
 type WholeFile = {
   detect: Detect;
@@ -19,8 +18,14 @@ const redactFile = async ({
 }: WholeFile): Promise<RedactionResult> => {
   const analysis = await redactor.analyse(file, detect, onProgress, options);
 
-  return redactor.apply({ analysis, decisions: NOTHING_DISMISSED, detect, file, onProgress });
+  return redactor.apply({
+    analysis,
+    decisions: defaultDecisions(analysis.detections),
+    detect,
+    file,
+    onProgress,
+  });
 };
 
-export { NOTHING_DISMISSED, redactFile };
+export { redactFile };
 export type { WholeFile };

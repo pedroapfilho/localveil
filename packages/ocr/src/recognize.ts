@@ -30,6 +30,13 @@ const workerFor = (language: OcrLanguage) => {
 
   workers.set(language, started);
 
+  // oxlint-disable-next-line promise/prefer-await-to-then -- eviction must not make callers wait
+  started.catch(() => {
+    if (workers.get(language) === started) {
+      workers.delete(language);
+    }
+  });
+
   return started;
 };
 

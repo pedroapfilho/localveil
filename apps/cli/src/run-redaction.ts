@@ -11,7 +11,7 @@ import {
   toArrayBuffer,
   uniqueFilename,
 } from "@repo/redact-core";
-import type { ZipEntry } from "@repo/redact-core";
+import type { FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
 import type { DocumentLanguage, NodeRedactionOutput } from "@repo/redact-node";
 import { createNodeDetector } from "@repo/redact-node";
 import workerpool from "workerpool";
@@ -35,15 +35,19 @@ type FileFailure = {
 };
 
 type FileWarnings = {
-  keys: Array<string>;
+  keys: Array<WarningKey>;
   name: string;
 };
 
 type RunProgress = {
   fraction: number;
   index: number;
-  stage: string;
+  stage: FileStageKey;
 };
+
+type FileOutcome =
+  | { blob: Blob; kind: "done"; name: string; redactionCount: number; warnings: Array<WarningKey> }
+  | { kind: "failed"; name: string; reason: string };
 
 type RunResult = {
   cancelled: boolean;
@@ -64,8 +68,11 @@ type RunOptions = {
   signal: AbortSignal;
 };
 
-const isProgress = (payload: unknown): payload is { fraction: number; stage: string } =>
-  typeof payload === "object" && payload !== null && "fraction" in payload && "stage" in payload;
+const isProgress = (payload: unknown): payload is { fraction: number; stage: FileStageKey } =>
+  typeof payload === "object" &&
+  payload !== null &&
+  typeof Reflect.get(payload, "fraction") === "number" &&
+  typeof Reflect.get(payload, "stage") === "string";
 
 const availableName = async (directory: string): Promise<string> => {
   const taken = new Set(await readdir(directory));
@@ -120,11 +127,6 @@ const runRedaction = async ({
     workerType: "thread",
   });
 
-  const entries: Array<ZipEntry> = [];
-  const failures: Array<FileFailure> = [];
-  const warnings: Array<FileWarnings> = [];
-  const counts: Array<number> = [];
-
   const stop = () => {
     void pool.terminate(true);
   };
@@ -152,27 +154,43 @@ const runRedaction = async ({
     await pool.terminate();
   }
 
-  for (const [index, outcome] of settled.entries()) {
+  const cancelled = signal.aborted;
+
+  const outcomes = settled.map((outcome, index): FileOutcome => {
     const name = basename(files[index]);
 
-    if (outcome.status === "rejected") {
-      if (!signal.aborted) {
-        failures.push({ name, reason: describeError(outcome.reason) });
+    return outcome.status === "rejected"
+      ? { kind: "failed", name, reason: describeError(outcome.reason) }
+      : {
+          blob: new Blob([toArrayBuffer(outcome.value.bytes)]),
+          kind: "done",
+          name,
+          redactionCount: outcome.value.redactionCount,
+          warnings: outcome.value.warnings,
+        };
+  });
+
+  const entries: Array<ZipEntry> = [];
+  const failures: Array<FileFailure> = [];
+  const warnings: Array<FileWarnings> = [];
+  let redactionCount = 0;
+
+  for (const outcome of outcomes) {
+    if (outcome.kind === "failed") {
+      if (!cancelled) {
+        failures.push({ name: outcome.name, reason: outcome.reason });
       }
 
       continue;
     }
 
-    entries.push({ blob: new Blob([toArrayBuffer(outcome.value.bytes)]), name });
-    counts.push(outcome.value.redactionCount);
+    entries.push({ blob: outcome.blob, name: outcome.name });
+    redactionCount += outcome.redactionCount;
 
-    if (outcome.value.warnings.length > 0) {
-      warnings.push({ keys: outcome.value.warnings, name });
+    if (outcome.warnings.length > 0) {
+      warnings.push({ keys: outcome.warnings, name: outcome.name });
     }
   }
-
-  const redactionCount = counts.reduce((total, value) => total + value, 0);
-  const cancelled = signal.aborted;
 
   if (cancelled || entries.length === 0) {
     return {

@@ -91,5 +91,7 @@ type MessageKey = keyof typeof en;
 
 type Messages = Record<MessageKey, string>;
 
+type EnglishMessages = typeof en;
+
 export { en };
-export type { MessageKey, Messages };
+export type { EnglishMessages, MessageKey, Messages };

@@ -1,4 +1,5 @@
-import type { Span } from "@repo/redact-core";
+import type { SpanWord } from "./gliner-encode.ts";
+import type { SourceWord } from "./split-words.ts";
 
 const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['’]\p{Lu}+)?/gv;
 
@@ -32,25 +33,37 @@ const collectShouting = (text: string): Shouting => {
   return { segments, text: lines.join("\n") };
 };
 
-const toSourceSpans = (spans: Array<Span>, segments: Array<Segment>): Array<Span> => {
-  const mapped: Array<Span> = [];
+const positionShouted = (
+  words: Array<SourceWord>,
+  segments: Array<Segment>,
+  base: number,
+): Array<SpanWord> => {
+  const positioned: Array<SpanWord> = [];
+  let line = 0;
 
-  for (const segment of segments) {
-    const shift = segment.at - segment.start;
-
-    for (const span of spans) {
-      if (span.start >= segment.start && span.start < segment.end) {
-        mapped.push({
-          ...span,
-          end: Math.min(span.end, segment.end) + shift,
-          start: span.start + shift,
-        });
-      }
+  for (const word of words) {
+    while (line < segments.length && word.start >= segments[line].end) {
+      line += 1;
     }
+
+    const segment = segments[line];
+
+    if (segment === undefined || word.start < segment.start) {
+      continue;
+    }
+
+    const shift = segment.at - segment.start + base;
+
+    positioned.push({
+      end: Math.min(word.end, segment.end) + shift,
+      line,
+      start: word.start + shift,
+      text: word.text,
+    });
   }
 
-  return mapped;
+  return positioned;
 };
 
-export { collectShouting, titleCased, toSourceSpans };
+export { collectShouting, positionShouted, titleCased };
 export type { Segment, Shouting };

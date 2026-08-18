@@ -1,3 +1,4 @@
+import type { FileStageKey } from "@repo/redact-core";
 import { cleanup, render } from "ink-testing-library";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -7,8 +8,8 @@ const defaults = {
   fileIndex: 1,
   fileName: "invoice.pdf",
   fraction: 0.42,
-  modelFraction: null,
-  stage: "stage.detecting",
+  modelFraction: null as number | null,
+  stage: "stage.detecting" as FileStageKey | null,
   stopping: false,
   total: 3,
 };

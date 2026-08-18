@@ -1,5 +1,5 @@
 import type { Detect, Span } from "@repo/redact-core";
-import { redactFile } from "@repo/redact-core";
+import { defaultDecisions, redactFile } from "@repo/redact-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { textRedactor } from "./index.ts";
@@ -181,7 +181,7 @@ describe("textRedactor", () => {
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
     const result = await textRedactor.apply({
       analysis,
-      decisions: { dismissed: analysis.detections.map((detection) => detection.id), kept: [] },
+      decisions: { covered: [] },
       detect: detecting([]),
       file: source,
       onProgress: noProgress,
@@ -206,7 +206,7 @@ describe("textRedactor", () => {
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
     const result = await textRedactor.apply({
       analysis,
-      decisions: { dismissed: [], kept: [] },
+      decisions: defaultDecisions(analysis.detections),
       detect: detecting([]),
       file: source,
       onProgress: noProgress,
@@ -239,5 +239,38 @@ describe("textRedactor", () => {
 
     expect(seen.at(0)).toBe(0);
     expect(seen.at(-1)).toBe(1);
+  });
+});
+
+describe("the analysed text snapshot", () => {
+  it("refuses to mask when the analysis carried no source text", async () => {
+    const source = file("a.txt", "text/plain");
+    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+
+    await expect(
+      textRedactor.apply({
+        analysis: { ...analysis, handle: undefined },
+        decisions: defaultDecisions(analysis.detections),
+        detect: detecting([]),
+        file: source,
+        onProgress: noProgress,
+      }),
+    ).rejects.toThrow(/carried no source text/v);
+  });
+
+  it("masks the snapshot rather than re-reading a file that has since changed", async () => {
+    const source = file("a.txt", "text/plain");
+    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+    const changed = new File(["Hi Bob!"], "a.txt", { type: "text/plain" });
+
+    const result = await textRedactor.apply({
+      analysis,
+      decisions: defaultDecisions(analysis.detections),
+      detect: detecting([]),
+      file: changed,
+      onProgress: noProgress,
+    });
+
+    await expect(result.blob.text()).resolves.toBe("Hi ███!");
   });
 });

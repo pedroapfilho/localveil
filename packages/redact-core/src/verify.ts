@@ -33,9 +33,6 @@ const survivingSpans = async (text: string, detect: Detect): Promise<Array<Survi
   const survivors: Array<Survivor> = [];
 
   for (const span of spans) {
-    // The detector reads far below the apply floor, and everything under it is a suggestion
-    // the product never covers on its own. Only a span that would have been covered counts
-    // as a leak.
     if (span.score < APPLY_SCORE) {
       continue;
     }

@@ -1,7 +1,7 @@
+import { absorbNested } from "./merge-spans.ts";
 import type { PiiLabel, Span } from "./types.ts";
 
 type Pattern = {
-  capture?: boolean;
   label: PiiLabel;
   matcher: RegExp;
   verify?: (value: string) => boolean;
@@ -97,9 +97,6 @@ const isIban = (value: string) => {
   return remainder === 1;
 };
 
-// Spain's DNI and NIE carry a check letter over the number modulo 23, so they can be verified
-// rather than guessed at, like a CPF or an IBAN. A NIE swaps its leading X, Y or Z for 0, 1
-// or 2 before the arithmetic.
 const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
 
 const isSpanishId = (value: string) => {
@@ -118,14 +115,8 @@ const isSpanishId = (value: string) => {
 
 const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(value);
 
-// A reference like 2024-0817 has the shape of a NANP number and is not one. Rejecting a
-// year-like first group keeps 555-0181 while dropping an invoice or order number, which the
-// eval corpus pins as the pattern layer's one false positive.
 const startsWithAYear = (value: string) => /^(?:19|20)\d{2}[\s\-]/v.test(value);
 
-// Month names in the three languages the app reads, with and without the accent on março,
-// because OCR drops accents often enough that requiring one loses real dates. A written date is
-// matched whole: the model tends to cover only the year, which leaves "2 April" readable.
 const MONTHS =
   "january|february|march|april|may|june|july|august|september|october|november|december|" +
   "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|" +
@@ -172,17 +163,14 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     verify: luhn,
   },
   {
-    capture: true,
     label: "account_number",
     matcher: /\bRG[.:]?\s?(?<value>\d{1,2}\.?\d{3}\.?\d{3}-?[\dX])\b/dgv,
   },
   {
-    capture: true,
     label: "account_number",
     matcher: /\b(?:CNH|[Rr]egistro)[.:]?\s?(?<value>\d{9,11})\b/dgv,
   },
   {
-    capture: true,
     label: "private_address",
     matcher: /\bCEP[.:]?\s?(?<value>\d{5}-?\d{3})\b/dgv,
   },
@@ -206,22 +194,29 @@ const PATTERNS: ReadonlyArray<Pattern> = [
 ];
 
 const patternSpans = (text: string): Array<Span> => {
-  const found = new Map<string, Span>();
+  const found: Array<Span> = [];
 
-  for (const { capture, label, matcher, verify } of PATTERNS) {
+  for (const { label, matcher, verify } of PATTERNS) {
     for (const match of text.matchAll(matcher)) {
-      const range = capture === true ? match.indices?.groups?.value : undefined;
-      const [start, end] = range ?? [match.index, match.index + match[0].length];
+      const [start, end] = match.indices?.groups?.value ?? [
+        match.index,
+        match.index + match[0].length,
+      ];
 
       if (verify !== undefined && !verify(text.slice(start, end))) {
         continue;
       }
 
-      found.set(`${String(start)}-${String(end)}`, { end, label, score: 1, start });
+      found.push({ end, label, score: 1, start });
     }
   }
 
-  return [...found.values()].toSorted((left, right) => left.start - right.start);
+  return absorbNested(
+    found,
+    (span) => span.label,
+    (span) => span.score,
+    (span) => span,
+  ).toSorted((left, right) => left.start - right.start);
 };
 
 export { isCnpj, isCpf, isIban, isSpanishId, luhn, patternSpans };

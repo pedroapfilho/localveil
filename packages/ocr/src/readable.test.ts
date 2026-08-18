@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LEGIBLE_WORD, legibleWords, muchWasUnreadable } from "./readable.ts";
+import { assessReading } from "./readable.ts";
 import type { Recognition } from "./recognize.ts";
 
 const BOX = { x0: 0, x1: 10, y0: 0, y1: 10 };
@@ -15,67 +15,56 @@ const reading = (...confidences: Array<number>): Recognition => ({
 });
 
 const kept = (...confidences: Array<number>) =>
-  legibleWords(reading(...confidences)).map((word) => word.text);
+  assessReading(reading(...confidences)).legible.map((word) => word.text);
 
-describe("legibleWords", () => {
-  it("keeps a word the recogniser was sure of", () => {
-    expect(kept(95)).toEqual(["word0"]);
+describe("legible words", () => {
+  it("keeps the words at or above the floor", () => {
+    expect(kept(95, 60, 59, 12)).toEqual(["word0", "word1"]);
   });
 
-  it("drops a word it was guessing at", () => {
-    expect(kept(12)).toEqual([]);
+  it("drops every word when none reaches the floor", () => {
+    expect(kept(21, 8, 14, 30, 19)).toEqual([]);
   });
 
-  it("keeps a word exactly on the floor", () => {
-    expect(kept(LEGIBLE_WORD)).toEqual(["word0"]);
+  it("carries the box and the text through, without the confidence", () => {
+    expect(assessReading(reading(95)).legible).toEqual([{ bbox: BOX, text: "word0" }]);
   });
 
-  it("drops the word one point below it", () => {
-    expect(kept(LEGIBLE_WORD - 1)).toEqual([]);
-  });
-
-  it("keeps the readable half of a page the average would have condemned", () => {
-    const page = reading(95, 92, 91, 4, 7, 11, 3, 9);
-
-    expect(page.confidence).toBeLessThan(50);
-    expect(legibleWords(page).length).toBe(3);
-  });
-
-  it("keeps nothing at all from a page of tofu", () => {
-    expect(legibleWords(reading(21, 8, 14, 30, 19))).toEqual([]);
-  });
-
-  it("hands back plain words, without the score they were judged on", () => {
-    expect(legibleWords(reading(95))).toEqual([{ bbox: BOX, text: "word0" }]);
-  });
-
-  it("takes a floor of its own when a caller has a reason to differ", () => {
-    expect(legibleWords(reading(40), 30).length).toBe(1);
-  });
-
-  it("finds nothing to keep in a page with no words", () => {
-    expect(legibleWords(reading())).toEqual([]);
+  it("returns nothing for a page with no words", () => {
+    expect(kept()).toEqual([]);
   });
 });
 
-describe("muchWasUnreadable", () => {
-  it("stays quiet when every word cleared the floor", () => {
-    expect(muchWasUnreadable(reading(95, 88, 74))).toBe(false);
+describe("the unreadable verdict", () => {
+  it("calls a mostly legible page readable", () => {
+    expect(assessReading(reading(95, 88, 74)).unreadable).toBe(false);
   });
 
-  it("stays quiet about the odd word it could not make out", () => {
-    expect(muchWasUnreadable(reading(95, 92, 88, 91, 90, 87, 94, 12))).toBe(false);
+  it("allows one bad word in eight", () => {
+    expect(assessReading(reading(95, 92, 88, 91, 90, 87, 94, 12)).unreadable).toBe(false);
   });
 
-  it("speaks up when a quarter of the page was beyond it", () => {
-    expect(muchWasUnreadable(reading(95, 92, 12, 8))).toBe(true);
+  it("calls a page with half its words unreadable gibberish", () => {
+    expect(assessReading(reading(95, 92, 12, 8)).unreadable).toBe(true);
   });
 
-  it("speaks up about a page that was mostly background", () => {
-    expect(muchWasUnreadable(reading(95, 91, 4, 7, 11, 3, 9, 14))).toBe(true);
+  it("calls a page with six bad words in eight gibberish", () => {
+    expect(assessReading(reading(95, 91, 4, 7, 11, 3, 9, 14)).unreadable).toBe(true);
   });
 
-  it("stays quiet about a page that had no words to lose", () => {
-    expect(muchWasUnreadable(reading())).toBe(false);
+  it("calls an empty page readable rather than gibberish", () => {
+    expect(assessReading(reading()).unreadable).toBe(false);
+  });
+
+  it("holds at exactly a quarter unreadable and tips one word later", () => {
+    expect(assessReading(reading(95, 92, 88, 12)).unreadable).toBe(false);
+    expect(assessReading(reading(95, 92, 88, 12, 11)).unreadable).toBe(true);
+  });
+
+  it("decides the kept words and the verdict in the same pass", () => {
+    const assessed = assessReading(reading(95, 92, 12, 8));
+
+    expect(assessed.legible).toHaveLength(2);
+    expect(assessed.unreadable).toBe(true);
   });
 });

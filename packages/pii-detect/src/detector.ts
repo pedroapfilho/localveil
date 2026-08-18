@@ -1,5 +1,5 @@
 import { AutoTokenizer, env } from "@huggingface/transformers";
-import type { ChunkSpans, Detect, ModelProgress, Span } from "@repo/redact-core";
+import type { Detect, ModelProgress, Span } from "@repo/redact-core";
 import {
   describeError,
   mergeChunkSpans,
@@ -11,10 +11,12 @@ import {
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs.ts";
+import type { ChunkStore } from "./chunk-store.ts";
+import { createIndexedDbChunkStore } from "./chunk-store.ts";
 import { chunkWords } from "./chunk-words.ts";
 import type { Logits } from "./gliner-decode.ts";
 import { decodeSpans, suppressOverlaps } from "./gliner-decode.ts";
-import type { GlinerInput, TokenFrame } from "./gliner-encode.ts";
+import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode.ts";
 import { encodeGlinerInput } from "./gliner-encode.ts";
 import { ENTITY_PROMPTS } from "./gliner-labels.ts";
 import { MODEL_FILE } from "./model-runtime.ts";
@@ -22,17 +24,8 @@ import type { ModelDevice } from "./model-runtime.ts";
 import { purgeStaleModels } from "./purge-stale-models.ts";
 import type { ResumableCache } from "./resumable-cache.ts";
 import { createResumableCache } from "./resumable-cache.ts";
-import type { Segment } from "./shouting.ts";
-import { collectShouting, toSourceSpans } from "./shouting.ts";
-import type { SourceWord } from "./split-words.ts";
+import { collectShouting, positionShouted } from "./shouting.ts";
 import { splitWords } from "./split-words.ts";
-
-type Job = {
-  encoded: GlinerInput;
-  offset: number;
-  segments?: Array<Segment>;
-  words: Array<SourceWord>;
-};
 
 const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
 
@@ -43,22 +36,11 @@ const MAX_WIDTH = 12;
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
 
-// Batching pays on a GPU and costs on a CPU, so the size follows the device.
-//
-// onnxruntime-node already spreads one inference across every core, and batching only adds
-// padded work: measured on the eval corpus, darwin arm64, 2030 ms at 1, 2913 ms at 2 and
-// 3151 ms at 4. WebGPU is the opposite case, because tiny submissions leave it idle between
-// dispatches: measured in Chrome over 8280 characters, about 3200 ms at 1 against 2920 ms at
-// 4, with 8 no better than 4. Spans are identical either way.
 const CPU_BATCH = 1;
 const GPU_BATCH = 4;
 
 const BATCH_TOKENS = 4096;
 
-// Detection returns everything down to here. What actually gets covered is decided later, by
-// APPLY_SCORE in @repo/redact-core: at or above it a span is covered unless dismissed, below it
-// the span is offered as a suggestion and covered only if somebody ticks it. Reading this far
-// down is only affordable because nothing under the apply floor reaches a file on its own.
 const MIN_SCORE = 0.15;
 
 type DetectorOptions = {
@@ -75,7 +57,7 @@ const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/
 
 const isWeights = (name: string) => name.endsWith(`/${MODEL_FILE}`);
 
-const installResumableCache = (report: ModelProgress): ResumableCache => {
+const installResumableCache = (report: ModelProgress, store: ChunkStore): ResumableCache => {
   const cache = createResumableCache({
     onProgress: ({ loaded, name, total }) => {
       if (!isWeights(name) || total === 0) {
@@ -84,6 +66,7 @@ const installResumableCache = (report: ModelProgress): ResumableCache => {
 
       report(Math.min(loaded / total, 1), "model.downloading");
     },
+    store,
   });
 
   env.useCustomCache = true;
@@ -118,7 +101,8 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     onProgress?.(fraction, stage);
   };
 
-  const cache = resumableCache ? installResumableCache(report) : undefined;
+  const chunks = createIndexedDbChunkStore();
+  const cache = resumableCache ? installResumableCache(report, chunks) : undefined;
   const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, { revision: MODEL_REVISION });
   const frame = frameOf(tokenizer);
 
@@ -180,6 +164,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     await purgeStaleModels({
       keepFiles: [MODEL_FILE],
       revision: MODEL_REVISION,
+      store: chunks,
     }).catch((error: unknown) => {
       // oxlint-disable-next-line eslint/no-console
       console.warn("Could not clear superseded model weights", error);
@@ -190,45 +175,49 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   const prompts = ENTITY_PROMPTS.map((entity) => entity.prompt);
 
-  const encodeChunk = (sourceWords: Array<SourceWord>) => {
-    const encoded = encodeGlinerInput({
-      encodeWord,
-      frame,
-      maxWidth: MAX_WIDTH,
-      prompts,
-      words: sourceWords.map((word) => word.text),
-    });
+  const encodeChunk = (words: Array<SpanWord>) => {
+    const encoded = encodeGlinerInput({ encodeWord, frame, maxWidth: MAX_WIDTH, prompts, words });
 
     return encoded.keptWords.length === 0 ? undefined : encoded;
   };
 
-  const spansOf = (job: Job, logits: Logits, item: number): Array<Span> => {
+  const spansOf = (input: GlinerInput, logits: Logits, item: number): Array<Span> => {
+    const { keptWords } = input;
     const found = suppressOverlaps(
       decodeSpans({
         entityCount: prompts.length,
         item,
         logits,
         threshold: minScore,
-        wordCount: job.encoded.keptWords.length,
+        wordCount: keptWords.length,
       }),
     );
 
-    return found.map((candidate) => ({
-      end: job.words[job.encoded.keptWords[candidate.end]].end,
-      label: ENTITY_PROMPTS[candidate.entity].label,
-      score: candidate.score,
-      start: job.words[job.encoded.keptWords[candidate.start]].start,
-    }));
+    return found.map((candidate) => {
+      const first = keptWords[candidate.start];
+      let last = keptWords[candidate.end];
+
+      for (let at = candidate.end; at > candidate.start && last.line !== first.line; at -= 1) {
+        last = keptWords[at - 1];
+      }
+
+      return {
+        end: last.end,
+        label: ENTITY_PROMPTS[candidate.entity].label,
+        score: candidate.score,
+        start: first.start,
+      };
+    });
   };
 
-  const jobsFor = (text: string): Array<Job> => {
-    const jobs: Array<Job> = [];
+  const jobsFor = (text: string): Array<GlinerInput> => {
+    const jobs: Array<GlinerInput> = [];
 
     for (const chunk of chunkWords(splitWords(text), maxWords, overlapWords)) {
       const encoded = encodeChunk(chunk.words);
 
       if (encoded !== undefined) {
-        jobs.push({ encoded, offset: 0, words: chunk.words });
+        jobs.push(encoded);
       }
 
       const shouting = collectShouting(text.slice(chunk.start, chunk.end));
@@ -237,16 +226,12 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
         continue;
       }
 
-      const words = splitWords(shouting.text);
-      const shouted = encodeChunk(words);
+      const shouted = encodeChunk(
+        positionShouted(splitWords(shouting.text), shouting.segments, chunk.start),
+      );
 
       if (shouted !== undefined) {
-        jobs.push({
-          encoded: shouted,
-          offset: chunk.start,
-          segments: shouting.segments,
-          words,
-        });
+        jobs.push(shouted);
       }
     }
 
@@ -255,30 +240,24 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   return serialiseDetect(async (text) => {
     const jobs = jobsFor(text);
-    const batches = batchInputs(
-      jobs.map((job) => job.encoded),
-      batching,
-      BATCH_TOKENS,
-    );
-    const parts: Array<ChunkSpans> = [];
+    const batches = batchInputs(jobs, batching, BATCH_TOKENS);
+    const found: Array<Span> = [];
 
     /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
     for (const batch of batches) {
-      const logits = await run(batch.map((at) => jobs[at].encoded));
+      const inputs = batch.map((at) => jobs[at]);
+      const logits = await run(inputs);
 
-      batch.forEach((at, item) => {
-        const job = jobs[at];
-        const spans = spansOf(job, logits, item);
-
-        parts.push({
-          offset: job.offset,
-          spans: job.segments === undefined ? spans : toSourceSpans(spans, job.segments),
-        });
+      inputs.forEach((input, item) => {
+        found.push(...spansOf(input, logits, item));
       });
     }
     /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
-    return tightenToVerified([...mergeChunkSpans(parts), ...patternSpans(text)], text);
+    return tightenToVerified(
+      [...mergeChunkSpans([{ offset: 0, spans: found }]), ...patternSpans(text)],
+      text,
+    );
   });
 };
 

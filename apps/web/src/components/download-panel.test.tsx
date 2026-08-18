@@ -1,22 +1,67 @@
+import type { Analysis, DocumentLanguage, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Job } from "../store";
+import type { Job, JobResult, JobSource, JobStatus } from "../store";
 import { renderWithI18n } from "../test-utils";
 
 import { DownloadPanel } from "./download-panel";
 
 const result = { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] };
 
-const job = (patch: Partial<Job> = {}): Job => ({
-  dismissed: [],
-  file: new File(["hello"], "notes.txt", { type: "text/plain" }),
-  id: "job-1",
-  kept: [],
-  progress: 0,
-  status: "queued",
-  ...patch,
-});
+type JobPatch = {
+  analysis?: Analysis;
+  covered?: ReadonlyArray<string>;
+  error?: string;
+  file?: File;
+  id?: string;
+  language?: DocumentLanguage;
+  path?: string;
+  progress?: number;
+  result?: JobResult;
+  stage?: FileStageKey;
+  status?: JobStatus;
+};
+
+const EMPTY_ANALYSIS: Analysis = { detections: [], handle: undefined, warnings: [] };
+
+const EMPTY_RESULT: JobResult = { blob: new Blob([]), redactionCount: 0, warnings: [] };
+
+const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job => {
+  const source: JobSource = {
+    file: patch.file ?? fallbackFile,
+    id: patch.id ?? fallbackId,
+    language: patch.language,
+    path: patch.path,
+  };
+
+  if (patch.status === "done") {
+    return { ...source, result: patch.result ?? EMPTY_RESULT, status: "done" };
+  }
+
+  if (patch.status === "error") {
+    return { ...source, error: patch.error ?? "boom", status: "error" };
+  }
+
+  if (patch.status === "running") {
+    return { ...source, progress: patch.progress ?? 0, stage: patch.stage, status: "running" };
+  }
+
+  if (patch.status === "reviewing") {
+    return {
+      ...source,
+      analysis: patch.analysis ?? EMPTY_ANALYSIS,
+      covered: patch.covered ?? [],
+      progress: patch.progress ?? 0.5,
+      status: "reviewing",
+    };
+  }
+
+  return { ...source, stage: patch.stage, status: "queued" };
+};
+
+const job = (patch: JobPatch = {}): Job =>
+  jobFrom(patch, new File(["hello"], "notes.txt", { type: "text/plain" }), "job-1");
 
 const setup = (jobs: Array<Job>) => {
   const onDownload = vi.fn<() => void>();

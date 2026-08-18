@@ -3,7 +3,7 @@ import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useJobStore } from "./store";
+import { progressOf, stageOf, useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
 import type { RedactionPoolOptions } from "./worker-pool";
@@ -249,7 +249,7 @@ describe("useRedaction", () => {
   it("says the model is loading before the worker says anything", () => {
     submitTwo();
 
-    expect(jobsNow()[0].stage).toBe("stage.loadingModel");
+    expect(stageOf(jobsNow()[0])).toBe("stage.loadingModel");
   });
 
   it("tears the pool down when the page goes", () => {
@@ -286,11 +286,10 @@ describe("what the pool reports", () => {
     });
 
     expect(jobsNow()[0]).toMatchObject({
-      progress: 1,
       result: { blob, redactionCount: 3, warnings: ["warning.noText"] },
-      stage: "stage.finished",
       status: "done",
     });
+    expect(progressOf(jobsNow()[0])).toBe(1);
   });
 
   it("fails a row and says so", () => {
@@ -494,13 +493,15 @@ describe("changing a document's language", () => {
 
     setPortuguese();
 
-    expect(jobsNow()[0]).toMatchObject({
+    const requeued = jobsNow()[0];
+
+    expect(requeued).toMatchObject({
       language: "pt",
-      progress: 0,
-      result: undefined,
       stage: "stage.loadingModel",
       status: "queued",
     });
+    expect(progressOf(requeued)).toBe(0);
+    expect("result" in requeued).toBe(false);
   });
 
   it("records the choice on a text file without redoing the work", () => {

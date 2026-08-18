@@ -6,16 +6,12 @@ type Selection = {
 };
 
 declare global {
-  // Window declarations require an interface so this experimental API can merge with lib.dom.
   // oxlint-disable-next-line typescript/consistent-type-definitions
   interface Window {
     showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
   }
 }
 
-// A folder of scans is easy to choose and expensive to redact, and every file becomes a job the
-// pool holds until it is downloaded. Past this many the browser is likelier to run out of memory
-// than the user is to have meant it.
 const MOST_FILES = 200;
 
 const cleanPath = (parts: Array<string>) => {
@@ -64,8 +60,6 @@ const fileOf = (entry: FileSystemFileEntry) =>
     });
   });
 
-// readEntries hands back a page at a time and signals the end with an empty page. Yielding those
-// pages instead of collecting them all lets the walk stop at its file cap even for a huge folder.
 const childrenOf = async function* (entry: FileSystemDirectoryEntry) {
   const reader = entry.createReader();
 
@@ -81,43 +75,65 @@ const childrenOf = async function* (entry: FileSystemDirectoryEntry) {
   /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
 };
 
-const walkEntry = async (
-  entry: FileSystemEntry,
-  parent: Array<string>,
+type Tree<Node> = {
+  childrenOf: (node: Node) => AsyncIterable<Node> | Iterable<Node>;
+  fileOf: (node: Node) => Promise<File | undefined>;
+  isDirectory: (node: Node) => boolean;
+  nameOf: (node: Node) => string;
+  pathOf?: (node: Node) => string | undefined;
+};
+
+const collect = async <Node>(
+  roots: Iterable<Node>,
+  tree: Tree<Node>,
   into: Array<SelectedFile>,
 ): Promise<void> => {
-  if (into.length > MOST_FILES) {
-    return;
-  }
-
-  if (isDirectory(entry)) {
-    const here = [...parent, entry.name];
-
-    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
-    for await (const child of childrenOf(entry)) {
-      await walkEntry(child, here, into);
-
-      if (into.length > MOST_FILES) {
-        return;
-      }
+  const walk = async (node: Node, parent: Array<string>): Promise<void> => {
+    if (into.length > MOST_FILES) {
+      return;
     }
-    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
 
-    return;
+    if (tree.isDirectory(node)) {
+      const here = [...parent, tree.nameOf(node)];
+
+      /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
+      for await (const child of tree.childrenOf(node)) {
+        await walk(child, here);
+
+        if (into.length > MOST_FILES) {
+          return;
+        }
+      }
+      /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
+
+      return;
+    }
+
+    const file = await tree.fileOf(node);
+
+    if (file !== undefined) {
+      const own = tree.pathOf?.(node);
+      const here = [...parent, tree.nameOf(node)];
+
+      into.push(selected(file, own === undefined || own === "" ? cleanPath(here) : own));
+    }
+  };
+
+  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
+  for (const root of roots) {
+    await walk(root, []);
+
+    if (into.length > MOST_FILES) {
+      return;
+    }
   }
-
-  if (!isFile(entry)) {
-    return;
-  }
-
-  const file = await fileOf(entry);
-
-  if (file !== undefined) {
-    const path = entry.fullPath || cleanPath([...parent, entry.name]);
-
-    into.push(selected(file, path));
-  }
+  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
 };
+
+const capped = (found: Array<SelectedFile>): Selection => ({
+  files: found.slice(0, MOST_FILES),
+  limited: found.length > MOST_FILES,
+});
 
 const asEntry = (item: DataTransferItem): FileSystemEntry | undefined => {
   const get = item.webkitGetAsEntry;
@@ -125,10 +141,7 @@ const asEntry = (item: DataTransferItem): FileSystemEntry | undefined => {
   return typeof get === "function" ? (get.call(item) ?? undefined) : undefined;
 };
 
-/** Reads what was dropped, walking into folders where the browser exposes directory entries. */
 const droppedFiles = async (transfer: DataTransfer): Promise<Selection> => {
-  // These entries have to be captured synchronously, before the drop event is recycled. The walk
-  // can then continue asynchronously. Browsers without the entry API keep the flat file behavior.
   const entries = [...transfer.items].flatMap((item) => {
     const entry = item.kind === "file" ? asEntry(item) : undefined;
 
@@ -141,49 +154,21 @@ const droppedFiles = async (transfer: DataTransfer): Promise<Selection> => {
 
   const found: Array<SelectedFile> = [];
 
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
-  for (const entry of entries) {
-    await walkEntry(entry, [], found);
+  await collect(
+    entries,
+    {
+      childrenOf: (entry) => (isDirectory(entry) ? childrenOf(entry) : []),
+      fileOf: (entry) => (isFile(entry) ? fileOf(entry) : Promise.resolve(undefined)),
+      isDirectory,
+      nameOf: (entry) => entry.name,
+      pathOf: (entry) => entry.fullPath,
+    },
+    found,
+  );
 
-    if (found.length > MOST_FILES) {
-      break;
-    }
-  }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
-
-  return { files: found.slice(0, MOST_FILES), limited: found.length > MOST_FILES };
+  return capped(found);
 };
 
-const walkHandle = async (
-  handle: FileSystemDirectoryHandle | FileSystemFileHandle,
-  parent: Array<string>,
-  into: Array<SelectedFile>,
-): Promise<void> => {
-  if (into.length > MOST_FILES) {
-    return;
-  }
-
-  if (handle.kind === "file") {
-    const file = await handle.getFile();
-
-    into.push(selected(file, cleanPath([...parent, handle.name])));
-    return;
-  }
-
-  const here = [...parent, handle.name];
-
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
-  for await (const child of handle.values()) {
-    await walkHandle(child, here, into);
-
-    if (into.length > MOST_FILES) {
-      return;
-    }
-  }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
-};
-
-/** Opens the modern directory picker, or returns undefined so the caller can use an input. */
 const pickedDirectoryFiles = async (): Promise<Selection | undefined> => {
   const picker = window.showDirectoryPicker;
 
@@ -194,9 +179,20 @@ const pickedDirectoryFiles = async (): Promise<Selection | undefined> => {
   const directory = await picker.call(window);
   const found: Array<SelectedFile> = [];
 
-  await walkHandle(directory, [], found);
+  type Handle = FileSystemDirectoryHandle | FileSystemFileHandle;
 
-  return { files: found.slice(0, MOST_FILES), limited: found.length > MOST_FILES };
+  await collect<Handle>(
+    [directory],
+    {
+      childrenOf: (handle) => (handle.kind === "directory" ? handle.values() : []),
+      fileOf: (handle) => (handle.kind === "file" ? handle.getFile() : Promise.resolve(undefined)),
+      isDirectory: (handle) => handle.kind === "directory",
+      nameOf: (handle) => handle.name,
+    },
+    found,
+  );
+
+  return capped(found);
 };
 
 export { droppedFiles, MOST_FILES, pickedDirectoryFiles, selectedFiles };

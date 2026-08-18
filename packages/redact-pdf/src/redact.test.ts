@@ -39,10 +39,17 @@ vi.mock("pdfjs-dist/build/pdf.worker.mjs", () => {
 
 vi.mock("pdfjs-dist", () => ({
   getDocument: () => ({
+    destroy: () => {
+      events.push("destroy");
+
+      return Promise.resolve();
+    },
     promise: Promise.resolve({
       getPage: (number: number) =>
         Promise.resolve({
-          cleanup: () => undefined,
+          cleanup: () => {
+            events.push(`cleanup:${String(number)}`);
+          },
           getTextContent: () => {
             events.push(`text:${String(number)}`);
 
@@ -513,5 +520,57 @@ describe("pdfRedactor", () => {
 
     expect(state.copied).toEqual([]);
     expect(state.drawn.length).toBe(2);
+  });
+
+  it("releases every page it opens and the document at the end of the pass", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await pdfRedactor.analyse(file(), detecting(["Ana Lima"]), () => undefined);
+
+    expect(events.filter((entry) => entry.startsWith("cleanup:"))).toHaveLength(2);
+    expect(events.filter((entry) => entry === "destroy")).toHaveLength(1);
+  });
+
+  it("releases the document on the apply pass too", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await run(detecting(["Ana Lima"]));
+
+    expect(events.filter((entry) => entry === "destroy")).toHaveLength(2);
+  });
+
+  it("still releases the document when the job is cancelled mid-pass", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    const stopped = pdfRedactor.analyse(file(), detecting([]), (_fraction, stage) => {
+      if (stage === "stage.detecting") {
+        throw new Error("cancelled");
+      }
+    });
+
+    await expect(stopped).rejects.toThrow("cancelled");
+    expect(events).toContain("destroy");
+    expect(events.some((entry) => entry.startsWith("cleanup:"))).toBe(true);
+  });
+
+  it("keeps only the word geometry in the handle it hands to apply", async () => {
+    const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
+    const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
+
+    expect(Object.keys(first)).toEqual(["words"]);
+  });
+
+  it("refuses a handle whose pages carry no words", async () => {
+    const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
+
+    await expect(
+      pdfRedactor.apply({
+        analysis: { ...analysis, handle: { pages: [{}] } },
+        decisions: { covered: [] },
+        detect: detecting([]),
+        file: file(),
+        onProgress: () => undefined,
+      }),
+    ).rejects.toThrow(/no recognised pages/v);
   });
 });

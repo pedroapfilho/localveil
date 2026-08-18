@@ -20,6 +20,8 @@ const contexts: Array<{
 }> = [];
 
 class CanvasStub {
+  static contextless = false;
+
   height: number;
   width: number;
 
@@ -45,7 +47,7 @@ class CanvasStub {
   }
 
   getContext() {
-    return this.context;
+    return CanvasStub.contextless ? null : this.context;
   }
 }
 
@@ -68,12 +70,38 @@ const reading = (
 const file = () => new File(["image"], "identity.jpg", { type: "image/jpeg" });
 
 const noSpans: Detect = () => Promise.resolve([]);
+
+const detectEitherSpelling: Detect = (text) => {
+  const start = text.indexOf("108");
+
+  return Promise.resolve(
+    start === -1
+      ? []
+      : [
+          {
+            end: start + (text.includes(".") ? 14 : 11),
+            label: "account_number" as const,
+            score: 1,
+            start,
+          },
+        ],
+  );
+};
+
+const detectCpf: Detect = (text) => {
+  const start = text.indexOf("108");
+
+  return Promise.resolve(
+    start === -1 ? [] : [{ end: start + 14, label: "account_number" as const, score: 1, start }],
+  );
+};
 const onProgress: FileProgress = () => undefined;
 
 const redact = (detect: Detect = noSpans) =>
   redactFile({ detect, file: file(), onProgress, redactor: imageRedactor });
 
 beforeEach(() => {
+  CanvasStub.contextless = false;
   contexts.length = 0;
   bitmap.close.mockClear();
   mocks.readImageText.mockReset();
@@ -206,6 +234,36 @@ describe("image OCR retry", () => {
     expect(result.redactionCount).toBe(1);
   });
 
+  it("redacts distinct PII at nested offsets across readings", async () => {
+    mocks.readImageText
+      .mockResolvedValueOnce(
+        reading("en", 40, [
+          ["Ana", 95],
+          ["noise", 10],
+        ]),
+      )
+      .mockResolvedValueOnce(
+        reading("en", 80, [
+          ["Jose", 95],
+          ["Silva", 94],
+        ]),
+      );
+
+    const detect = vi.fn<Detect>((text) => {
+      if (text === "Ana") {
+        return Promise.resolve([{ end: 3, label: "private_person", score: 0.9, start: 0 }]);
+      }
+
+      return Promise.resolve(
+        text === "Jose Silva" ? [{ end: 10, label: "private_person", score: 0.9, start: 0 }] : [],
+      );
+    });
+
+    const result = await redact(detect);
+
+    expect(result.redactionCount).toBe(2);
+  });
+
   it("uses an improved Portuguese retry", async () => {
     mocks.readImageText
       .mockResolvedValueOnce(
@@ -263,5 +321,117 @@ describe("image OCR retry", () => {
     await redact(detect);
 
     expect(detect).toHaveBeenCalledWith("Alice Smith London");
+  });
+
+  it("reports one detection when both readings find the same value", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["CPF", 96],
+      ["108.467.036-45", 94],
+      ["NOME", 93],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
+
+    expect(analysis.detections).toHaveLength(1);
+  });
+
+  it("paints nothing once that single detection is dismissed", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["CPF", 96],
+      ["108.467.036-45", 94],
+      ["NOME", 93],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
+
+    contexts.length = 0;
+
+    const result = await imageRedactor.apply({
+      analysis,
+      decisions: { covered: [] },
+      detect: noSpans,
+      file: file(),
+      onProgress,
+    });
+
+    expect(contexts.at(-1)?.fillRect).not.toHaveBeenCalled();
+    expect(result.redactionCount).toBe(0);
+  });
+
+  it("closes the bitmap when painting throws", async () => {
+    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Ana", 95]]));
+
+    const analysis = await imageRedactor.analyse(file(), noSpans, onProgress);
+
+    bitmap.close.mockClear();
+    CanvasStub.contextless = true;
+
+    await expect(
+      imageRedactor.apply({
+        analysis,
+        decisions: { covered: [] },
+        detect: noSpans,
+        file: file(),
+        onProgress,
+      }),
+    ).rejects.toThrow(/no 2d canvas/v);
+    expect(bitmap.close).toHaveBeenCalled();
+  });
+
+  it("reports one detection when the readings spell the same value differently", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["CPF", 96],
+      ["10846703645", 94],
+      ["NOME", 93],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectEitherSpelling, onProgress);
+
+    expect(analysis.detections).toHaveLength(1);
+  });
+
+  it("reports one detection when the readings put the same value at different offsets", async () => {
+    const first = reading("pt", 40, [
+      ["CPF", 95],
+      ["108.467.036-45", 92],
+      ["ruido", 10],
+      ["texto", 12],
+    ]);
+    const retry = reading("pt", 80, [
+      ["DOCUMENTO", 96],
+      ["NUMERO", 95],
+      ["108.467.036-45", 94],
+    ]);
+
+    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
+
+    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
+
+    expect(analysis.detections).toHaveLength(1);
+    expect(new Set(analysis.detections.map((entry) => entry.id)).size).toBe(1);
   });
 });

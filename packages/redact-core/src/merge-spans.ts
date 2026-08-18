@@ -4,28 +4,51 @@ type ChunkSpans = { offset: number; spans: Array<Span> };
 
 type Range = { end: number; start: number };
 
-const spanKey = (span: Span) => `${span.start}:${span.end}:${span.label}`;
+const widestFirst = (left: Range, right: Range) => left.start - right.start || right.end - left.end;
 
-const mergeChunkSpans = (parts: Array<ChunkSpans>): Array<Span> => {
-  const byKey = new Map<string, Span>();
+const encloses = (outer: Range, inner: Range) =>
+  outer.start <= inner.start && outer.end >= inner.end;
 
-  for (const part of parts) {
-    for (const span of part.spans) {
-      const shifted: Span = {
-        ...span,
-        end: span.end + part.offset,
-        start: span.start + part.offset,
-      };
-      const key = spanKey(shifted);
-      const existing = byKey.get(key);
+const absorbNested = <T extends Range>(
+  items: ReadonlyArray<T>,
+  groupOf: (item: T) => string,
+  scoreOf: (item: T) => number,
+  rescore: (item: T, score: number) => T,
+): Array<T> => {
+  const kept: Array<T> = [];
+  const containers = new Map<string, number>();
 
-      if (!existing || existing.score < shifted.score) {
-        byKey.set(key, shifted);
-      }
+  for (const item of items.toSorted(widestFirst)) {
+    const group = groupOf(item);
+    const at = containers.get(group);
+
+    if (at !== undefined && encloses(kept[at], item)) {
+      kept[at] = rescore(kept[at], Math.max(scoreOf(kept[at]), scoreOf(item)));
+      continue;
     }
+
+    containers.set(group, kept.length);
+    kept.push(item);
   }
 
-  return [...byKey.values()].toSorted((a, b) => a.start - b.start || a.end - b.end);
+  return kept;
+};
+
+const mergeChunkSpans = (parts: Array<ChunkSpans>): Array<Span> => {
+  const shifted = parts.flatMap((part) =>
+    part.spans.map((span) => ({
+      ...span,
+      end: span.end + part.offset,
+      start: span.start + part.offset,
+    })),
+  );
+
+  return absorbNested(
+    shifted,
+    (span) => span.label,
+    (span) => span.score,
+    (span, score) => ({ ...span, score }),
+  ).toSorted((a, b) => a.start - b.start || a.end - b.end);
 };
 
 const mergeOverlappingRanges = (spans: Array<Span>): Array<Range> => {
@@ -46,5 +69,5 @@ const mergeOverlappingRanges = (spans: Array<Span>): Array<Range> => {
   return merged;
 };
 
-export { mergeChunkSpans, mergeOverlappingRanges };
+export { absorbNested, mergeChunkSpans, mergeOverlappingRanges };
 export type { ChunkSpans, Range };

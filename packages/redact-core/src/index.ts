@@ -1,14 +1,17 @@
-export { chunkText } from "./chunk.ts";
 export { isCovered } from "./covered.ts";
 export { describeError } from "./describe-error.ts";
-export { APPLY_SCORE, dedupeDetections, describeSpans, keptSpans } from "./detections.ts";
-export type { TextChunk } from "./chunk.ts";
+export {
+  APPLY_SCORE,
+  dedupeDetections,
+  defaultDecisions,
+  describeSpans,
+  keptSpans,
+} from "./detections.ts";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
 export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";
-export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
+export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
 export type { ChunkSpans, Range } from "./merge-spans.ts";
-export { NOTHING_DISMISSED, redactFile } from "./redact-file.ts";
-export { RedactionError } from "./redaction-error.ts";
+export { redactFile } from "./redact-file.ts";
 export { patternSpans } from "./patterns.ts";
 export { spansForTokens, tokensFromSpans } from "./repeats.ts";
 export type { PiiToken } from "./repeats.ts";
@@ -21,7 +24,6 @@ export type {
   Decisions,
   Detect,
   Detection,
-  DetectionSource,
   DocumentLanguage,
   FileProgress,
   FileStageKey,

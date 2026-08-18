@@ -119,4 +119,67 @@ describe("detect RPC", () => {
 
     await expect(detect("Ada")).resolves.toStrictEqual([]);
   });
+
+  it("rejects a request issued after the far side closed, rather than hanging", async () => {
+    const { client, server } = wire();
+
+    serveDetect(server, () => Promise.resolve([]));
+
+    const detect = createDetectClient(client);
+
+    server.close();
+
+    await expect(detect("Ada")).rejects.toThrow(/closed before it answered/v);
+    await expect(detect("Grace")).rejects.toThrow(/closed before it answered/v);
+  });
+});
+
+describe("serialiseDetect", () => {
+  it("runs calls in the order they were made", async () => {
+    const finished: Array<string> = [];
+    const delays: Record<string, number> = { first: 20, second: 10, third: 0 };
+
+    const detect = serialiseDetect(
+      (text) =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            finished.push(text);
+            resolve([]);
+          }, delays[text]);
+        }),
+    );
+
+    await Promise.all([detect("first"), detect("second"), detect("third")]);
+
+    expect(finished).toEqual(["first", "second", "third"]);
+  });
+
+  it("keeps a failure from poisoning the calls behind it", async () => {
+    const detect = serialiseDetect((text) =>
+      text === "bad" ? Promise.reject(new Error("boom")) : Promise.resolve([]),
+    );
+
+    const failing = detect("bad");
+    const following = detect("good");
+
+    await expect(failing).rejects.toThrow("boom");
+    await expect(following).resolves.toStrictEqual([]);
+  });
+
+  it("rejects when the detector throws synchronously and stays usable", async () => {
+    let thrown = false;
+
+    const detect = serialiseDetect((text) => {
+      if (!thrown) {
+        thrown = true;
+
+        throw new Error("synchronous");
+      }
+
+      return Promise.resolve([{ end: text.length, label: "secret" as const, score: 1, start: 0 }]);
+    });
+
+    await expect(detect("Ada")).rejects.toThrow("synchronous");
+    await expect(detect("Grace")).resolves.toHaveLength(1);
+  });
 });
