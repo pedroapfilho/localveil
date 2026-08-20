@@ -4,7 +4,14 @@ import { parseArgs } from "node:util";
 
 import { createDetector } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
-import { APPLY_SCORE, patternSpans } from "@repo/redact-core";
+import {
+  APPLY_SCORE,
+  definedTerms,
+  dropDefinedTerms,
+  patternSpans,
+  spansForTokens,
+  tokensFromSpans,
+} from "@repo/redact-core";
 import { structuralSpans } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus.ts";
@@ -15,6 +22,7 @@ import type { Counts } from "./score.ts";
 import { addCounts, countMatches, totalCounts } from "./score.ts";
 
 type DocumentResult = {
+  analysed: Map<PiiLabel, Counts>;
   everything: Map<PiiLabel, Counts>;
   exact: Map<PiiLabel, Counts>;
   id: string;
@@ -66,11 +74,22 @@ const rowsByLanguage = (results: Array<DocumentResult>) => {
     .map(([language, counts]) => ({ counts: totalCounts(counts), name: language }));
 };
 
+/* What a redactor hands the review list: the detector, the structural layer, the repeats the
+   first two justify, and the defined terms dropped back out. redact-text composes these in the
+   same order. */
+const analysedSpans = (text: string, detected: Array<Span>) => {
+  const repeated = spansForTokens(text, tokensFromSpans(text, detected));
+
+  return dropDefinedTerms([...detected, ...repeated], text, definedTerms(text, detected));
+};
+
 const scoreDocument = (document: EvalDocument, predicted: Array<Span>): DocumentResult => {
   const structural = structuralSpans(filenameOf(document.id), document.text);
+  const detected = [...predicted, ...structural];
 
   return {
-    everything: countMatches(document.spans, [...predicted, ...structural]),
+    analysed: countMatches(document.spans, analysedSpans(document.text, detected)),
+    everything: countMatches(document.spans, detected),
     exact: countMatches(document.spans, predicted, true),
     id: document.id,
     language: document.language,
@@ -142,6 +161,10 @@ const run = async () => {
     table(
       "Detection plus the structural layer, overlap matching",
       rowsByLabel(results, (result) => result.everything),
+    ),
+    table(
+      "Whole analysis, overlap matching",
+      rowsByLabel(results, (result) => result.analysed),
     ),
   ].join("\n\n");
 
