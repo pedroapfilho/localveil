@@ -181,6 +181,16 @@ const detecting = (targets: Array<string>): Detect =>
     ),
   );
 
+const onlyOnTheSignaturePage: Detect = (text) => {
+  const start = text.startsWith("Signed") ? text.indexOf("Ana Lima") : -1;
+
+  return Promise.resolve(
+    start === -1
+      ? []
+      : [{ end: start + "Ana Lima".length, label: "private_person" as const, score: 0.9, start }],
+  );
+};
+
 const run = (detect: Detect = detecting([])) => {
   const stages: Array<FileStageKey> = [];
 
@@ -241,7 +251,7 @@ describe("pdfRedactor", () => {
   it("covers a name on the page where the model missed it", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima today")];
 
-    await run(detecting(["Signed by Ana Lima"]));
+    await run(onlyOnTheSignaturePage);
 
     expect(state.drawn[0]).toEqual(["Invoice", "for"]);
   });

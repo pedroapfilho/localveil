@@ -10,13 +10,13 @@ const span = (start: number, end: number, label: Span["label"] = "private_person
   start,
 });
 
-const TEXT = "Joao Goncalves came in. O Joao pode ser contactado. Ask joao about it.";
+const TEXT = "Joao Goncalves came in. Later Joao Goncalves left. Ask joao goncalves about it.";
 
 describe("tokensFromSpans", () => {
-  it("takes each word of a span as its own token", () => {
+  it("takes the whole span as one token", () => {
     const tokens = tokensFromSpans(TEXT, [span(0, 14)]);
 
-    expect(tokens.map((token) => token.text)).toEqual(["Joao", "Goncalves"]);
+    expect(tokens.map((token) => token.text)).toEqual(["Joao Goncalves"]);
   });
 
   it("carries the label and score of the span the token came from", () => {
@@ -25,21 +25,31 @@ describe("tokensFromSpans", () => {
     );
   });
 
-  it("skips tokens too short to be a name", () => {
-    expect(tokensFromSpans("de Sa lives here", [span(0, 5)]).map((token) => token.text)).toEqual(
-      [],
+  it("reads a span broken over a line as one phrase", () => {
+    expect(tokensFromSpans("Joao   Goncalves came in.", [span(0, 16)])[0].text).toBe(
+      "Joao Goncalves",
     );
   });
 
+  it("skips a span too short to be a name", () => {
+    expect(tokensFromSpans("Sa lives here", [span(0, 2)])).toEqual([]);
+  });
+
+  it("skips a span the model was not confident enough to act on", () => {
+    const unsure: Span = { end: 14, label: "private_person", score: 0.49, start: 0 };
+
+    expect(tokensFromSpans(TEXT, [unsure])).toEqual([]);
+  });
+
   it("counts a token once however often it was tagged", () => {
-    expect(tokensFromSpans(TEXT, [span(0, 4), span(26, 30)]).length).toBe(1);
+    expect(tokensFromSpans(TEXT, [span(0, 14), span(30, 44)]).length).toBe(1);
   });
 
   it("keeps the highest score a token was seen with, in either order", () => {
-    const low: Span = { end: 30, label: "private_person", score: 0.2, start: 26 };
+    const low: Span = { end: 44, label: "private_person", score: 0.7, start: 30 };
 
-    expect(tokensFromSpans(TEXT, [span(0, 4), low])[0].score).toBe(0.9);
-    expect(tokensFromSpans(TEXT, [low, span(0, 4)])[0].score).toBe(0.9);
+    expect(tokensFromSpans(TEXT, [span(0, 14), low])[0].score).toBe(0.9);
+    expect(tokensFromSpans(TEXT, [low, span(0, 14)])[0].score).toBe(0.9);
   });
 
   it("returns nothing when nothing was tagged", () => {
@@ -52,11 +62,30 @@ describe("spansForTokens", () => {
     const spans = spansForTokens(TEXT, tokensFromSpans(TEXT, [span(0, 14)]));
 
     expect(spans.map(({ end, start }) => TEXT.slice(start, end))).toEqual([
-      "Joao",
-      "Goncalves",
-      "Joao",
-      "joao",
+      "Joao Goncalves",
+      "Joao Goncalves",
+      "joao goncalves",
     ]);
+  });
+
+  it("does not spread a single word of a longer phrase across the document", () => {
+    const phrase = "the addresses set forth at the end of this Agreement";
+    const text = `${phrase} bind the parties`;
+    const tokens = tokensFromSpans(text, [
+      { end: phrase.length, label: "private_address", score: 0.9, start: 0 },
+    ]);
+
+    expect(spansForTokens(text, tokens).map(({ end, start }) => text.slice(start, end))).toEqual([
+      phrase,
+    ]);
+  });
+
+  it("finds a phrase however the document spaced it", () => {
+    const spans = spansForTokens("Joao Goncalves came in. Joao\nGoncalves left.", [
+      { label: "private_person", score: 0.9, text: "Joao Goncalves" },
+    ]);
+
+    expect(spans.length).toBe(2);
   });
 
   it("ignores case, the way a document does", () => {
