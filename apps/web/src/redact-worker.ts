@@ -1,10 +1,4 @@
-import type {
-  Analysis,
-  Decisions,
-  DocumentLanguage,
-  FileStageKey,
-  RedactionResult,
-} from "@repo/redact-core";
+import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
 import { createDetectClient, createRedactorRegistry } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
@@ -67,11 +61,10 @@ const guarded = async <T>(
 async function analyse(
   this: { worker: PublicWorker },
   file: File,
-  language: DocumentLanguage | undefined,
   port: MessagePort,
 ): Promise<Analysis> {
   const analysis = await guarded(this.worker, port, (report) =>
-    registry.resolve(file).analyse(file, createDetectClient(port), report, { language }),
+    registry.resolve(file).analyse(file, createDetectClient(port), report),
   );
 
   return analysis;

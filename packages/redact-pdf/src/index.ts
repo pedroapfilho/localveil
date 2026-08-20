@@ -148,7 +148,7 @@ const isHandle = (value: unknown): value is PdfHandle => {
   return Array.isArray(pages) && pages.every((page: unknown) => hasWords(page));
 };
 
-const analysePdf: Redactor["analyse"] = (file, detect, onProgress, options) =>
+const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
   withPdf(file, async (pdf) => {
     onProgress(0, "stage.reading");
 
@@ -156,7 +156,7 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress, options) =>
     const pages: Array<Page> = [];
     const tokens = new Map<string, PiiToken>();
 
-    let language: OcrLanguage | undefined = options?.language;
+    let language: OcrLanguage | undefined;
     let anyText = false;
 
     /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */

@@ -3,24 +3,14 @@ import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { TrashIcon } from "lucide-react";
 
-import type { DocumentLanguageChoice } from "./document-language-picker";
-import { DocumentLanguagePicker } from "./document-language-picker";
-
 type JobSelectionToolbarProps = {
   all: boolean;
   count: number;
-  onLanguageChange: (choice: DocumentLanguageChoice) => void;
   onRemove: () => void;
   onToggleAll: (selected: boolean) => void;
 };
 
-const JobSelectionToolbar = ({
-  all,
-  count,
-  onLanguageChange,
-  onRemove,
-  onToggleAll,
-}: JobSelectionToolbarProps) => {
+const JobSelectionToolbar = ({ all, count, onRemove, onToggleAll }: JobSelectionToolbarProps) => {
   const { t } = useTranslations();
 
   const handleToggleAll = () => {
@@ -43,8 +33,6 @@ const JobSelectionToolbar = ({
       </p>
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        <DocumentLanguagePicker onChange={onLanguageChange} value="auto" />
-
         <Button
           aria-label={t("files.removeSelected")}
           className="relative"

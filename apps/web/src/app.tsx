@@ -45,7 +45,6 @@ const App = () => {
     removeMany,
     reviewing,
     setCovered,
-    setLanguage,
     setReviewing,
     submit,
   } = useRedaction();
@@ -140,7 +139,6 @@ const App = () => {
                   onApply={applyDecisions}
                   onClear={clear}
                   onCoveredChange={setCovered}
-                  onLanguage={setLanguage}
                   onRemove={remove}
                   onRemoveMany={removeMany}
                 />

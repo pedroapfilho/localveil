@@ -63,7 +63,7 @@ describe("useJobStore review state", () => {
     expect(updated?.status === "reviewing" ? updated.covered : undefined).toEqual(["a"]);
   });
 
-  it("forgets the analysis and the decisions when a job is requeued", () => {
+  it("forgets the analysis and the decisions when a job moves on", () => {
     const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
 
     useJobStore.getState().setState(job.id, {
@@ -72,11 +72,12 @@ describe("useJobStore review state", () => {
       progress: 0.5,
       status: "reviewing",
     });
+    useJobStore.getState().setState(job.id, { status: "queued" });
 
-    const [requeued] = useJobStore.getState().requeue([job.id]);
+    const requeued = found(job.id);
 
-    expect(requeued.status).toBe("queued");
-    expect(Object.keys(requeued).toSorted()).toEqual(["file", "id", "language", "path", "status"]);
+    expect(requeued?.status).toBe("queued");
+    expect(Object.keys(requeued ?? {}).toSorted()).toEqual(["file", "id", "path", "status"]);
   });
 });
 
@@ -162,59 +163,6 @@ describe("useJobStore", () => {
     useJobStore.getState().removeJobs(["missing"]);
 
     expect(jobsOf().length).toBe(1);
-  });
-});
-
-describe("requeueing", () => {
-  beforeEach(() => {
-    useJobStore.getState().reset();
-  });
-
-  const finish = (id: string) => {
-    useJobStore.getState().setState(id, { result: doneResult, status: "done" });
-  };
-
-  it("wipes everything the last run left behind", () => {
-    const [job] = useJobStore.getState().addFiles([textFile("a.txt")]);
-
-    finish(job.id);
-    useJobStore.getState().requeue([job.id], "pt");
-
-    const requeued = jobsOf()[0];
-
-    expect(requeued).toMatchObject({ language: "pt", status: "queued" });
-    expect(progressOf(requeued)).toBe(0);
-    expect(stageOf(requeued)).toBeUndefined();
-    expect("result" in requeued).toBe(false);
-  });
-
-  it("returns only the jobs it reset", () => {
-    const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
-
-    finish(first.id);
-    finish(second.id);
-
-    const queued = useJobStore.getState().requeue([second.id], "es");
-
-    expect(queued.map((job) => job.id)).toEqual([second.id]);
-    expect(found(first.id)?.status).toBe("done");
-  });
-
-  it("clears a language back to auto-detect when given none", () => {
-    const [job] = useJobStore.getState().addFiles([textFile("a.txt")], "pt");
-
-    useJobStore.getState().requeue([job.id]);
-
-    expect(jobsOf()[0].language).toBeUndefined();
-  });
-
-  it("keeps the file and the id so the worker can be sent the same job", () => {
-    const [job] = useJobStore.getState().addFiles([textFile("a.txt")]);
-
-    const [queued] = useJobStore.getState().requeue([job.id], "en");
-
-    expect(queued.id).toBe(job.id);
-    expect(queued.file).toBe(job.file);
   });
 });
 

@@ -19,18 +19,10 @@ vi.mock("@repo/redact-node", () => ({
 vi.mock("workerpool", () => ({
   default: {
     pool: () => ({
-      exec: (
-        _method: string,
-        [path, language]: [string, string | undefined],
-        options: { on: (payload: unknown) => void },
-      ) =>
-        redactFile(
-          path,
-          (fraction: number, stage: string) => {
-            options.on({ fraction, stage });
-          },
-          language,
-        ),
+      exec: (_method: string, [path]: [string], options: { on: (payload: unknown) => void }) =>
+        redactFile(path, (fraction: number, stage: string) => {
+          options.on({ fraction, stage });
+        }),
       terminate: () => Promise.resolve(),
     }),
   },

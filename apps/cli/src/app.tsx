@@ -1,6 +1,5 @@
 import { basename } from "node:path";
 
-import type { DocumentLanguage } from "@repo/redact-node";
 import { Box, Text, useApp, useInput } from "ink";
 import { useState } from "react";
 
@@ -13,18 +12,16 @@ type Props = {
   initialDirectory: string;
   initialSelection?: ReadonlyArray<string>;
   jobs?: number;
-  language?: DocumentLanguage;
   outputDirectory: string;
 };
 
-const App = ({ initialDirectory, initialSelection, jobs, language, outputDirectory }: Props) => {
+const App = ({ initialDirectory, initialSelection, jobs, outputDirectory }: Props) => {
   const { exit } = useApp();
   const [files, setFiles] = useState<ReadonlyArray<string> | null>(null);
   const [stopping, setStopping] = useState(false);
 
   const { cancel, failure, progress, result, start } = useRedactionRun({
     jobs,
-    language,
     onSettled: exit,
     outputDirectory,
   });

@@ -1,17 +1,12 @@
 import type {
   Analysis,
   Decisions,
-  DocumentLanguage,
   FileStageKey,
   ModelStageKey,
   RedactionResult,
 } from "@repo/redact-core";
 
-type AnalyseTask = (
-  file: File,
-  language: DocumentLanguage | undefined,
-  port: MessagePort,
-) => Analysis;
+type AnalyseTask = (file: File, port: MessagePort) => Analysis;
 
 type ApplyWork = { analysis: Analysis; decisions: Decisions };
 

@@ -14,8 +14,6 @@ type Detect = (text: string) => Promise<Array<Span>>;
 
 type DocumentLanguage = "en" | "es" | "pt";
 
-type RedactOptions = { language?: DocumentLanguage };
-
 type ModelStageKey = "model.downloading" | "model.ready" | "model.slowDevice";
 
 type FileStageKey =
@@ -76,12 +74,7 @@ type ApplyRequest = {
 
 type Redactor = {
   accepts: (file: File) => boolean;
-  analyse: (
-    file: File,
-    detect: Detect,
-    onProgress: FileProgress,
-    options?: RedactOptions,
-  ) => Promise<Analysis>;
+  analyse: (file: File, detect: Detect, onProgress: FileProgress) => Promise<Analysis>;
   apply: (request: ApplyRequest) => Promise<RedactionResult>;
 };
 
@@ -107,7 +100,6 @@ export type {
   PositionedWord,
   Rect,
   RedactionResult,
-  RedactOptions,
   Redactor,
   Span,
   StageKey,

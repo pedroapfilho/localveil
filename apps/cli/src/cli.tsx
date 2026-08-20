@@ -14,14 +14,13 @@ const resolved = await resolveArguments(process.argv.slice(2), workingDirectory)
   },
 );
 
-const { directory, jobs, language, selection } = resolved;
+const { directory, jobs, selection } = resolved;
 
 const instance = render(
   <App
     initialDirectory={directory}
     initialSelection={selection}
     jobs={jobs}
-    language={language}
     outputDirectory={workingDirectory}
   />,
   { exitOnCtrlC: false },

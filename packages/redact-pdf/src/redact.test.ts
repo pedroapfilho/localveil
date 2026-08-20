@@ -359,24 +359,6 @@ describe("pdfRedactor", () => {
     expect(state.recognisedIn).toEqual([undefined]);
   });
 
-  it("recognises every page in the language the caller forced", async () => {
-    state.pages = [{ layer: "", words: ["Ana", "Lima"] }, page("Signed by Ana Lima")];
-
-    const stages: Array<FileStageKey> = [];
-
-    await redactFile({
-      detect: detecting([]),
-      file: file(),
-      onProgress: (_fraction, stage) => {
-        stages.push(stage);
-      },
-      options: { language: "pt" },
-      redactor: pdfRedactor,
-    });
-
-    expect(state.recognisedIn).toEqual(["pt", "pt"]);
-  });
-
   it("reports the stages a reader watches go by", async () => {
     const { stages } = await run();
 

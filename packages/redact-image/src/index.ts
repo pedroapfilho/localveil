@@ -150,18 +150,15 @@ const isHandle = (value: unknown): value is ImageHandle =>
 
 const imageRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),
-  analyse: async (file, detect, onProgress, options) => {
+  analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
     onProgress(0.1, "stage.recognising");
 
-    const known = options?.language === undefined ? {} : { known: options.language };
-    const first = await readImageText(file, known);
+    const first = await readImageText(file);
     const readings = [first];
 
     if (shouldRetryOcr(first)) {
-      readings.push(
-        await withBitmap(file, (bitmap) => readImageText(binarizeForOcr(bitmap), known)),
-      );
+      readings.push(await withBitmap(file, (bitmap) => readImageText(binarizeForOcr(bitmap))));
     }
 
     const chosen = readings.reduce((kept, candidate) => betterReading(kept, candidate));

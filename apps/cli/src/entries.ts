@@ -1,7 +1,6 @@
 import { readdir, stat } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 
-import type { DocumentLanguage } from "@repo/redact-node";
 import { SUPPORTED_EXTENSIONS } from "@repo/redact-node";
 
 const PARENT_NAME = "..";
@@ -16,16 +15,10 @@ type DirectoryEntry = {
 type StartingPoint = {
   directory: string;
   jobs?: number;
-  language?: DocumentLanguage;
   selection: Array<string>;
 };
 
-const DOCUMENT_LANGUAGES: ReadonlyArray<DocumentLanguage> = ["en", "es", "pt"];
-
-const isDocumentLanguage = (value: string): value is DocumentLanguage =>
-  DOCUMENT_LANGUAGES.some((language) => language === value);
-
-type ParsedFlags = { jobs?: number; language?: DocumentLanguage; paths: Array<string> };
+type ParsedFlags = { jobs?: number; paths: Array<string> };
 
 const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
   const arg = args[at];
@@ -41,24 +34,9 @@ const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
 
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   const paths: Array<string> = [];
-  let language: DocumentLanguage | undefined;
   let jobs: number | undefined;
 
   for (let at = 0; at < args.length; at += 1) {
-    const lang = valueOf(args, at, "lang");
-
-    if (lang !== undefined) {
-      if (lang.value === undefined || !isDocumentLanguage(lang.value)) {
-        throw new RangeError(
-          `--lang takes one of ${DOCUMENT_LANGUAGES.join(", ")}, not ${lang.value ?? "nothing"}`,
-        );
-      }
-
-      language = lang.value;
-      at += lang.extra;
-      continue;
-    }
-
     const parallel = valueOf(args, at, "jobs");
 
     if (parallel !== undefined) {
@@ -78,7 +56,7 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
     paths.push(args[at]);
   }
 
-  return { jobs, language, paths };
+  return { jobs, paths };
 };
 
 const isSupported = (name: string): boolean =>
@@ -129,13 +107,12 @@ const resolveArguments = async (
   args: ReadonlyArray<string>,
   workingDirectory: string,
 ): Promise<StartingPoint> => {
-  const { jobs, language, paths } = parseFlags(args);
+  const { jobs, paths } = parseFlags(args);
 
   if (paths.length === 0) {
     return {
       directory: workingDirectory,
       ...(jobs !== undefined && { jobs }),
-      ...(language && { language }),
       selection: [],
     };
   }
@@ -170,7 +147,6 @@ const resolveArguments = async (
   return {
     directory,
     ...(jobs !== undefined && { jobs }),
-    ...(language && { language }),
     selection,
   };
 };

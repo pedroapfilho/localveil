@@ -24,7 +24,7 @@ vi.mock("@repo/redact-core", async (importOriginal) => {
 });
 
 const cancelled: Array<string> = [];
-const submitted: Array<{ file: File; id: string; language?: string }> = [];
+const submitted: Array<{ file: File; id: string }> = [];
 
 let destroyed = 0;
 let pools = 0;
@@ -42,7 +42,7 @@ vi.mock("./worker-pool", () => ({
       destroy: () => {
         destroyed += 1;
       },
-      submit: (job: { file: File; id: string; language?: string }) => {
+      submit: (job: { file: File; id: string }) => {
         submitted.push(job);
       },
     };
@@ -60,24 +60,13 @@ const pool = () => {
 const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
 
 const Harness = () => {
-  const { clear, downloadZip, remove, removeMany, setLanguage, submit } = useRedaction();
+  const { clear, downloadZip, remove, removeMany, submit } = useRedaction();
 
   const handleClick = () => {
     submit([
       new File(["one"], "one.txt", { type: "text/plain" }),
       new File(["two"], "two.txt", { type: "text/plain" }),
     ]);
-  };
-
-  const handleClickScans = () => {
-    submit([
-      new File(["%PDF"], "card.pdf", { type: "application/pdf" }),
-      new File(["png"], "scan.png", { type: "image/png" }),
-    ]);
-  };
-
-  const handleClickForced = () => {
-    submit([new File(["um"], "um.txt", { type: "text/plain" })], "pt");
   };
 
   const handleClickFolder = () => {
@@ -87,14 +76,6 @@ const Harness = () => {
         path: "cases/august/report.txt",
       },
     ]);
-  };
-
-  const handleSetPortuguese = () => {
-    setLanguage(idsNow(), "pt");
-  };
-
-  const handleSetAuto = () => {
-    setLanguage(idsNow());
   };
 
   const handleRemoveAll = () => {
@@ -115,24 +96,8 @@ const Harness = () => {
         submit
       </button>
 
-      <button onClick={handleClickForced} type="button">
-        submit-forced
-      </button>
-
       <button onClick={handleClickFolder} type="button">
         submit-folder
-      </button>
-
-      <button onClick={handleClickScans} type="button">
-        submit-scans
-      </button>
-
-      <button onClick={handleSetPortuguese} type="button">
-        set-pt
-      </button>
-
-      <button onClick={handleSetAuto} type="button">
-        set-auto
       </button>
 
       <button onClick={handleRemoveFirst} type="button">
@@ -174,15 +139,6 @@ const modelNotice = () => {
 const submitTwo = () => {
   renderWithI18n(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "submit" }));
-};
-
-const submitScans = () => {
-  renderWithI18n(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "submit-scans" }));
-};
-
-const setPortuguese = () => {
-  fireEvent.click(screen.getByRole("button", { name: "set-pt" }));
 };
 
 beforeEach(() => {
@@ -428,21 +384,6 @@ describe("the model download", () => {
   });
 });
 
-describe("a forced document language", () => {
-  it("travels with every file the reader submits", () => {
-    renderWithI18n(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "submit-forced" }));
-
-    expect(submitted.map((job) => job.language)).toEqual(["pt"]);
-  });
-
-  it("stays absent when the reader left the picker on auto", () => {
-    submitTwo();
-
-    expect(submitted.map((job) => job.language)).toEqual([undefined, undefined]);
-  });
-});
-
 describe("removing a file", () => {
   it("tells the pool to stop as well as the page", () => {
     submitTwo();
@@ -453,72 +394,6 @@ describe("removing a file", () => {
 
     expect(cancelled).toEqual([id]);
     expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
-  });
-});
-
-describe("changing a document's language", () => {
-  it("sends the file back to the pool in the new language", () => {
-    submitScans();
-    setPortuguese();
-
-    expect(submitted.map((job) => [job.file.name, job.language])).toEqual([
-      ["card.pdf", undefined],
-      ["scan.png", undefined],
-      ["card.pdf", "pt"],
-      ["scan.png", "pt"],
-    ]);
-  });
-
-  it("cancels before it re-submits, never after", () => {
-    submitScans();
-
-    const ids = idsNow();
-
-    setPortuguese();
-
-    expect(cancelled).toEqual(ids);
-    expect(submitted.slice(2).map((job) => job.id)).toEqual(ids);
-  });
-
-  it("sends the row back to the queue with the last run wiped off it", () => {
-    submitScans();
-
-    act(() => {
-      pool().onDone(idsNow()[0], {
-        blob: new Blob(["hi"]),
-        redactionCount: 2,
-        warnings: [],
-      });
-    });
-
-    setPortuguese();
-
-    const requeued = jobsNow()[0];
-
-    expect(requeued).toMatchObject({
-      language: "pt",
-      stage: "stage.loadingModel",
-      status: "queued",
-    });
-    expect(progressOf(requeued)).toBe(0);
-    expect("result" in requeued).toBe(false);
-  });
-
-  it("records the choice on a text file without redoing the work", () => {
-    submitTwo();
-    setPortuguese();
-
-    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
-    expect(jobsNow().map((job) => job.language)).toEqual(["pt", "pt"]);
-  });
-
-  it("takes a file back to auto-detect", () => {
-    submitScans();
-    setPortuguese();
-    fireEvent.click(screen.getByRole("button", { name: "set-auto" }));
-
-    expect(submitted.at(-1)?.language).toBeUndefined();
-    expect(jobsNow()[0].language).toBeUndefined();
   });
 });
 

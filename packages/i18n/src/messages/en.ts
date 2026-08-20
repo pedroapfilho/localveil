@@ -10,8 +10,6 @@ const en = {
   "dropzone.formats": "Text, Markdown, CSV, JSON, log, PDF and image files",
   "dropzone.hint": "or drag and drop them here",
   "dropzone.label": "Add files or folders",
-  "dropzone.language": "Document language",
-  "dropzone.languageAuto": "Auto-detect",
   "error.unknown": "Something went wrong.",
   "files.clear": "Clear",
   "files.details": "Details for {name}",

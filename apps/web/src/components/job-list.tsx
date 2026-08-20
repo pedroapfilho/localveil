@@ -1,6 +1,5 @@
 /* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
-import type { DocumentLanguage } from "@repo/redact-core";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
@@ -9,8 +8,6 @@ import { useState } from "react";
 
 import type { Job } from "../store";
 
-import type { DocumentLanguageChoice } from "./document-language-picker";
-import { asLanguage } from "./document-language-picker";
 import { JobRow } from "./job-row";
 import { JobSelectionToolbar } from "./job-selection-toolbar";
 
@@ -24,7 +21,6 @@ type JobListProps = {
   onApply: (id: string) => void;
   onClear: () => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
-  onLanguage: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => void;
   onRemove: (id: string) => void;
   onRemoveMany: (ids: ReadonlyArray<string>) => void;
 };
@@ -34,7 +30,6 @@ const JobList = ({
   onApply,
   onClear,
   onCoveredChange,
-  onLanguage,
   onRemove,
   onRemoveMany,
 }: JobListProps) => {
@@ -65,14 +60,6 @@ const JobList = ({
     handleToggleAll(true);
   };
 
-  const handleRowLanguage = (id: string, choice: DocumentLanguageChoice) => {
-    onLanguage([id], asLanguage(choice));
-  };
-
-  const handleSelectionLanguage = (choice: DocumentLanguageChoice) => {
-    onLanguage(selected, asLanguage(choice));
-  };
-
   const handleRemoveSelected = () => {
     onRemoveMany(selected);
     setPicked(new Set());
@@ -92,7 +79,6 @@ const JobList = ({
           <JobSelectionToolbar
             all={selected.length === jobs.length}
             count={selected.length}
-            onLanguageChange={handleSelectionLanguage}
             onRemove={handleRemoveSelected}
             onToggleAll={handleToggleAll}
           />
@@ -131,7 +117,6 @@ const JobList = ({
                 key={job.id}
                 onApply={onApply}
                 onCoveredChange={onCoveredChange}
-                onLanguageChange={handleRowLanguage}
                 onRemove={onRemove}
                 onSelect={handleSelect}
                 selected={chosen.has(job.id)}
