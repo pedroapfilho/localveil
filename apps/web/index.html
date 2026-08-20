@@ -3,22 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title>localveil</title>
+
+    <title>localveil: redact personal data from your files, locally</title>
     <meta
-      content="Redact personal data from your files, entirely on your device."
+      content="localveil blacks out names, emails, phone numbers, addresses and account numbers in PDFs, images and text. It runs in your browser, so nothing is uploaded."
       name="description"
     />
+    <meta content="index, follow, max-image-preview:large" name="robots" />
     <link href="https://localveil.com/" rel="canonical" />
+    <link href="/site.webmanifest" rel="manifest" />
 
     <meta content="website" property="og:type" />
     <meta content="localveil" property="og:site_name" />
     <meta content="https://localveil.com/" property="og:url" />
-    <meta content="localveil" property="og:title" />
+    <meta content="localveil: redact personal data from your files, locally" property="og:title" />
     <meta
-      content="Redact personal data from your files, entirely on your device."
+      content="localveil blacks out names, emails, phone numbers, addresses and account numbers in PDFs, images and text. It runs in your browser, so nothing is uploaded."
       property="og:description"
     />
     <meta content="https://localveil.com/og.png" property="og:image" />
+    <meta content="image/png" property="og:image:type" />
     <meta content="1200" property="og:image:width" />
     <meta content="630" property="og:image:height" />
     <meta
@@ -26,17 +30,50 @@
       property="og:image:alt"
     />
     <meta content="en_US" property="og:locale" />
+    <meta content="pt_BR" property="og:locale:alternate" />
+    <meta content="es_ES" property="og:locale:alternate" />
 
     <meta content="summary_large_image" name="twitter:card" />
-    <meta content="localveil" name="twitter:title" />
+    <meta content="localveil: redact personal data from your files, locally" name="twitter:title" />
     <meta
-      content="Redact personal data from your files, entirely on your device."
+      content="localveil blacks out names, emails, phone numbers, addresses and account numbers in PDFs, images and text. It runs in your browser, so nothing is uploaded."
       name="twitter:description"
     />
     <meta content="https://localveil.com/og.png" name="twitter:image" />
+    <meta
+      content="localveil: redact personal data from your files, entirely on your device."
+      name="twitter:image:alt"
+    />
 
+    <meta content="light" name="color-scheme" />
     <meta content="oklch(1 0 0)" name="theme-color" />
     <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "localveil",
+        "url": "https://localveil.com/",
+        "description": "localveil blacks out names, emails, phone numbers, addresses and account numbers in PDFs, images and text. It runs in your browser, so nothing is uploaded.",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Any browser with WebAssembly",
+        "browserRequirements": "Requires WebAssembly",
+        "inLanguage": ["en", "pt", "es"],
+        "isAccessibleForFree": true,
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "featureList": [
+          "Redacts names, emails, phone numbers, addresses, dates, account numbers and secrets",
+          "Handles text, Markdown, CSV, JSON, logs, PDFs and images",
+          "Runs entirely on your device, with no upload and no account",
+          "Returns the redacted files as a ZIP"
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
