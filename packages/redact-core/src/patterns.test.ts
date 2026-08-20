@@ -102,8 +102,40 @@ describe("patternSpans", () => {
     expect(labels("CEP 01310-100")).toEqual(["private_address"]);
   });
 
+  it("finds a street address by the word that opens it and the number that closes it", () => {
+    expect(covered("mora na Rua Professor Alvaro Rodrigues, 277 Botafogo")).toEqual([
+      "Rua Professor Alvaro Rodrigues, 277",
+    ]);
+    expect(labels("Rua das Acacias, 214")).toEqual(["private_address"]);
+  });
+
+  it("finds one written without a comma", () => {
+    expect(covered("Avenida Sete de Setembro 1180, Salvador")).toEqual([
+      "Avenida Sete de Setembro 1180",
+    ]);
+  });
+
+  it("finds a Spanish street the same way", () => {
+    expect(covered("vive en Calle Alcala 214, Madrid")).toEqual(["Calle Alcala 214"]);
+    expect(covered("Paseo de Gracia 45, Barcelona")).toEqual(["Paseo de Gracia 45"]);
+  });
+
+  it("reads a street shouted in capitals", () => {
+    expect(covered("AVENIDA DE LA CONSTITUCION 88, SEVILLA")).toEqual([
+      "AVENIDA DE LA CONSTITUCION 88",
+    ]);
+  });
+
   it("leaves a month name alone when the digits after it run longer than a day", () => {
     expect(labels("Sete de Setembro 1180")).not.toContain("private_date");
+  });
+
+  it("leaves a street word with no number after it alone", () => {
+    expect(covered("a loja fica na Avenida principal do bairro")).toEqual([]);
+  });
+
+  it("leaves prose that merely names a road alone", () => {
+    expect(covered("seguimos pela Estrada velha ate o fim")).toEqual([]);
   });
 
   it("finds a written-out date", () => {

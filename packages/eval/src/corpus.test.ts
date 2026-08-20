@@ -56,7 +56,9 @@ describe("the corpus", () => {
   });
 
   it("holds at least twelve Portuguese documents", () => {
-    expect(corpus.filter((document) => document.language === "pt")).toHaveLength(12);
+    expect(corpus.filter((document) => document.language === "pt").length).toBeGreaterThanOrEqual(
+      12,
+    );
   });
 
   it("covers English and Spanish too", () => {
