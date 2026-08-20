@@ -1,5 +1,4 @@
 import { useTranslations } from "@repo/i18n";
-import { Checkbox } from "@repo/ui/components/checkbox";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
@@ -37,17 +36,8 @@ const BrandMark = () => (
 const App = () => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const {
-    applyDecisions,
-    clear,
-    downloadZip,
-    remove,
-    removeMany,
-    reviewing,
-    setCovered,
-    setReviewing,
-    submit,
-  } = useRedaction();
+  const { applyDecisions, clear, downloadZip, remove, removeMany, setCovered, submit } =
+    useRedaction();
 
   useDocumentLocale();
 
@@ -114,17 +104,6 @@ const App = () => {
               toast.warning(t("toast.fileLimit", { count: 200 }));
             }}
           />
-
-          <label className="text-muted-foreground mx-auto flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={reviewing}
-              onChange={(event) => {
-                setReviewing(event.currentTarget.checked);
-              }}
-            />
-
-            {t("review.before")}
-          </label>
 
           <AnimatePresence initial={false}>
             {queued ? (

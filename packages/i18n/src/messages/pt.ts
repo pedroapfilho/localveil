@@ -49,7 +49,6 @@ const pt: Messages = {
   "model.ready": "Modelo de detecção pronto",
   "model.slowDevice": "Rodando sem aceleração de GPU, isso vai demorar.",
   "review.apply": "Aplicar",
-  "review.before": "Revisar antes de exportar",
   "review.dismissGroup": "Manter tudo de {label} legível",
   "review.heading": "{count} encontrados. Desmarque o que não for dado pessoal.",
   "review.keepAll": "Cobrir tudo",

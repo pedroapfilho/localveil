@@ -1,7 +1,7 @@
 import { useTranslations } from "@repo/i18n";
 import { buildZip, defaultDecisions } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
@@ -10,25 +10,6 @@ import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
 
 const ZIP_NAME = "localveil.zip";
-
-const REVIEW_KEY = "localveil.review";
-
-const readReviewPreference = () => {
-  try {
-    return globalThis.localStorage.getItem(REVIEW_KEY) !== "off";
-  } catch {
-    return true;
-  }
-};
-
-const writeReviewPreference = (on: boolean) => {
-  try {
-    globalThis.localStorage.setItem(REVIEW_KEY, on ? "on" : "off");
-  } catch {
-    // oxlint-disable-next-line eslint/no-console
-    console.warn("Could not remember the review preference");
-  }
-};
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
@@ -73,8 +54,6 @@ const useRedaction = () => {
   const translateRef = useRef(t);
 
   const saidSlowRef = useRef(false);
-  const [reviewing, setReviewingState] = useState(readReviewPreference);
-  const reviewingRef = useRef(reviewing);
 
   const modelRef = useRef<ModelState>({ kind: "idle" });
 
@@ -102,17 +81,6 @@ const useRedaction = () => {
         const job = jobs.find((entry) => entry.id === id);
 
         if (job === undefined) {
-          return;
-        }
-
-        if (!reviewingRef.current) {
-          poolRef.current?.apply({
-            analysis,
-            decisions: defaultDecisions(analysis.detections),
-            file: job.file,
-            id,
-          });
-
           return;
         }
 
@@ -262,12 +230,6 @@ const useRedaction = () => {
     useJobStore.getState().setCovered(id, covered);
   }, []);
 
-  const setReviewing = useCallback((on: boolean) => {
-    reviewingRef.current = on;
-    setReviewingState(on);
-    writeReviewPreference(on);
-  }, []);
-
   const clear = useCallback(() => {
     const pool = poolRef.current;
     const { jobs, reset } = useJobStore.getState();
@@ -297,9 +259,7 @@ const useRedaction = () => {
     downloadZip,
     remove,
     removeMany,
-    reviewing,
     setCovered,
-    setReviewing,
     submit,
   };
 };
