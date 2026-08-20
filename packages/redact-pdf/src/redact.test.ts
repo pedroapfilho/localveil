@@ -181,6 +181,22 @@ const detecting = (targets: Array<string>): Detect =>
     ),
   );
 
+const detectingEvery = (targets: Array<string>): Detect =>
+  vi.fn((text: string) =>
+    Promise.resolve(
+      targets.flatMap((target) =>
+        [...text.matchAll(new RegExp(target.replaceAll(".", String.raw`\.`), "gv"))].map(
+          (match) => ({
+            end: match.index + target.length,
+            label: "private_person" as const,
+            score: 0.9,
+            start: match.index,
+          }),
+        ),
+      ),
+    ),
+  );
+
 const onlyOnTheSignaturePage: Detect = (text) => {
   const start = text.startsWith("Signed") ? text.indexOf("Ana Lima") : -1;
 
@@ -564,5 +580,23 @@ describe("pdfRedactor", () => {
         onProgress: () => undefined,
       }),
     ).rejects.toThrow(/no recognised pages/v);
+  });
+
+  it("leaves a role the first page defined out of the detections on every page", async () => {
+    state.pages = [
+      page('Zora Labs, Inc. ("Client") engages Ana Lima'),
+      page("Client will pay Ana Lima"),
+    ];
+
+    const analysis = await pdfRedactor.analyse(
+      file(),
+      detectingEvery(["Client", "Ana Lima"]),
+      () => undefined,
+    );
+
+    expect(analysis.detections.map((detection) => detection.preview)).toEqual([
+      "Ana Lima",
+      "Ana Lima",
+    ]);
   });
 });

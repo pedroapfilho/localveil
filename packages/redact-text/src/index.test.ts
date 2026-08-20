@@ -140,6 +140,26 @@ describe("textRedactor", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("leaves the role a contract defined for itself readable", async () => {
+    const text = 'Zora Labs, Inc. ("Client") engages Pedro Filho. Client will pay Pedro Filho.';
+    const at = (value: string, from = 0) => {
+      const start = text.indexOf(value, from);
+
+      return span(start, start + value.length);
+    };
+
+    const result = await redactFile({
+      detect: answering([at("Client"), at("Pedro Filho"), at("Client", 30)]),
+      file: file("deal.txt", "text/plain", text),
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
+
+    await expect(result.blob.text()).resolves.toBe(
+      'Zora Labs, Inc. ("Client") engages ███████████. Client will pay ███████████.',
+    );
+  });
+
   it("counts overlapping spans as the one redaction they become", async () => {
     const result = await redactFile({
       detect: detecting([span(3, 6), span(4, 12)]),

@@ -95,6 +95,16 @@ const detectCpf: Detect = (text) => {
     start === -1 ? [] : [{ end: start + 14, label: "account_number" as const, score: 1, start }],
   );
 };
+const detectRole: Detect = (text) =>
+  Promise.resolve(
+    [...text.matchAll(/Client/gv)].map((match) => ({
+      end: match.index + "Client".length,
+      label: "private_person" as const,
+      score: 0.97,
+      start: match.index,
+    })),
+  );
+
 const onProgress: FileProgress = () => undefined;
 
 const redact = (detect: Detect = noSpans) =>
@@ -428,5 +438,20 @@ describe("image OCR retry", () => {
 
     expect(analysis.detections).toHaveLength(1);
     expect(new Set(analysis.detections.map((entry) => entry.id)).size).toBe(1);
+  });
+
+  it("leaves a role the page defined for itself out of the detections", async () => {
+    mocks.readImageText.mockResolvedValue(
+      reading("en", 90, [
+        ["Zora", 95],
+        ['("Client")', 95],
+        ["engages", 95],
+        ["Client", 95],
+      ]),
+    );
+
+    const analysis = await imageRedactor.analyse(file(), detectRole, onProgress);
+
+    expect(analysis.detections).toEqual([]);
   });
 });

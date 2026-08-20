@@ -7,6 +7,7 @@ export {
   describeSpans,
   keptSpans,
 } from "./detections.ts";
+export { definedTerms, dropDefinedTerms } from "./defined-terms.ts";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
 export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";
 export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
