@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const events: Array<string> = [];
 
-type FakePage = { layer: string; words: Array<string> };
+type FakePage = {
+  layer: string;
+  layout?: Array<[x: number, y: number]>;
+  words: Array<string>;
+};
 
 const state = {
   confidence: 90,
@@ -56,12 +60,11 @@ vi.mock("pdfjs-dist", () => ({
             const page = state.pages[number - 1];
 
             return Promise.resolve({
-              items: page.layer.split(" ").map((str, at) => ({
-                height: 10,
-                str,
-                transform: [10, 0, 0, 10, at * 40, 100],
-                width: str.length * 5,
-              })),
+              items: page.layer.split(" ").map((str, at) => {
+                const [x, y] = page.layout?.[at] ?? [at * 40, 100];
+
+                return { height: 10, str, transform: [10, 0, 0, 10, x, y], width: str.length * 5 };
+              }),
             });
           },
           getViewport: () => ({
@@ -598,5 +601,42 @@ describe("pdfRedactor", () => {
       "Ana Lima",
       "Ana Lima",
     ]);
+  });
+
+  it("reads a filled form by its layout, not by the order the layer lists it", async () => {
+    state.layerTransform = [2, 0, 0, -2, 0, 400];
+    state.pages = [
+      {
+        layer: "Name of Recipient Please Print Ana Lima The parties have executed this agreement",
+        layout: [
+          [0, 100],
+          [40, 100],
+          [80, 100],
+          [120, 100],
+          [160, 100],
+          [0, 120],
+          [40, 120],
+          [0, 140],
+          [40, 140],
+          [80, 140],
+          [120, 140],
+          [160, 140],
+          [200, 140],
+        ],
+        words: [],
+      },
+    ];
+
+    const seen: Array<string> = [];
+
+    await run((text) => {
+      seen.push(text);
+
+      return detecting([])(text);
+    });
+
+    expect(seen.at(0)).toBe(
+      "The parties have executed this agreement Ana Lima Name of Recipient Please Print",
+    );
   });
 });

@@ -14,6 +14,7 @@ export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-s
 export type { ChunkSpans, Range } from "./merge-spans.ts";
 export { redactFile } from "./redact-file.ts";
 export { patternSpans } from "./patterns.ts";
+export { inReadingOrder } from "./reading-order.ts";
 export { spansForTokens, tokensFromSpans } from "./repeats.ts";
 export type { PiiToken } from "./repeats.ts";
 export { createRedactorRegistry } from "./registry.ts";

@@ -7,6 +7,7 @@ import {
   definedTerms,
   describeSpans,
   dropDefinedTerms,
+  inReadingOrder,
   isCovered,
   keptSpans,
   mergeOverlappingRanges,
@@ -186,7 +187,7 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
           warnings.add("warning.scannedPages");
         }
 
-        const typed = textLayerWords({ items: content.items, viewport });
+        const typed = inReadingOrder(textLayerWords({ items: content.items, viewport }));
         const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
 
         let reading: ImageReading;
