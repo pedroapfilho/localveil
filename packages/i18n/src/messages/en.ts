@@ -46,7 +46,6 @@ const en = {
   "model.ready": "Detection model ready",
   "model.slowDevice": "Running without GPU acceleration, this will be slow.",
   "review.apply": "Apply redactions",
-  "review.before": "Review before exporting",
   "review.dismissGroup": "Keep all {label} readable",
   "review.heading": "{count} found. Uncheck anything that is not personal data.",
   "review.keepAll": "Cover everything",

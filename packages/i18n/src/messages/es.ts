@@ -49,7 +49,6 @@ const es: Messages = {
   "model.ready": "Modelo de detección listo",
   "model.slowDevice": "Funcionando sin aceleración de GPU, esto será lento.",
   "review.apply": "Aplicar",
-  "review.before": "Revisar antes de exportar",
   "review.dismissGroup": "Mantener todo de {label} legible",
   "review.heading": "{count} encontrados. Desmarca lo que no sea dato personal.",
   "review.keepAll": "Cubrir todo",
