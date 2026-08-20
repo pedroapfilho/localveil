@@ -102,6 +102,10 @@ describe("patternSpans", () => {
     expect(labels("CEP 01310-100")).toEqual(["private_address"]);
   });
 
+  it("leaves a month name alone when the digits after it run longer than a day", () => {
+    expect(labels("Sete de Setembro 1180")).not.toContain("private_date");
+  });
+
   it("finds a written-out date", () => {
     expect(covered("nascido em 12/03/1985 em Santos")).toEqual(["12/03/1985"]);
     expect(labels("12/03/1985")).toEqual(["private_date"]);

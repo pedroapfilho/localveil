@@ -128,7 +128,7 @@ const WRITTEN_DATE = new RegExp(
 );
 
 const MONTH_FIRST_DATE = new RegExp(
-  `\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+(?:19|20)\\d{2})?`,
+  `\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?\\b(?:,?\\s+(?:19|20)\\d{2})?`,
   "giv",
 );
 
