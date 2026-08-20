@@ -1,0 +1,17 @@
+{
+  "name": "localveil",
+  "short_name": "localveil",
+  "description": "Redact personal data from your files, entirely on your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}
