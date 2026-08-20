@@ -1,5 +1,4 @@
 import { useTranslations } from "@repo/i18n";
-import type { DocumentLanguage } from "@repo/redact-core";
 import { buildZip, defaultDecisions } from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -7,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
 import type { JobInput } from "./store";
-import { usesLanguage } from "./uses-language";
 import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
 
@@ -217,13 +215,13 @@ const useRedaction = () => {
   }, [ensurePool]);
 
   const submit = useCallback(
-    (files: Array<JobInput>, language?: DocumentLanguage) => {
+    (files: Array<JobInput>) => {
       const pool = ensurePool();
       const { addFiles, setState } = useJobStore.getState();
 
-      for (const job of addFiles(files, language)) {
+      for (const job of addFiles(files)) {
         setState(job.id, { stage: "stage.loadingModel", status: "queued" });
-        pool.submit({ file: job.file, id: job.id, language: job.language });
+        pool.submit({ file: job.file, id: job.id });
       }
     },
     [ensurePool],
@@ -245,45 +243,6 @@ const useRedaction = () => {
 
     useJobStore.getState().removeJobs(ids);
   }, []);
-
-  const setLanguage = useCallback(
-    (ids: ReadonlyArray<string>, language?: DocumentLanguage) => {
-      const { jobs, requeue, setLanguage: setJobLanguage, setState } = useJobStore.getState();
-      const byId = new Map(jobs.map((job) => [job.id, job]));
-
-      const rerunning = ids.filter((id) => {
-        const job = byId.get(id);
-
-        if (job === undefined) {
-          return false;
-        }
-
-        if (usesLanguage(job.file)) {
-          return true;
-        }
-
-        setJobLanguage(id, language);
-
-        return false;
-      });
-
-      if (rerunning.length === 0) {
-        return;
-      }
-
-      const pool = ensurePool();
-
-      for (const id of rerunning) {
-        pool.cancel(id);
-      }
-
-      for (const job of requeue(rerunning, language)) {
-        setState(job.id, { stage: "stage.loadingModel", status: "queued" });
-        pool.submit({ file: job.file, id: job.id, language: job.language });
-      }
-    },
-    [ensurePool],
-  );
 
   const applyDecisions = useCallback((id: string) => {
     const { jobs, setState } = useJobStore.getState();
@@ -340,7 +299,6 @@ const useRedaction = () => {
     removeMany,
     reviewing,
     setCovered,
-    setLanguage,
     setReviewing,
     submit,
   };

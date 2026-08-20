@@ -34,7 +34,6 @@ For the terminal:
 ```bash
 pnpm --filter cli start                    # browse and pick files
 pnpm --filter cli start scan.pdf           # or name them up front
-pnpm --filter cli start --lang pt scan.pdf # skip the language guessing
 pnpm --filter cli start --jobs 2 *.pdf     # cap how many files run at once
 ```
 

@@ -1,4 +1,4 @@
-import type { Analysis, DocumentLanguage, FileStageKey } from "@repo/redact-core";
+import type { Analysis, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -13,7 +13,6 @@ type JobPatch = {
   error?: string;
   file?: File;
   id?: string;
-  language?: DocumentLanguage;
   path?: string;
   progress?: number;
   result?: JobResult;
@@ -29,7 +28,6 @@ const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job =
   const source: JobSource = {
     file: patch.file ?? fallbackFile,
     id: patch.id ?? fallbackId,
-    language: patch.language,
     path: patch.path,
   };
 
@@ -67,7 +65,6 @@ const pdf = (patch: JobPatch = {}): Job =>
 const setup = (job: Job, selected = false) => {
   const onApply = vi.fn<(id: string) => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
-  const onLanguageChange = vi.fn<(id: string, choice: "auto" | "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onSelect = vi.fn<(id: string, next: boolean) => void>();
 
@@ -78,7 +75,6 @@ const setup = (job: Job, selected = false) => {
         job={job}
         onApply={onApply}
         onCoveredChange={onCoveredChange}
-        onLanguageChange={onLanguageChange}
         onRemove={onRemove}
         onSelect={onSelect}
         selected={selected}
@@ -94,7 +90,6 @@ const setup = (job: Job, selected = false) => {
           job={next}
           onApply={onApply}
           onCoveredChange={onCoveredChange}
-          onLanguageChange={onLanguageChange}
           onRemove={onRemove}
           onSelect={onSelect}
           selected={selected}
@@ -103,7 +98,7 @@ const setup = (job: Job, selected = false) => {
     );
   };
 
-  return { container: view.container, onLanguageChange, onRemove, onSelect, rerenderWith };
+  return { container: view.container, onRemove, onSelect, rerenderWith };
 };
 
 const LOW_CONFIDENCE =
@@ -178,12 +173,10 @@ describe("JobRow", () => {
     expect(screen.queryByText("The worker gave up")).toBeNull();
   });
 
-  it("offers a language on a file that reaches OCR", () => {
+  it("offers no disclosure on a queued file that reaches OCR", () => {
     setup(pdf());
 
-    fireEvent.click(screen.getByLabelText("Details for card.pdf"));
-
-    expect(screen.getByRole("combobox", { name: "Document language" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Details for card.pdf")).toBeNull();
   });
 
   it("offers no disclosure at all on a clean text file", () => {
@@ -192,31 +185,6 @@ describe("JobRow", () => {
     );
 
     expect(screen.queryByLabelText("Details for notes.txt")).toBeNull();
-  });
-
-  it("shows the language a file was given", () => {
-    setup(pdf({ language: "pt" }));
-
-    fireEvent.click(screen.getByLabelText("Details for card.pdf"));
-
-    expect(screen.getByRole("combobox", { name: "Document language" })).toHaveTextContent(
-      "Português",
-    );
-  });
-
-  it("reports a language change with the row's own id", async () => {
-    const { onLanguageChange } = setup(pdf({ id: "job-pdf" }));
-
-    fireEvent.click(screen.getByLabelText("Details for card.pdf"));
-    fireEvent.click(screen.getByRole("combobox", { name: "Document language" }));
-
-    const option = await screen.findByRole("option", { name: "Español" });
-
-    fireEvent.pointerDown(option);
-    fireEvent.pointerUp(option);
-    fireEvent.click(option);
-
-    expect(onLanguageChange).toHaveBeenCalledWith("job-pdf", "es");
   });
 
   it("reports its own selection", () => {

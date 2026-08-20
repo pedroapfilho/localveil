@@ -159,7 +159,7 @@ describe("image OCR retry", () => {
     await redact(detect);
 
     expect(mocks.readImageText).toHaveBeenCalledTimes(2);
-    expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([{}, {}]);
+    expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([undefined, undefined]);
     expect(detect.mock.calls.map(([text]) => text)).toEqual(["Maria Silva", "Maria Silva"]);
     expect(contexts).toHaveLength(2);
     expect(contexts.at(-1)?.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
@@ -287,14 +287,9 @@ describe("image OCR retry", () => {
       detect,
       file: file(),
       onProgress,
-      options: { language: "pt" },
       redactor: imageRedactor,
     });
 
-    expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([
-      { known: "pt" },
-      { known: "pt" },
-    ]);
     expect(detect).toHaveBeenCalledWith("Pedro Afonso Pedrosa");
   });
 

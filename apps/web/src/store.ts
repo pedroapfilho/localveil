@@ -1,4 +1,4 @@
-import type { Analysis, DocumentLanguage, FileStageKey, WarningKey } from "@repo/redact-core";
+import type { Analysis, FileStageKey, WarningKey } from "@repo/redact-core";
 import { create } from "zustand";
 
 type JobStatus = "done" | "error" | "queued" | "reviewing" | "running";
@@ -8,7 +8,6 @@ type JobResult = { blob: Blob; redactionCount: number; warnings: Array<WarningKe
 type JobSource = {
   file: File;
   id: string;
-  language?: DocumentLanguage;
   path?: string;
 };
 
@@ -22,14 +21,12 @@ type JobState =
 type Job = JobSource & JobState;
 
 type JobStore = {
-  addFiles: (files: Array<JobInput>, language?: DocumentLanguage) => Array<Job>;
+  addFiles: (files: Array<JobInput>) => Array<Job>;
   jobs: Array<Job>;
   removeJob: (id: string) => void;
   removeJobs: (ids: ReadonlyArray<string>) => void;
-  requeue: (ids: ReadonlyArray<string>, language?: DocumentLanguage) => Array<Job>;
   reset: () => void;
   setCovered: (id: string, covered: ReadonlyArray<string>) => void;
-  setLanguage: (id: string, language?: DocumentLanguage) => void;
   setState: (id: string, state: JobState) => void;
 };
 
@@ -40,12 +37,7 @@ const sourceOf = (input: JobInput) =>
     ? { file: input, path: input.webkitRelativePath || input.name }
     : { file: input.file, path: input.path };
 
-const justTheSource = ({ file, id, language, path }: Job): JobSource => ({
-  file,
-  id,
-  language,
-  path,
-});
+const justTheSource = ({ file, id, path }: Job): JobSource => ({ file, id, path });
 
 const useJobStore = create<JobStore>((set) => {
   const mapJob = (id: string, change: (job: Job) => Job) => {
@@ -53,11 +45,11 @@ const useJobStore = create<JobStore>((set) => {
   };
 
   return {
-    addFiles: (files, language) => {
+    addFiles: (files) => {
       const created = files.map((input): Job => {
         const { file, path } = sourceOf(input);
 
-        return { file, id: crypto.randomUUID(), language, path, status: "queued" };
+        return { file, id: crypto.randomUUID(), path, status: "queued" };
       });
 
       set((state) => ({ jobs: [...state.jobs, ...created] }));
@@ -74,34 +66,11 @@ const useJobStore = create<JobStore>((set) => {
       set((state) => ({ jobs: state.jobs.filter((job) => !dropping.has(job.id)) }));
     },
 
-    requeue: (ids, language) => {
-      const requeueing = new Set(ids);
-      const queued: Array<Job> = [];
-
-      set((state) => ({
-        jobs: state.jobs.map((job) => {
-          if (!requeueing.has(job.id)) {
-            return job;
-          }
-
-          const next: Job = { ...justTheSource(job), language, status: "queued" };
-
-          queued.push(next);
-
-          return next;
-        }),
-      }));
-
-      return queued;
-    },
     reset: () => {
       set({ jobs: [] });
     },
     setCovered: (id, covered) => {
       mapJob(id, (job) => (job.status === "reviewing" ? { ...job, covered } : job));
-    },
-    setLanguage: (id, language) => {
-      mapJob(id, (job) => ({ ...job, language }));
     },
     setState: (id, next) => {
       mapJob(id, (job) => ({ ...justTheSource(job), ...next }));

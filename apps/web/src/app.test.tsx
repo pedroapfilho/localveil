@@ -25,7 +25,7 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "localveil" })).toBeInTheDocument();
     expect(screen.getByLabelText(/choose files/iv)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose a folder" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add files or folders/iv })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();
     expect(screen.queryByRole("button", { name: /download zip/iv })).toBeNull();
   });
@@ -98,7 +98,7 @@ describe("App", () => {
 
     renderWithI18n(<App />);
 
-    expect(screen.getByText("Escolher arquivos")).toBeInTheDocument();
+    expect(screen.getByText("Adicionar arquivos ou pastas")).toBeInTheDocument();
     expect(screen.getByText("Sobre o localveil")).toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe("App", () => {
     fireEvent.click(option);
 
     await waitFor(() => {
-      expect(screen.getByText("Escolher arquivos")).toBeInTheDocument();
+      expect(screen.getByText("Adicionar arquivos ou pastas")).toBeInTheDocument();
     });
   });
 });

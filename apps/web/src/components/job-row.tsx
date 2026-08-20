@@ -25,11 +25,8 @@ import { useState } from "react";
 import { APPEAR, staggered } from "../motion";
 import type { Job, JobStatus } from "../store";
 import { progressOf, stageOf } from "../store";
-import { usesLanguage } from "../uses-language";
 
 import { DetectionReview } from "./detection-review";
-import type { DocumentLanguageChoice } from "./document-language-picker";
-import { asChoice, DocumentLanguagePicker } from "./document-language-picker";
 import { GlossaryText } from "./glossary-text";
 
 const STATUS_KEYS = {
@@ -61,7 +58,6 @@ type JobRowProps = {
   job: Job;
   onApply: (id: string) => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
-  onLanguageChange: (id: string, choice: DocumentLanguageChoice) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
   selected: boolean;
@@ -72,30 +68,24 @@ const JobRow = ({
   job,
   onApply,
   onCoveredChange,
-  onLanguageChange,
   onRemove,
   onSelect,
   selected,
 }: JobRowProps) => {
   const { t } = useTranslations();
-  const { file, id, language, path, status } = job;
+  const { file, id, path, status } = job;
   const name = path ?? file.name;
 
   const busy = status === "running";
   const inFlight = status === "queued" || busy;
-  const languageMatters = usesLanguage(file);
   const warnings = job.status === "done" ? job.result.warnings : [];
   const failure = job.status === "error";
   const reviewing = job.status === "reviewing";
 
-  const hasDetails = languageMatters || failure || reviewing || warnings.length > 0;
+  const hasDetails = failure || reviewing || warnings.length > 0;
 
   const [chosen, setChosen] = useState<boolean | undefined>(undefined);
   const open = chosen ?? (failure || reviewing);
-
-  const handleLanguageChange = (choice: DocumentLanguageChoice) => {
-    onLanguageChange(id, choice);
-  };
 
   const handleRemove = () => {
     onRemove(id);
@@ -202,19 +192,6 @@ const JobRow = ({
                       onCoveredChange(id, next);
                     }}
                   />
-                ) : null}
-
-                {languageMatters ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground text-base sm:text-sm">
-                      {t("dropzone.language")}
-                    </span>
-
-                    <DocumentLanguagePicker
-                      onChange={handleLanguageChange}
-                      value={asChoice(language)}
-                    />
-                  </div>
                 ) : null}
 
                 {job.status === "error" ? (

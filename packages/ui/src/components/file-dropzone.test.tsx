@@ -9,49 +9,66 @@ const withFiles = (files: Array<File>) => ({
   dataTransfer: { files, items: [], types: ["Files"] },
 });
 
-const setup = (props: Partial<Parameters<typeof FileDropzone>[0]> = {}) => {
-  const onFilesSelected = vi.fn<(files: Array<{ file: File; path: string }>) => void>();
-
-  render(
-    <FileDropzone
-      hint="or drag and drop them here"
-      label="Choose files"
-      onFilesSelected={onFilesSelected}
-      {...props}
-    />,
-  );
-
-  const input = screen.getByLabelText(/choose files/iv);
+const inputNamed = (name: RegExp | string) => {
+  const input = screen.getByLabelText(name);
 
   if (!(input instanceof HTMLInputElement)) {
     throw new TypeError("The labelled control is not a file input");
   }
 
-  const zone = input.closest("[data-slot=file-dropzone]");
+  return input;
+};
 
-  if (!(zone instanceof HTMLLabelElement)) {
-    throw new TypeError("The file input is not inside the dropzone label");
+const setup = (props: Partial<Parameters<typeof FileDropzone>[0]> = {}) => {
+  const onFilesSelected = vi.fn<(files: Array<{ file: File; path: string }>) => void>();
+
+  render(
+    <FileDropzone
+      filesLabel="Choose files"
+      folderLabel="Choose a folder"
+      hint="or drag and drop them here"
+      label="Add files or folders"
+      onFilesSelected={onFilesSelected}
+      {...props}
+    />,
+  );
+
+  const zone = screen.getByRole("button", { name: /add files or folders/iv });
+
+  if (!(zone instanceof HTMLButtonElement)) {
+    throw new TypeError("The dropzone is not a button");
   }
 
-  return { input, onFilesSelected, zone };
+  return {
+    directory: inputNamed(/choose a folder/iv),
+    input: inputNamed(/choose files/iv),
+    onFilesSelected,
+    zone,
+  };
+};
+
+const openMenu = async (zone: HTMLElement, item: RegExp) => {
+  fireEvent.click(zone);
+
+  fireEvent.click(await screen.findByRole("menuitem", { name: item }));
 };
 
 describe("FileDropzone", () => {
-  it("opens the picker when the zone is clicked", () => {
+  it("opens the file picker from the menu when the zone is clicked", async () => {
     const { input, zone } = setup();
-    const opened = vi.fn<() => void>();
+    const opened = vi.spyOn(input, "click");
 
-    input.addEventListener("click", opened);
-    fireEvent.click(zone);
+    await openMenu(zone, /choose files/iv);
 
     expect(opened).toHaveBeenCalled();
   });
 
-  it("keeps the input reachable by keyboard so Enter and Space open the picker", () => {
-    const { input } = setup();
+  it("keeps the zone reachable by keyboard and the inputs out of the tab order", () => {
+    const { directory, input, zone } = setup();
 
-    expect(input.disabled).toBe(false);
-    expect(input.tabIndex).toBe(0);
+    expect(zone.disabled).toBe(false);
+    expect(input.tabIndex).toBe(-1);
+    expect(directory.tabIndex).toBe(-1);
   });
 
   it("flags dragging while files are over the zone and clears it on leave", () => {
@@ -130,38 +147,32 @@ describe("FileDropzone", () => {
 
   it("ignores clicks and drops while disabled", () => {
     const { input, onFilesSelected, zone } = setup({ disabled: true });
-    const opened = vi.fn<() => void>();
 
-    input.addEventListener("click", opened);
     fireEvent.click(zone);
     fireEvent.dragOver(zone, withFiles([textFile()]));
     fireEvent.drop(zone, withFiles([textFile()]));
 
+    expect(zone.disabled).toBe(true);
     expect(input.disabled).toBe(true);
-    expect(opened).not.toHaveBeenCalled();
+    expect(screen.queryByRole("menuitem")).toBeNull();
     expect(onFilesSelected).not.toHaveBeenCalled();
     expect(zone.dataset.dragging).toBeUndefined();
   });
 
-  it("passes the accept list to the input", () => {
-    const { input } = setup({ accept: ".txt,.pdf" });
+  it("passes the accept list to both inputs", () => {
+    const { directory, input } = setup({ accept: ".txt,.pdf" });
 
     expect(input.accept).toBe(".txt,.pdf");
+    expect(directory.accept).toBe(".txt,.pdf");
   });
 
   it("falls back to a directory input when the modern picker is unavailable", async () => {
-    const { onFilesSelected } = setup({ folderLabel: "Choose a folder" });
-    const directory = document.querySelectorAll('input[type="file"]')[1];
-
-    if (!(directory instanceof HTMLInputElement)) {
-      throw new TypeError("The directory fallback input was not rendered");
-    }
-
+    const { directory, onFilesSelected, zone } = setup();
     const opened = vi.spyOn(directory, "click");
 
     expect(directory.webkitdirectory).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose a folder" }));
+    await openMenu(zone, /choose a folder/iv);
 
     await waitFor(() => {
       expect(opened).toHaveBeenCalled();

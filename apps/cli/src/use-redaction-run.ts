@@ -1,6 +1,5 @@
 import type { FileStageKey } from "@repo/redact-core";
 import { describeError } from "@repo/redact-core";
-import type { DocumentLanguage } from "@repo/redact-node";
 import { useCallback, useRef, useState } from "react";
 
 import type { RunResult } from "./run-redaction";
@@ -15,14 +14,13 @@ type RunProgressState = {
 
 type RedactionRunOptions = {
   jobs?: number;
-  language?: DocumentLanguage;
   onSettled: () => void;
   outputDirectory: string;
 };
 
 const INITIAL: RunProgressState = { fileIndex: 0, fraction: 0, modelFraction: null, stage: null };
 
-const useRedactionRun = ({ jobs, language, onSettled, outputDirectory }: RedactionRunOptions) => {
+const useRedactionRun = ({ jobs, onSettled, outputDirectory }: RedactionRunOptions) => {
   const [progress, setProgress] = useState(INITIAL);
   const [result, setResult] = useState<RunResult | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -45,7 +43,6 @@ const useRedactionRun = ({ jobs, language, onSettled, outputDirectory }: Redacti
             await runRedaction({
               files,
               jobs,
-              language,
 
               onFileProgress: ({ fraction, index, stage }) => {
                 setProgress({ fileIndex: index, fraction, modelFraction: null, stage });
@@ -66,7 +63,7 @@ const useRedactionRun = ({ jobs, language, onSettled, outputDirectory }: Redacti
 
       void execute();
     },
-    [jobs, language, onSettled, outputDirectory],
+    [jobs, onSettled, outputDirectory],
   );
 
   return { cancel, failure, progress, result, start };

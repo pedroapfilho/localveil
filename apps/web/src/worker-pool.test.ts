@@ -55,14 +55,13 @@ describe("createRedactionPool", () => {
     expect(new Set(pooled.tasks.map((task) => task.options.transfer[0])).size).toBe(2);
   });
 
-  it("passes the file and its language through to the worker", () => {
+  it("passes the file through to the worker", () => {
     const pool = build();
     const file = new File(["x"], "one.txt");
 
-    pool.submit({ file, id: "a", language: "pt" });
+    pool.submit({ file, id: "a" });
 
     expect(taskAt(0).params[0]).toBe(file);
-    expect(taskAt(0).params[1]).toBe("pt");
   });
 
   it("reports progress against the file it came from", () => {

@@ -1,4 +1,4 @@
-import type { Detect, FileStageKey, RedactOptions, WarningKey } from "@repo/redact-core";
+import type { Detect, FileStageKey, WarningKey } from "@repo/redact-core";
 import { createRedactorRegistry, redactFile } from "@repo/redact-core";
 import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
@@ -21,7 +21,6 @@ const redactPath = async (
   path: string,
   detect: Detect,
   onProgress: NodeRedactionProgress,
-  options: RedactOptions = {},
 ): Promise<NodeRedactionOutput> => {
   installCanvas();
 
@@ -31,7 +30,6 @@ const redactPath = async (
     detect,
     file,
     onProgress,
-    options,
     redactor,
   });
 

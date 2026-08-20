@@ -1,6 +1,6 @@
 import { workerData } from "node:worker_threads";
 
-import type { DocumentLanguage, EventPort } from "@repo/redact-core";
+import type { EventPort } from "@repo/redact-core";
 import { createDetectClient } from "@repo/redact-core";
 import type { NodeRedactionOutput } from "@repo/redact-node";
 import { redactPath } from "@repo/redact-node";
@@ -17,17 +17,9 @@ if (!isSetup(workerData)) {
 
 const detect = createDetectClient(workerData.port);
 
-const redact = (
-  path: string,
-  language: DocumentLanguage | undefined,
-): Promise<NodeRedactionOutput> =>
-  redactPath(
-    path,
-    detect,
-    (fraction, stage) => {
-      workerpool.workerEmit({ fraction, stage });
-    },
-    { language },
-  );
+const redact = (path: string): Promise<NodeRedactionOutput> =>
+  redactPath(path, detect, (fraction, stage) => {
+    workerpool.workerEmit({ fraction, stage });
+  });
 
 workerpool.worker({ redact });

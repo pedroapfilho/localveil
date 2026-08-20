@@ -1,7 +1,6 @@
 import type {
   Analysis,
   Decisions,
-  DocumentLanguage,
   FileStageKey,
   ModelStageKey,
   RedactionResult,
@@ -17,7 +16,7 @@ import type { AnalyseTask, ApplyTask, ProgressEvent } from "./worker-protocol";
 
 const SILENCE_LIMIT = 120_000;
 
-type JobRequest = { file: File; id: string; language?: DocumentLanguage };
+type JobRequest = { file: File; id: string };
 
 type ApplyRequest = { analysis: Analysis; decisions: Decisions; file: File; id: string };
 
@@ -232,7 +231,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
         submit(job);
       },
       (port) =>
-        pool.exec<AnalyseTask>("analyse", [job.file, job.language, port], {
+        pool.exec<AnalyseTask>("analyse", [job.file, port], {
           on: watching(job.id),
           transfer: [port],
         }),

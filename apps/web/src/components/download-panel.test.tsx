@@ -1,4 +1,4 @@
-import type { Analysis, DocumentLanguage, FileStageKey } from "@repo/redact-core";
+import type { Analysis, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,6 @@ type JobPatch = {
   error?: string;
   file?: File;
   id?: string;
-  language?: DocumentLanguage;
   path?: string;
   progress?: number;
   result?: JobResult;
@@ -31,7 +30,6 @@ const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job =
   const source: JobSource = {
     file: patch.file ?? fallbackFile,
     id: patch.id ?? fallbackId,
-    language: patch.language,
     path: patch.path,
   };
 

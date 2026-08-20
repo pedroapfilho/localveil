@@ -29,13 +29,15 @@ type ScrollAreaProps = ComponentProps<typeof ScrollAreaPrimitive.Root> & {
 
 const ScrollArea = ({ children, className, viewportClassName, ...props }: ScrollAreaProps) => (
   <ScrollAreaPrimitive.Root
-    className={cn("relative", className)}
+    className={cn("relative overflow-hidden", className)}
     data-slot="scroll-area"
     {...props}
   >
     <ScrollAreaPrimitive.Viewport
       className={cn(
-        "focus-visible:outline-ring size-full overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2",
+        // max-h-[inherit] carries a max-height set on the root down to the viewport: h-full alone
+        // resolves to auto against an auto-height root, leaving nothing to scroll against.
+        "focus-visible:outline-ring size-full max-h-[inherit] overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2",
         viewportClassName,
       )}
       data-slot="scroll-area-viewport"

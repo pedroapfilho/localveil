@@ -45,7 +45,6 @@ const App = () => {
     removeMany,
     reviewing,
     setCovered,
-    setLanguage,
     setReviewing,
     submit,
   } = useRedaction();
@@ -102,6 +101,7 @@ const App = () => {
         <main className="flex flex-col gap-8" id="main">
           <FileDropzone
             accept={ACCEPTED_FILES}
+            filesLabel={t("dropzone.files")}
             folderLabel={t("dropzone.folder")}
             formats={t("dropzone.formats")}
             hint={t("dropzone.hint")}
@@ -139,7 +139,6 @@ const App = () => {
                   onApply={applyDecisions}
                   onClear={clear}
                   onCoveredChange={setCovered}
-                  onLanguage={setLanguage}
                   onRemove={remove}
                   onRemoveMany={removeMany}
                 />

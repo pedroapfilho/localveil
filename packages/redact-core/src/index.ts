@@ -33,7 +33,6 @@ export type {
   PositionedWord,
   Rect,
   RedactionResult,
-  RedactOptions,
   Redactor,
   Span,
   StageKey,

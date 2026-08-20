@@ -12,7 +12,7 @@ import {
   uniqueFilename,
 } from "@repo/redact-core";
 import type { FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
-import type { DocumentLanguage, NodeRedactionOutput } from "@repo/redact-node";
+import type { NodeRedactionOutput } from "@repo/redact-node";
 import { createNodeDetector } from "@repo/redact-node";
 import workerpool from "workerpool";
 
@@ -61,7 +61,6 @@ type RunResult = {
 type RunOptions = {
   files: ReadonlyArray<string>;
   jobs?: number;
-  language?: DocumentLanguage;
   onFileProgress: (progress: RunProgress) => void;
   onModelProgress: (fraction: number) => void;
   outputDirectory: string;
@@ -104,7 +103,6 @@ const writeArchive = async (
 const runRedaction = async ({
   files,
   jobs,
-  language,
   onFileProgress,
   onModelProgress,
   outputDirectory,
@@ -134,17 +132,13 @@ const runRedaction = async ({
   signal.addEventListener("abort", stop, { once: true });
 
   const redactOne = (file: string, index: number) =>
-    pool.exec<(path: string, forced: DocumentLanguage | undefined) => NodeRedactionOutput>(
-      "redact",
-      [file, language],
-      {
-        on: (payload: unknown) => {
-          if (isProgress(payload)) {
-            onFileProgress({ fraction: payload.fraction, index, stage: payload.stage });
-          }
-        },
+    pool.exec<(path: string) => NodeRedactionOutput>("redact", [file], {
+      on: (payload: unknown) => {
+        if (isProgress(payload)) {
+          onFileProgress({ fraction: payload.fraction, index, stage: payload.stage });
+        }
       },
-    );
+    });
 
   const settled = await Promise.allSettled(files.map(redactOne));
 

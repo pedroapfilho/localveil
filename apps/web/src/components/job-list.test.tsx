@@ -1,4 +1,4 @@
-import type { Analysis, DocumentLanguage, FileStageKey } from "@repo/redact-core";
+import type { Analysis, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -13,7 +13,6 @@ type JobPatch = {
   error?: string;
   file?: File;
   id?: string;
-  language?: DocumentLanguage;
   path?: string;
   progress?: number;
   result?: JobResult;
@@ -29,7 +28,6 @@ const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job =
   const source: JobSource = {
     file: patch.file ?? fallbackFile,
     id: patch.id ?? fallbackId,
-    language: patch.language,
     path: patch.path,
   };
 
@@ -72,7 +70,6 @@ const setup = (jobs: Array<Job>) => {
   const onApply = vi.fn<(id: string) => void>();
   const onClear = vi.fn<() => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
-  const onLanguage = vi.fn<(ids: ReadonlyArray<string>, language?: "en" | "es" | "pt") => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onRemoveMany = vi.fn<(ids: ReadonlyArray<string>) => void>();
 
@@ -82,7 +79,6 @@ const setup = (jobs: Array<Job>) => {
       onApply={onApply}
       onClear={onClear}
       onCoveredChange={onCoveredChange}
-      onLanguage={onLanguage}
       onRemove={onRemove}
       onRemoveMany={onRemoveMany}
     />,
@@ -95,14 +91,13 @@ const setup = (jobs: Array<Job>) => {
         onApply={onApply}
         onClear={onClear}
         onCoveredChange={onCoveredChange}
-        onLanguage={onLanguage}
         onRemove={onRemove}
         onRemoveMany={onRemoveMany}
       />,
     );
   };
 
-  return { onClear, onLanguage, onRemove, onRemoveMany, rerenderWith };
+  return { onClear, onRemove, onRemoveMany, rerenderWith };
 };
 
 describe("JobList", () => {
@@ -221,18 +216,12 @@ describe("selecting files", () => {
     expect(onRemoveMany).toHaveBeenCalledWith(["job-1"]);
   });
 
-  it("applies a language to the whole selection", async () => {
-    const { onLanguage } = setup([pdf(), pdf({ id: "job-pdf-2" })]);
+  it("removes a whole selection of scans at once", () => {
+    const { onRemoveMany } = setup([pdf(), pdf({ id: "job-pdf-2" })]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
-    fireEvent.click(screen.getByRole("combobox", { name: "Document language" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
 
-    const option = await screen.findByRole("option", { name: "Português" });
-
-    fireEvent.pointerDown(option);
-    fireEvent.pointerUp(option);
-    fireEvent.click(option);
-
-    expect(onLanguage).toHaveBeenCalledWith(["job-pdf", "job-pdf-2"], "pt");
+    expect(onRemoveMany).toHaveBeenCalledWith(["job-pdf", "job-pdf-2"]);
   });
 });
