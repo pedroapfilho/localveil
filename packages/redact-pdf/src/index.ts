@@ -4,7 +4,10 @@ import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from 
 import {
   buildWordIndex,
   dedupeDetections,
+  definedTerms,
   describeSpans,
+  dropDefinedTerms,
+  inReadingOrder,
   isCovered,
   keptSpans,
   mergeOverlappingRanges,
@@ -155,6 +158,7 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
     const warnings = new Set<WarningKey>();
     const pages: Array<Page> = [];
     const tokens = new Map<string, PiiToken>();
+    const terms = new Set<string>();
 
     let language: OcrLanguage | undefined;
     let anyText = false;
@@ -183,7 +187,7 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
           warnings.add("warning.scannedPages");
         }
 
-        const typed = textLayerWords({ items: content.items, viewport });
+        const typed = inReadingOrder(textLayerWords({ items: content.items, viewport }));
         const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
 
         let reading: ImageReading;
@@ -216,6 +220,10 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
         const { text, words } = buildWordIndex(assessReading(reading).legible);
         const spans = await detect(text);
 
+        for (const term of definedTerms(text, spans)) {
+          terms.add(term);
+        }
+
         for (const token of tokensFromSpans(text, spans)) {
           const key = token.text.toLowerCase();
           const existing = tokens.get(key);
@@ -243,7 +251,15 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
     return {
       detections: dedupeDetections(
         pages.flatMap((page, at) =>
-          describeSpans([...page.spans, ...spansForTokens(page.text, everyToken)], page.text, at),
+          describeSpans(
+            dropDefinedTerms(
+              [...page.spans, ...spansForTokens(page.text, everyToken)],
+              page.text,
+              terms,
+            ),
+            page.text,
+            at,
+          ),
         ),
       ),
       handle: { pages: pages.map(({ words }) => ({ words })) } satisfies PdfHandle,

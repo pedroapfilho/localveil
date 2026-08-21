@@ -128,7 +128,19 @@ const WRITTEN_DATE = new RegExp(
 );
 
 const MONTH_FIRST_DATE = new RegExp(
-  `\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s+(?:19|20)\\d{2})?`,
+  `\\b(?:${MONTHS})\\s+\\d{1,2}(?:st|nd|rd|th)?\\b(?:,?\\s+(?:19|20)\\d{2})?`,
+  "giv",
+);
+
+const STREET_OPENERS =
+  String.raw`R\.|Rua|Av\.|Avda\.?|Avenida|Alameda|Al\.|Travessa|Trav\.|Pra[cç]a|Rodovia|` +
+  String.raw`Estrada|Calle|Carrera|Paseo|Plaza`;
+
+/* Portuguese and Spanish write the street word first and the number last, so the pair brackets
+   the name between them. English puts the number first and the type last, which this does not
+   read; those addresses reach the review list through the model alone. */
+const STREET_ADDRESS = new RegExp(
+  String.raw`\b(?:${STREET_OPENERS})\s+\p{Letter}[\p{Letter}\p{Number}\s.'\-]{2,44}?,?\s*(?:n[º°.]?\s*)?\d{1,5}\b`,
   "giv",
 );
 
@@ -174,6 +186,7 @@ const PATTERNS: ReadonlyArray<Pattern> = [
     label: "private_address",
     matcher: /\bCEP[.:]?\s?(?<value>\d{5}-?\d{3})\b/dgv,
   },
+  { label: "private_address", matcher: STREET_ADDRESS },
   {
     label: "private_date",
     matcher: /\b(?:0?[1-9]|[12]\d|3[01])\/(?:0?[1-9]|1[0-2])\/(?:19|20)\d{2}\b/gv,

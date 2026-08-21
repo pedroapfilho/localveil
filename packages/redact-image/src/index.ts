@@ -12,7 +12,9 @@ import type {
 } from "@repo/redact-core";
 import {
   buildWordIndex,
+  definedTerms,
   describeSpans,
+  dropDefinedTerms,
   isCovered,
   mergeOverlappingRanges,
   spansForTokens,
@@ -81,9 +83,10 @@ const readingOf = async (reading: ImageReading, detect: Detect): Promise<Reading
   }
 
   const detected = await detect(text);
+  const repeated = spansForTokens(text, tokensFromSpans(text, detected));
 
   return {
-    spans: [...detected, ...spansForTokens(text, tokensFromSpans(text, detected))],
+    spans: dropDefinedTerms([...detected, ...repeated], text, definedTerms(text, detected)),
     text,
     words,
   };

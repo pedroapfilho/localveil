@@ -1,7 +1,9 @@
 import type { Redactor, WarningKey } from "@repo/redact-core";
 import {
   dedupeDetections,
+  definedTerms,
   describeSpans,
+  dropDefinedTerms,
   keptSpans,
   mergeOverlappingRanges,
   spansForTokens,
@@ -70,11 +72,12 @@ const textRedactor: Redactor = {
     const structural = structuralSpans(file.name, text);
     const detected = [...found, ...structural];
     const repeated = spansForTokens(text, tokensFromSpans(text, detected));
+    const spans = dropDefinedTerms([...detected, ...repeated], text, definedTerms(text, detected));
 
     onProgress(1, "stage.finished");
 
     return {
-      detections: dedupeDetections(describeSpans([...detected, ...repeated], text)),
+      detections: dedupeDetections(describeSpans(spans, text)),
       handle: text,
       warnings: [],
     };
