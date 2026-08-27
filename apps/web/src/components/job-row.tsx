@@ -19,7 +19,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useState } from "react";
 
 import { APPEAR, staggered } from "../motion";
@@ -45,13 +45,13 @@ const ATTACHMENT_STATES = {
   running: "processing",
 } as const;
 
-const STATUS_TONES: Record<JobStatus, string> = {
+const STATUS_TONES = {
   done: "text-success",
   error: "text-destructive",
   queued: "text-muted-foreground",
   reviewing: "text-foreground",
   running: "text-foreground",
-};
+} satisfies Record<JobStatus, string>;
 
 type JobRowProps = {
   index: number;
@@ -109,7 +109,7 @@ const JobRow = ({
   const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
 
   return (
-    <motion.li
+    <m.li
       animate={{ opacity: 1, transform: "translateY(0px)", transition: staggered(index) }}
       exit={{ opacity: 0, transform: "translateY(-4px)" }}
       initial={{ opacity: 0, transform: "translateY(-6px)" }}
@@ -138,7 +138,10 @@ const JobRow = ({
                 className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}
               >
                 {busy ? (
-                  <LoaderCircleIcon aria-hidden className="size-3 shrink-0 animate-spin" />
+                  <LoaderCircleIcon
+                    aria-hidden
+                    className="size-3 shrink-0 motion-safe:animate-spin"
+                  />
                 ) : (
                   <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
                 )}
@@ -215,7 +218,7 @@ const JobRow = ({
           </CollapsiblePanel>
         </Attachment>
       </Collapsible>
-    </motion.li>
+    </m.li>
   );
 };
 

@@ -1,3 +1,3 @@
-const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const describeError = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 export { describeError };

@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-node and workerpool wrap wasm engines and worker threads; the module seam is the only practical hermetic substitute */
 import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +20,11 @@ vi.mock("@repo/redact-node", () => ({
 vi.mock("workerpool", () => ({
   default: {
     pool: () => ({
-      exec: (_method: string, [path]: [string], options: { on: (payload: unknown) => void }) =>
+      exec: (
+        _method: string,
+        [path]: [string],
+        options: { on: (payload: { fraction: number; stage: string }) => void },
+      ) =>
         redactFile(path, (fraction: number, stage: string) => {
           options.on({ fraction, stage });
         }),

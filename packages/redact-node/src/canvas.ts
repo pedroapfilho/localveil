@@ -20,6 +20,7 @@ const createNodeCanvas = (width: number, height: number) => {
   });
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- `this` is annotated only so the shim can be new-called as the global OffscreenCanvas; the body ignores it
 function NodeOffscreenCanvas(this: unknown, width: number, height: number) {
   return createNodeCanvas(width, height);
 }

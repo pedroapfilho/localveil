@@ -2,7 +2,7 @@ import "@repo/ui/globals.css";
 
 import { I18nProvider } from "@repo/i18n";
 import { Toaster } from "@repo/ui/components/sonner";
-import { MotionConfig } from "motion/react";
+import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -16,12 +16,14 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <MotionConfig reducedMotion="user">
-      <I18nProvider>
-        <App />
+    <LazyMotion features={domAnimation} strict>
+      <MotionConfig reducedMotion="user">
+        <I18nProvider>
+          <App />
 
-        <Toaster />
-      </I18nProvider>
-    </MotionConfig>
+          <Toaster />
+        </I18nProvider>
+      </MotionConfig>
+    </LazyMotion>
   </StrictMode>,
 );

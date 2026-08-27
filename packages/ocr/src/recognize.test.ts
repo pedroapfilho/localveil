@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- tesseract.js is a wasm OCR engine; the module seam is the only practical hermetic substitute */
 import type { ImageLike } from "tesseract.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

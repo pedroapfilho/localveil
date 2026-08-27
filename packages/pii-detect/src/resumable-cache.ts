@@ -22,9 +22,9 @@ const CACHE_KEY = "transformers-cache";
 
 const isHttpUrl = (name: string) => name.startsWith("https://") || name.startsWith("http://");
 
-const warnStorageFailed = (name: string, error: unknown) => {
+const warnStorageFailed = (name: string, cause: unknown) => {
   // oxlint-disable-next-line eslint/no-console
-  console.warn(`Could not keep ${name} in the browser cache`, error);
+  console.warn(`Could not keep ${name} in the browser cache`, cause);
 };
 
 const underLock = (name: string, run: () => Promise<Response>) => {
@@ -73,9 +73,11 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
 
         const headers = { "content-length": String(blob.size) };
 
-        await cache.put(name, new Response(blob, { headers })).catch((error: unknown) => {
+        try {
+          await cache.put(name, new Response(blob, { headers }));
+        } catch (error) {
           warnStorageFailed(name, error);
-        });
+        }
 
         return new Response(blob, { headers });
       });
@@ -87,9 +89,11 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
 
       const cache = await caches.open(cacheKey);
 
-      await cache.put(name, response).catch((error: unknown) => {
+      try {
+        await cache.put(name, response);
+      } catch (error) {
         warnStorageFailed(name, error);
-      });
+      }
     },
   };
 };

@@ -67,11 +67,14 @@ type RunOptions = {
   signal: AbortSignal;
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; this guard is their parser
 const isProgress = (payload: unknown): payload is { fraction: number; stage: FileStageKey } =>
   typeof payload === "object" &&
   payload !== null &&
-  typeof Reflect.get(payload, "fraction") === "number" &&
-  typeof Reflect.get(payload, "stage") === "string";
+  "fraction" in payload &&
+  typeof payload.fraction === "number" &&
+  "stage" in payload &&
+  typeof payload.stage === "string";
 
 const availableName = async (directory: string): Promise<string> => {
   const taken = new Set(await readdir(directory));
@@ -133,6 +136,7 @@ const runRedaction = async ({
 
   const redactOne = (file: string, index: number) =>
     pool.exec<(path: string) => NodeRedactionOutput>("redact", [file], {
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; isProgress parses them
       on: (payload: unknown) => {
         if (isProgress(payload)) {
           onFileProgress({ fraction: payload.fraction, index, stage: payload.stage });

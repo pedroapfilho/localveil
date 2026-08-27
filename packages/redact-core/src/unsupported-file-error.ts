@@ -12,8 +12,8 @@ class UnsupportedFileError extends Error {
   }
 }
 
-const isUnsupportedFile = (error: unknown) =>
-  error instanceof UnsupportedFileError ||
-  (error instanceof Error && error.name === UNSUPPORTED_FILE);
+const isUnsupportedFile = (cause: unknown) =>
+  cause instanceof UnsupportedFileError ||
+  (cause instanceof Error && cause.name === UNSUPPORTED_FILE);
 
 export { isUnsupportedFile, UnsupportedFileError };

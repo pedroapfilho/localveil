@@ -2,13 +2,13 @@ type OcrLanguage = "en" | "es" | "pt";
 
 type DetectedLanguage = { confidence: number; language: OcrLanguage };
 
-const TRAINEDDATA: Record<OcrLanguage, string> = {
+const TRAINEDDATA = {
   en: "eng",
   es: "spa",
   pt: "por",
-};
+} satisfies Record<OcrLanguage, string>;
 
-const STOPWORDS: Record<OcrLanguage, ReadonlySet<string>> = {
+const STOPWORDS = {
   en: new Set([
     "and",
     "are",

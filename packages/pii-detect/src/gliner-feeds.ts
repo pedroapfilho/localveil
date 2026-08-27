@@ -16,7 +16,7 @@ const padded = (values: Array<number>, to: number) => [
   ...Array.from({ length: to - values.length }, () => 0),
 ];
 
-const toFeeds = <T>(inputs: Array<GlinerInput>, tensor: MakeTensor<T>): Record<string, T> => {
+const toFeeds = <T>(inputs: Array<GlinerInput>, tensor: MakeTensor<T>) => {
   const batch = inputs.length;
   const tokens = widest(inputs, (input) => input.inputIds.length);
   const spans = widest(inputs, (input) => input.spanMask.length);

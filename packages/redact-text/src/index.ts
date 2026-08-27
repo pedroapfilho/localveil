@@ -45,6 +45,7 @@ const structuralSpans = (name: string, text: string) => {
   return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
 const analysedText = (handle: unknown): string => {
   if (typeof handle !== "string") {
     throw new TypeError("The text analysis carried no source text to mask");

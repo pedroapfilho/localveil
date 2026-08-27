@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/ocr wraps a wasm OCR engine; the module seam is the only practical hermetic substitute */
 import type * as OcrModule from "@repo/ocr";
 import type { ImageReading } from "@repo/ocr";
 import type { Detect, FileProgress } from "@repo/redact-core";

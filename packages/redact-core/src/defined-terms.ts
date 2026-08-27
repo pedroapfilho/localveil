@@ -23,12 +23,11 @@ const holdsWord = (haystack: string, word: string) =>
     haystack,
   );
 
-/* A contract names a party by role, as in Zora Labs, Inc. ("Client"), but a person can be given a
-   short alias the same way: Pedro Filho ("Pedro"). Suppressing the second would leak every bare
-   mention of the name, so a term buried inside longer PII detected just before the bracket stays
-   a detection. The term has to be a real fragment of that PII: a contract introduces a role out of
-   its own wording, as in the consultant named on the signature page ("Consultant"), and the model
-   tags that wording too. */
+/* A contract names a party by role, Zora Labs, Inc. ("Client"), but a person can be aliased the
+   same way: Pedro Filho ("Pedro"). Suppressing the second would leak every bare mention of the
+   name, so a term buried inside longer PII detected just before the bracket stays a detection.
+   The term must be a real fragment of that PII: a role arises from the contract's own wording,
+   "Consultant" on a signature page, and the model tags that wording too. */
 const aliasesDetected = (text: string, spans: ReadonlyArray<Span>, at: number, term: string) => {
   const from = Math.max(0, at - ALIAS_WINDOW);
 

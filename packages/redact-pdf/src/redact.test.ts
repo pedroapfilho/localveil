@@ -1,6 +1,8 @@
+/* oxlint-disable anti-slop/no-module-mocking -- pdfjs-dist, pdf-lib and @repo/ocr wrap wasm/canvas engines; the module seam is the only practical hermetic substitute */
 import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
+import type { PDFDocument } from "pdf-lib";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const events: Array<string> = [];
@@ -113,7 +115,7 @@ vi.mock("pdf-lib", () => ({
             },
           };
         },
-        copyPages: (_from: unknown, indices: Array<number>) =>
+        copyPages: (_from: PDFDocument, indices: Array<number>) =>
           Promise.resolve(indices.map((index) => ({ index }))),
         embedFont: () => Promise.resolve({}),
         embedPng: () => Promise.resolve({}),
@@ -130,7 +132,7 @@ vi.mock("pdf-lib", () => ({
 vi.mock("@repo/ocr", async (importOriginal) => ({
   ...(await importOriginal<typeof Ocr>()),
   detectLanguage: () => ({ confidence: 0.9, language: state.language }),
-  readImageText: (_image: unknown, options: { known?: string } = {}) => {
+  readImageText: (_image: OffscreenCanvas, options: { known?: string } = {}) => {
     state.recognisedIn.push(options.known);
 
     const page = state.pages[state.recognisedIn.length - 1];

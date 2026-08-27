@@ -39,7 +39,7 @@ minimumReleaseAgeExclude:
   - "@oxlint/binding-win32-x64-msvc@1.75.0"
   - oxlint-tsgolint@7.0.2001
   - oxlint@1.75.0
-  - oxlint-config-awesomeness@3.2.0
+  - oxlint-config-awesomeness
   - "@napi-rs/canvas-android-arm64@1.0.3"
   - "@napi-rs/canvas-darwin-arm64@1.0.3"
   - "@napi-rs/canvas-darwin-x64@1.0.3"
@@ -58,3 +58,10 @@ onlyBuiltDependencies:
   - esbuild
   - lightningcss
   - unrs-resolver
+
+peerDependencyRules:
+  allowedVersions:
+    "@typescript-eslint/project-service>typescript": "7"
+    "@typescript-eslint/tsconfig-utils>typescript": "7"
+    "@typescript-eslint/typescript-estree>typescript": "7"
+    "@typescript-eslint/utils>typescript": "7"

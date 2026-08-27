@@ -64,6 +64,7 @@ const FileBrowser = ({
     status: "reading",
   }));
 
+  // oxlint-disable-next-line react-doctor/no-set-state-after-await-in-effect -- both setters are gated on pending.signal.aborted and the cleanup aborts, which is the cancellation flag this rule asks for
   useEffect(() => {
     const pending = new AbortController();
 

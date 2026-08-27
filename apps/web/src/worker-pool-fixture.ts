@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-unknown-parameters -- this fixture mirrors workerpool's untyped task wire, so its params are unknown by contract */
 import type { Analysis, RedactionResult } from "@repo/redact-core";
 import { vi } from "vitest";
 
@@ -44,23 +45,42 @@ class FakeTask {
   }
 }
 
-const pooled = {
-  connected: [] as Array<string>,
-  disconnected: [] as Array<string>,
-  host: undefined as ModelHostOptions | undefined,
+type Pooled = {
+  connected: Array<string>;
+  disconnected: Array<string>;
+  host: ModelHostOptions | undefined;
+  modelGone: boolean;
+  overflowAfter: number;
+  tasks: Array<FakeTask>;
+  terminated: number;
+};
+
+const pooled: Pooled = {
+  connected: [],
+  disconnected: [],
+  host: undefined,
   modelGone: false,
   overflowAfter: Number.POSITIVE_INFINITY,
-  tasks: [] as Array<FakeTask>,
+  tasks: [],
   terminated: 0,
 };
 
-const reported = {
-  analysed: [] as Array<string>,
-  done: [] as Array<string>,
-  errors: [] as Array<{ id: string; message: string; unsupported: boolean }>,
-  model: [] as Array<string>,
-  modelLost: [] as Array<string>,
-  progress: [] as Array<{ fraction: number; id: string }>,
+type Reported = {
+  analysed: Array<string>;
+  done: Array<string>;
+  errors: Array<{ id: string; message: string; unsupported: boolean }>;
+  model: Array<string>;
+  modelLost: Array<string>;
+  progress: Array<{ fraction: number; id: string }>;
+};
+
+const reported: Reported = {
+  analysed: [],
+  done: [],
+  errors: [],
+  model: [],
+  modelLost: [],
+  progress: [],
 };
 
 const modelHostDouble = {

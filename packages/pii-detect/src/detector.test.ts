@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- the tokenizer and ONNX runtime are wasm engines; the module seam is the only practical hermetic substitute */
 import { AutoTokenizer } from "@huggingface/transformers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

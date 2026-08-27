@@ -1,3 +1,5 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect wraps a wasm model runtime; the module seam is the only practical hermetic substitute */
+/* oxlint-disable anti-slop/no-unknown-parameters -- the serveDetect double mirrors the untyped MessagePort wire */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelRequest } from "./worker-protocol";

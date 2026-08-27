@@ -3,9 +3,9 @@ import { isLocale } from "./locale";
 
 const STORAGE_KEY = "localveil.locale";
 
-const warnStorageFailed = (action: string, error: unknown) => {
+const warnStorageFailed = (action: string, cause: unknown) => {
   // oxlint-disable-next-line eslint/no-console
-  console.warn(`Could not ${action} the saved language`, error);
+  console.warn(`Could not ${action} the saved language`, cause);
 };
 
 const readStoredLocale = (): Locale | undefined => {

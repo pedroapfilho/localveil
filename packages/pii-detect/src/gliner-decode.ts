@@ -4,18 +4,19 @@ type SpanCandidate = { end: number; entity: number; score: number; start: number
 
 const sigmoid = (value: number) => 1 / (1 + Math.exp(-value));
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the model runtime returns untyped tensor data; this guard is its parser
 const isNumberArray = (value: unknown): value is ArrayLike<number> => {
-  if (typeof value !== "object" || value === null) {
+  if (typeof value !== "object" || value === null || !("length" in value)) {
     return false;
   }
 
-  const length: unknown = Reflect.get(value, "length");
+  const { length } = value;
 
   if (typeof length !== "number") {
     return false;
   }
 
-  return length === 0 || typeof Reflect.get(value, 0) === "number";
+  return length === 0 || ("0" in value && typeof value[0] === "number");
 };
 
 const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> }): Logits => {

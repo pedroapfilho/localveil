@@ -8,22 +8,28 @@ import {
   SelectValue,
 } from "@repo/ui/components/select";
 
-const nameOf = (value: unknown) =>
-  typeof value === "string" && isLocale(value) ? LOCALE_NAMES[value] : "";
-
 const LanguagePicker = () => {
   const { locale, setLocale, t } = useTranslations();
 
-  const handleChange = (value: unknown) => {
-    if (typeof value === "string" && isLocale(value)) {
+  const handleChange = (value: string) => {
+    if (isLocale(value)) {
       setLocale(value);
     }
   };
 
   return (
-    <Select onValueChange={handleChange} value={locale}>
+    <Select
+      onValueChange={(value) => {
+        if (typeof value === "string") {
+          handleChange(value);
+        }
+      }}
+      value={locale}
+    >
       <SelectTrigger aria-label={t("app.language")} className="border-transparent">
-        <SelectValue>{(value: unknown) => nameOf(value)}</SelectValue>
+        <SelectValue>
+          {(value) => (typeof value === "string" && isLocale(value) ? LOCALE_NAMES[value] : "")}
+        </SelectValue>
       </SelectTrigger>
 
       <SelectContent>

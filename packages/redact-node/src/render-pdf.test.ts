@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/ocr wraps a wasm OCR engine; the module seam is the only practical hermetic substitute */
 import type * as Ocr from "@repo/ocr";
 import type { Detect } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";

@@ -5,6 +5,6 @@ import type { Messages } from "./en";
 import { es } from "./es";
 import { pt } from "./pt";
 
-const CATALOGUES: Record<Locale, Messages> = { en, es, pt };
+const CATALOGUES = { en, es, pt } satisfies Record<Locale, Messages>;
 
 export { CATALOGUES };
