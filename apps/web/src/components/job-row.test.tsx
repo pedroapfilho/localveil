@@ -132,7 +132,7 @@ describe("JobRow", () => {
     const { container } = setup(text({ stage: "stage.reading", status: "running" }));
 
     expect(screen.getByText("Working")).toBeInTheDocument();
-    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+    expect(container.querySelector("[class*=animate-spin]")).toBeInTheDocument();
   });
 
   it("explains OCR inside the warning that mentions it", async () => {

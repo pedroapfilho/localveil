@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-unknown-parameters -- the fake Worker mirrors the untyped postMessage wire, so its params are unknown by contract */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelHost, MAX_RESPAWNS } from "./model-host";

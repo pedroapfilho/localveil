@@ -20,12 +20,12 @@ const cachePathFor = (url: string) => {
   return path.join(CACHE_DIR, `${digest}-${path.basename(new URL(url).pathname)}`);
 };
 
-const isMissingFile = (error: unknown) =>
-  error instanceof Error && Reflect.get(error, "code") === "ENOENT";
+const isMissingFile = (cause: unknown) =>
+  cause instanceof Error && "code" in cause && cause.code === "ENOENT";
 
-const warnNotKept = (file: string, error: unknown) => {
+const warnNotKept = (file: string, cause: unknown) => {
   // oxlint-disable-next-line eslint/no-console
-  console.warn(`Could not keep the model at ${file}`, error);
+  console.warn(`Could not keep the model at ${file}`, cause);
 };
 
 const keepOnDisk = async (file: string, bytes: Uint8Array) => {
@@ -45,13 +45,19 @@ const fetchModelBytes = async (url: string, options: FetchModelOptions): Promise
   const { onProgress } = options;
   const file = cachePathFor(url);
 
-  const kept = await readFile(file).catch((error: unknown) => {
-    if (isMissingFile(error)) {
-      return undefined;
-    }
+  const readKept = async () => {
+    try {
+      return await readFile(file);
+    } catch (error) {
+      if (isMissingFile(error)) {
+        return undefined;
+      }
 
-    throw error;
-  });
+      throw error;
+    }
+  };
+
+  const kept = await readKept();
 
   if (kept !== undefined) {
     onProgress(1);

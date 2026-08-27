@@ -4,7 +4,7 @@ import type { Detect, Span } from "./types.ts";
 type EventPort = {
   addEventListener: (type: "close" | "message", handle: (event: { data: unknown }) => void) => void;
   close: () => void;
-  postMessage: (message: unknown) => void;
+  postMessage: (message: DetectRequest | DetectResponse) => void;
   start: () => void;
 };
 
@@ -14,9 +14,11 @@ type DetectResponse =
   | { message: string; requestId: string; type: "detect-error" }
   | { requestId: string; spans: Array<Span>; type: "spans" };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the wire boundary: MessagePort delivers untyped data and this guard is its parser
 const isDetectRequest = (value: unknown): value is DetectRequest =>
   typeof value === "object" && value !== null && "type" in value && value.type === "detect";
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the wire boundary: MessagePort delivers untyped data and this guard is its parser
 const isDetectResponse = (value: unknown): value is DetectResponse =>
   typeof value === "object" &&
   value !== null &&

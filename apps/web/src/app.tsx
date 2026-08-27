@@ -2,7 +2,7 @@ import { useTranslations } from "@repo/i18n";
 import { FileDropzone } from "@repo/ui/components/file-dropzone";
 import { toast } from "@repo/ui/components/sonner";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
@@ -62,6 +62,7 @@ const App = () => {
 
   return (
     <div className="isolate grid min-h-dvh grid-rows-[1fr_auto]">
+      {/* oxlint-disable-next-line react-doctor/no-layout-shifting-interaction-state -- the skip link leaves the flow on focus (focus:absolute), so surrounding content cannot jump */}
       <a
         className="focus:bg-background focus:ring-ring sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:rounded-lg focus:px-3 focus:py-2 focus:ring-2"
         href="#main"
@@ -107,12 +108,7 @@ const App = () => {
 
           <AnimatePresence initial={false}>
             {queued ? (
-              <motion.div
-                className="flex flex-col gap-8"
-                key="queue"
-                transition={APPEAR}
-                {...SLIDE}
-              >
+              <m.div className="flex flex-col gap-8" key="queue" transition={APPEAR} {...SLIDE}>
                 <JobList
                   jobs={jobs}
                   onApply={applyDecisions}
@@ -123,7 +119,7 @@ const App = () => {
                 />
 
                 <DownloadPanel jobs={jobs} onDownload={handleDownload} />
-              </motion.div>
+              </m.div>
             ) : null}
           </AnimatePresence>
         </main>

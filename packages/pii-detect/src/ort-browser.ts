@@ -6,20 +6,24 @@ import { toFeeds } from "./gliner-feeds.ts";
 import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime.ts";
 
 const pickDevice = async (): Promise<ModelDevice> => {
-  const gpu: unknown = Reflect.get(navigator, "gpu");
-
-  if (typeof gpu !== "object" || gpu === null) {
+  if (!("gpu" in navigator)) {
     return "wasm";
   }
 
-  const requestAdapter: unknown = Reflect.get(gpu, "requestAdapter");
+  const { gpu } = navigator;
+
+  if (typeof gpu !== "object" || gpu === null || !("requestAdapter" in gpu)) {
+    return "wasm";
+  }
+
+  const { requestAdapter } = gpu;
 
   if (typeof requestAdapter !== "function") {
     return "wasm";
   }
 
   try {
-    const adapter: unknown = await Reflect.apply(requestAdapter, gpu, []);
+    const adapter: unknown = await requestAdapter.call(gpu);
 
     return adapter === null || adapter === undefined ? "wasm" : "webgpu";
   } catch {

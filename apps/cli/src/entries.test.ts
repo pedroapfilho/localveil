@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-node wraps wasm engines and worker threads; the module seam is the only practical hermetic substitute */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -41,7 +41,7 @@ const installParser = async () => {
   // oxlint-disable-next-line react-doctor/async-defer-await
   await import("pdfjs-dist/build/pdf.worker.mjs");
 
-  if (Reflect.get(globalThis, "pdfjsWorker") === undefined) {
+  if (!("pdfjsWorker" in globalThis)) {
     throw new Error("pdf.js loaded without registering its parser, so no PDF can be read");
   }
 };
@@ -128,7 +128,9 @@ const withPage = async <T>(
 const render = async (page: PdfPage, viewport: PdfViewport) => {
   const canvas = new OffscreenCanvas(viewport.width, viewport.height);
 
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  /* SAFETY: pdf.js renders onto an offscreen 2d context at runtime, but its RenderParameters
+     type only admits a DOM CanvasRenderingContext2D, so the context is forced through unknown. */
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-chained-type-assertions
   const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
 
   await page.render({
@@ -141,15 +143,17 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
   return canvas;
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
 const hasWords = (page: unknown) =>
-  typeof page === "object" && page !== null && Array.isArray(Reflect.get(page, "words"));
+  typeof page === "object" && page !== null && "words" in page && Array.isArray(page.words);
 
-const isHandle = (value: unknown): value is PdfHandle => {
-  const pages: unknown =
-    typeof value === "object" && value !== null ? Reflect.get(value, "pages") : undefined;
-
-  return Array.isArray(pages) && pages.every((page: unknown) => hasWords(page));
-};
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
+const isHandle = (value: unknown): value is PdfHandle =>
+  typeof value === "object" &&
+  value !== null &&
+  "pages" in value &&
+  Array.isArray(value.pages) &&
+  value.pages.every(hasWords);
 
 const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
   withPdf(file, async (pdf) => {

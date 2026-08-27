@@ -24,15 +24,22 @@ const idFor = (span: Span, page?: number) =>
   `${page === undefined ? "" : String(page)}:${String(span.start)}-${String(span.end)}:${span.label}`;
 
 const describeSpans = (spans: Array<Span>, text: string, page?: number): Array<Detection> =>
-  spans.map((span) => ({
-    confidence: span.score,
-    end: span.end,
-    id: idFor(span, page),
-    label: span.label,
-    ...(page === undefined ? {} : { page }),
-    preview: preview(text.slice(span.start, span.end)),
-    start: span.start,
-  }));
+  spans.map((span) => {
+    const detection: Detection = {
+      confidence: span.score,
+      end: span.end,
+      id: idFor(span, page),
+      label: span.label,
+      preview: preview(text.slice(span.start, span.end)),
+      start: span.start,
+    };
+
+    if (page !== undefined) {
+      detection.page = page;
+    }
+
+    return detection;
+  });
 
 const dedupeDetections = (detections: Array<Detection>): Array<Detection> =>
   absorbNested(

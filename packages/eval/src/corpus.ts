@@ -39,6 +39,7 @@ const CORPUS_DIR = path.join(import.meta.dirname, "..", "corpus");
 
 const isLabel = (value: string): value is PiiLabel => LABELS.has(value);
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- corpus JSON boundary: the field arrives untyped and this guard is its parser
 const isLanguage = (value: unknown): value is DocumentLanguage =>
   typeof value === "string" && LANGUAGES.has(value);
 
@@ -68,15 +69,16 @@ const parseMarked = (marked: string, id: string) => {
   return { spans, text: text + marked.slice(read) };
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- corpus JSON boundary: JSON.parse output is untyped and this function is its parser
 const toDocument = (raw: unknown, file: string): EvalDocument => {
   if (typeof raw !== "object" || raw === null) {
     throw new TypeError(`${file} does not hold an object`);
   }
 
-  const id: unknown = Reflect.get(raw, "id");
-  const language: unknown = Reflect.get(raw, "language");
-  const marked: unknown = Reflect.get(raw, "marked");
-  const source: unknown = Reflect.get(raw, "source");
+  const id: unknown = "id" in raw ? raw.id : undefined;
+  const language: unknown = "language" in raw ? raw.language : undefined;
+  const marked: unknown = "marked" in raw ? raw.marked : undefined;
+  const source: unknown = "source" in raw ? raw.source : undefined;
 
   if (typeof id !== "string" || id.length === 0) {
     throw new TypeError(`${file} has no id`);

@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { SpanCandidate } from "./gliner-decode.ts";
 import { decodeSpans, suppressOverlaps, toLogits } from "./gliner-decode.ts";
 
-type Shape = { batch?: number; entities: number; widths: number; words: number };
+type LogitsDims = { batch?: number; entities: number; widths: number; words: number };
 
-const logitsOf = ({ batch = 1, entities, widths, words }: Shape, values: Array<number>) => ({
+const logitsOf = ({ batch = 1, entities, widths, words }: LogitsDims, values: Array<number>) => ({
   data: values,
   dims: [batch, words, widths, entities],
 });

@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

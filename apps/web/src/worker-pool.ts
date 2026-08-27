@@ -39,7 +39,8 @@ type RedactionPool = {
 
 type PooledTask = {
   cancel: () => void;
-  settle: (onDone: (value: unknown) => void, onFail: (error: unknown) => void) => void;
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
+  settle: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
 };
 
 type LiveJob = {
@@ -50,19 +51,30 @@ type LiveJob = {
   watchdog?: ReturnType<typeof setTimeout>;
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; this guard is their parser
 const isAnalysis = (value: unknown): value is Analysis =>
-  typeof value === "object" && value !== null && Array.isArray(Reflect.get(value, "detections"));
+  typeof value === "object" &&
+  value !== null &&
+  "detections" in value &&
+  Array.isArray(value.detections);
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; this guard is their parser
 const isResult = (value: unknown): value is RedactionResult =>
-  typeof value === "object" && value !== null && Reflect.get(value, "blob") instanceof Blob;
+  typeof value === "object" && value !== null && "blob" in value && value.blob instanceof Blob;
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the worker boundary untyped; this guard is their parser
 const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   typeof payload === "object" &&
   payload !== null &&
   "type" in payload &&
   payload.type === "progress";
 
-const asPooledTask = (task: object): PooledTask => {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool's exec result is untyped; this function is its parser
+const asPooledTask = (task: unknown): PooledTask => {
+  if (typeof task !== "object" || task === null) {
+    throw new TypeError("workerpool returned no task object");
+  }
+
   if (!("cancel" in task) || typeof task.cancel !== "function") {
     throw new TypeError("workerpool returned a task that cannot be cancelled");
   }
@@ -173,6 +185,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     workerType: "web",
   });
 
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the worker boundary untyped; isProgressEvent parses them
   const watching = (id: string) => (payload: unknown) => {
     const live = jobs.get(id);
 
@@ -188,6 +201,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     id: string,
     restart: () => void,
     run: (port: MessagePort) => object,
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
     settled: (value: unknown) => void,
   ) => {
     const channel = crypto.randomUUID();

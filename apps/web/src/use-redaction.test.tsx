@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
 import type * as RedactCore from "@repo/redact-core";
 import { toast } from "@repo/ui/components/sonner";
 import { act, fireEvent, screen } from "@testing-library/react";

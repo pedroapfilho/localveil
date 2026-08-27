@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-pdf and @repo/redact-image wrap wasm/canvas engines; the module seam is the only practical hermetic substitute */
 import type { Analysis, Detect, RedactionResult, Redactor } from "@repo/redact-core";
 import { UnsupportedFileError } from "@repo/redact-core";
 import type * as RedactImage from "@repo/redact-image";

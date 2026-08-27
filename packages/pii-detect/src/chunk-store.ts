@@ -64,20 +64,27 @@ const openDatabase = () =>
     });
   });
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- IndexedDB request results are untyped; this guard is their parser
 const isManifest = (value: unknown): value is Manifest =>
   typeof value === "object" &&
   value !== null &&
-  typeof Reflect.get(value, "chunkSize") === "number" &&
-  typeof Reflect.get(value, "etag") === "string" &&
-  typeof Reflect.get(value, "total") === "number";
+  "chunkSize" in value &&
+  typeof value.chunkSize === "number" &&
+  "etag" in value &&
+  typeof value.etag === "string" &&
+  "total" in value &&
+  typeof value.total === "number";
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- IndexedDB request results are untyped; this guard is their parser
 const isChunkRecord = (value: unknown): value is ChunkRecord =>
   typeof value === "object" &&
   value !== null &&
-  Reflect.get(value, "bytes") instanceof ArrayBuffer &&
-  typeof Reflect.get(value, "url") === "string";
+  "bytes" in value &&
+  value.bytes instanceof ArrayBuffer &&
+  "url" in value &&
+  typeof value.url === "string";
 
-const isChunkKey = (key: unknown): key is [string, number] =>
+const isChunkKey = (key: IDBValidKey): key is [string, number] =>
   Array.isArray(key) && typeof key.at(0) === "string" && typeof key.at(1) === "number";
 
 const rangeFor = (url: string) =>

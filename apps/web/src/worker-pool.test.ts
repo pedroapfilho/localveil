@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- workerpool and the model host wrap real Worker threads; the module seam is the only practical hermetic substitute */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createRedactionPool } from "./worker-pool";

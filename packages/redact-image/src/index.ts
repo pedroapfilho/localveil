@@ -145,11 +145,14 @@ const countRedactions = (readings: Array<Reading>, spansFor: (at: number) => Arr
   return [...maximums.values()].reduce((total, count) => total + count, 0);
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
 const isHandle = (value: unknown): value is ImageHandle =>
   typeof value === "object" &&
   value !== null &&
-  Array.isArray(Reflect.get(value, "readings")) &&
-  typeof Reflect.get(value, "best") === "number";
+  "readings" in value &&
+  Array.isArray(value.readings) &&
+  "best" in value &&
+  typeof value.best === "number";
 
 const imageRedactor: Redactor = {
   accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),

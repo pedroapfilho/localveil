@@ -5,14 +5,18 @@ import { resolveArguments } from "./entries";
 
 const workingDirectory = process.cwd();
 
-const resolved = await resolveArguments(process.argv.slice(2), workingDirectory).catch(
-  (error: unknown) => {
+const resolveOrExit = async () => {
+  try {
+    return await resolveArguments(process.argv.slice(2), workingDirectory);
+  } catch (error) {
     // oxlint-disable-next-line eslint/no-console
     console.error(error instanceof Error ? error.message : String(error));
     // oxlint-disable-next-line unicorn/no-process-exit
-    process.exit(1);
-  },
-);
+    return process.exit(1);
+  }
+};
+
+const resolved = await resolveOrExit();
 
 const { directory, jobs, selection } = resolved;
 

@@ -143,32 +143,42 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     report(0, "model.slowDevice");
   }
 
-  const run = await load(device).catch((firstError: unknown) => {
-    if (device === "wasm") {
-      throw firstError;
+  const loadWithFallback = async () => {
+    try {
+      return await load(device);
+    } catch (firstError) {
+      if (device === "wasm") {
+        throw firstError;
+      }
+
+      // oxlint-disable-next-line eslint/no-console
+      console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
+      report(0, "model.slowDevice");
+
+      try {
+        return await load("wasm");
+      } catch (wasmError) {
+        throw new Error(
+          `Could not load ${MODEL_ID} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
+          { cause: wasmError },
+        );
+      }
     }
+  };
 
-    // oxlint-disable-next-line eslint/no-console
-    console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
-    report(0, "model.slowDevice");
-
-    return load("wasm").catch((wasmError: unknown) => {
-      throw new Error(
-        `Could not load ${MODEL_ID} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
-        { cause: wasmError },
-      );
-    });
-  });
+  const run = await loadWithFallback();
 
   if (cache !== undefined) {
-    await purgeStaleModels({
-      keepFiles: [MODEL_FILE],
-      revision: MODEL_REVISION,
-      store: chunks,
-    }).catch((error: unknown) => {
+    try {
+      await purgeStaleModels({
+        keepFiles: [MODEL_FILE],
+        revision: MODEL_REVISION,
+        store: chunks,
+      });
+    } catch (error) {
       // oxlint-disable-next-line eslint/no-console
       console.warn("Could not clear superseded model weights", error);
-    });
+    }
   }
 
   report(1, "model.ready");

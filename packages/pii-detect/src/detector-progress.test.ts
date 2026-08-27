@@ -1,3 +1,4 @@
+/* oxlint-disable anti-slop/no-module-mocking -- the tokenizer, ONNX runtime and browser cache are wasm/platform seams; module mocks are the only practical hermetic substitute */
 import type { StageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

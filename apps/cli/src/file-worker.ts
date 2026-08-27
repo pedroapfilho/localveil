@@ -8,6 +8,7 @@ import workerpool from "workerpool";
 
 type WorkerSetup = { port: EventPort };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerData crosses the thread boundary untyped; this guard is its parser
 const isSetup = (value: unknown): value is WorkerSetup =>
   typeof value === "object" && value !== null && "port" in value && value.port !== null;
 
