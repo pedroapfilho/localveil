@@ -28,8 +28,8 @@ importers:
         specifier: ^1.79.0
         version: 1.80.0(oxlint-tsgolint@7.0.2001)
       oxlint-config-awesomeness:
-        specifier: ^4.3.0
-        version: 4.3.0(eslint-plugin-no-only-tests@3.4.0)(eslint-plugin-perfectionist@5.10.1(eslint@10.8.0(jiti@2.7.0))(typescript@7.0.2))(eslint-plugin-unused-imports@4.4.1(eslint@10.8.0(jiti@2.7.0)))(oxlint-plugin-react-doctor@0.9.12)(oxlint-tsgolint@7.0.2001)(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))(typescript@7.0.2)
+        specifier: ^4.4.0
+        version: 4.4.0(@nkzw/eslint-plugin@2.0.0(eslint@10.8.0(jiti@2.7.0)))(eslint-plugin-no-only-tests@3.4.0)(eslint-plugin-perfectionist@5.10.1(eslint@10.8.0(jiti@2.7.0))(typescript@7.0.2))(eslint-plugin-unused-imports@4.4.1(eslint@10.8.0(jiti@2.7.0)))(oxlint-plugin-react-doctor@0.9.12)(oxlint-tsgolint@7.0.2001)(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))(typescript@7.0.2)
       oxlint-plugin-react-doctor:
         specifier: ^0.9.12
         version: 0.9.12
@@ -1224,6 +1224,11 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@nkzw/eslint-plugin@2.0.0':
+    resolution: {integrity: sha512-IoU8kOqHfnf7se2dGxMD/7RPm6WVjzjOjWSo7FulRx3lJzuZvXioSkT5Nd82l66DH3Pl2whw74lPT1di3KMwFA==}
+    peerDependencies:
+      eslint: '>= 9'
 
   '@oxc-parser/binding-android-arm-eabi@0.143.0':
     resolution: {integrity: sha512-n9uozULWflPqBtdmI8lAabLqGKNgLVNN0ZH8HfgCwpKGNtzRzauB76jTiW/3YLkcA7N1zskpi9GdVnZuu1SAvg==}
@@ -2975,11 +2980,12 @@ packages:
       vite-plus:
         optional: true
 
-  oxlint-config-awesomeness@4.3.0:
-    resolution: {integrity: sha512-LhI7q+YQEeT4wt1QuiW4Su1c+H1DgEuQSTxs9cM/BcS76mmfRretcWiaqU2n97QBhvzng4sbpKcErr9MALgo4g==}
+  oxlint-config-awesomeness@4.4.0:
+    resolution: {integrity: sha512-8vUhhzqTuVeCyKYmpwPYliLqXkZMhenueZ46CiNMXIGJoZsIy05IG9wx8O0ff72s5hT3y16AGFsHr6XCWrcx5A==}
     engines: {node: '>=24'}
     hasBin: true
     peerDependencies:
+      '@nkzw/eslint-plugin': ^2.0.0
       eslint-plugin-no-only-tests: ^3.4.0
       eslint-plugin-perfectionist: ^5.10.1
       eslint-plugin-unused-imports: ~4.4.1
@@ -4029,6 +4035,10 @@ snapshots:
       '@tybys/wasm-util': 0.10.3
     optional: true
 
+  '@nkzw/eslint-plugin@2.0.0(eslint@10.8.0(jiti@2.7.0))':
+    dependencies:
+      eslint: 10.8.0(jiti@2.7.0)
+
   '@oxc-parser/binding-android-arm-eabi@0.143.0':
     optional: true
 
@@ -4596,7 +4606,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
+      vitest: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -5422,8 +5432,9 @@ snapshots:
       '@oxfmt/binding-win32-ia32-msvc': 0.58.0
       '@oxfmt/binding-win32-x64-msvc': 0.58.0
 
-  oxlint-config-awesomeness@4.3.0(eslint-plugin-no-only-tests@3.4.0)(eslint-plugin-perfectionist@5.10.1(eslint@10.8.0(jiti@2.7.0))(typescript@7.0.2))(eslint-plugin-unused-imports@4.4.1(eslint@10.8.0(jiti@2.7.0)))(oxlint-plugin-react-doctor@0.9.12)(oxlint-tsgolint@7.0.2001)(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))(typescript@7.0.2):
+  oxlint-config-awesomeness@4.4.0(@nkzw/eslint-plugin@2.0.0(eslint@10.8.0(jiti@2.7.0)))(eslint-plugin-no-only-tests@3.4.0)(eslint-plugin-perfectionist@5.10.1(eslint@10.8.0(jiti@2.7.0))(typescript@7.0.2))(eslint-plugin-unused-imports@4.4.1(eslint@10.8.0(jiti@2.7.0)))(oxlint-plugin-react-doctor@0.9.12)(oxlint-tsgolint@7.0.2001)(oxlint@1.80.0(oxlint-tsgolint@7.0.2001))(typescript@7.0.2):
     dependencies:
+      '@nkzw/eslint-plugin': 2.0.0(eslint@10.8.0(jiti@2.7.0))
       '@oxlint/plugins': 1.80.0
       eslint-plugin-no-only-tests: 3.4.0
       eslint-plugin-perfectionist: 5.10.1(eslint@10.8.0(jiti@2.7.0))(typescript@7.0.2)
