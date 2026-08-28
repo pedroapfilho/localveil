@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "clean": "rm -rf .turbo dist node_modules",
-    "dev": "vite",
+    "dev": "portless run --name localveil.web vite",
     "build": "tsc --noEmit && vite build",
     "start": "vite preview",
     "lint": "oxlint src",
