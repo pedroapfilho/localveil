@@ -23,14 +23,14 @@
   "dependencies": {
     "@huggingface/transformers": "^4.2.0",
     "@repo/redact-core": "workspace:*",
-    "onnxruntime-node": "1.24.3",
-    "onnxruntime-web": "1.27.0"
+    "onnxruntime-node": "1.29.0",
+    "onnxruntime-web": "1.29.0"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
