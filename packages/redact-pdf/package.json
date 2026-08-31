@@ -3,6 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "#pdfjs": {
+      "node": "pdfjs-dist/legacy/build/pdf.mjs",
+      "default": "pdfjs-dist"
+    },
+    "#pdfjs-worker": {
+      "node": "pdfjs-dist/legacy/build/pdf.worker.mjs",
+      "default": "pdfjs-dist/build/pdf.worker.mjs"
+    }
+  },
   "exports": {
     ".": "./src/index.ts"
   },

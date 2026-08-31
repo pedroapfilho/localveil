@@ -46,6 +46,7 @@ Every package's `exports` points straight at `./src/index.ts`. Nothing here is p
 - kebab-case filenames; oxlint (`oxlint-config-awesomeness`) + oxfmt; no ESLint/Prettier
 - `type` over `interface`, arrow functions, exports at end, WHY-comments only
 - Relative imports are extensionless; `allowImportingTsExtensions` stays off. Vite's asset queries (`./redact-worker.ts?worker&url`) and `new URL("worker.ts", import.meta.url)` are bundler inputs, not module specifiers, so they keep the extension
+- pdfjs is reached through `#pdfjs` / `#pdfjs-worker`, whose `imports` conditions in `packages/redact-pdf/package.json` send Node to pdfjs's `legacy` build. Only that build polyfills `Uint8Array.prototype.toHex`, which the modern build expects the engine to provide and Node 24 does not. `vi.mock` matches the literal specifier, so mocks name `#pdfjs`, not `pdfjs-dist`
 - Node ≥24, pnpm 11.13.1 (pinned `packageManager`)
 - No Playwright, no database, no auth by design (tool profile)
 

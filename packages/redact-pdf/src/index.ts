@@ -39,7 +39,7 @@ let parserInstalled: Promise<void> | undefined;
 
 const installParser = async () => {
   // oxlint-disable-next-line react-doctor/async-defer-await
-  await import("pdfjs-dist/build/pdf.worker.mjs");
+  await import("#pdfjs-worker");
 
   if (!("pdfjsWorker" in globalThis)) {
     throw new Error("pdf.js loaded without registering its parser, so no PDF can be read");
@@ -78,7 +78,7 @@ const openPdf = async (file: File) => {
 
   // oxlint-disable-next-line react-doctor/async-parallel
   const [pdfjs, pdfLib, source] = await Promise.all([
-    import("pdfjs-dist"),
+    import("#pdfjs"),
     import("pdf-lib"),
     file.arrayBuffer(),
 
