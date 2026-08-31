@@ -18,12 +18,12 @@
     "@repo/ocr": "workspace:*",
     "@repo/redact-core": "workspace:*",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.1.200"
+    "pdfjs-dist": "^6.2.108"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

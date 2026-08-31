@@ -23,16 +23,16 @@
     "@repo/redact-node": "workspace:*",
     "ink": "^7.1.1",
     "react": "^19.2.8",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.12",
     "workerpool": "^10.0.3"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^26.1.2",
-    "@types/react": "^19.2.17",
+    "@types/node": "^26.4.0",
+    "@types/react": "^19.2.18",
     "ink-testing-library": "^4.0.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }

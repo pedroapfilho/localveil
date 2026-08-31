@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.3",
+    "@napi-rs/canvas": "^1.0.8",
     "@repo/pii-detect": "workspace:*",
     "@repo/redact-core": "workspace:*",
     "@repo/redact-image": "workspace:*",
@@ -26,9 +26,9 @@
     "@repo/config-vitest": "workspace:*",
     "@repo/ocr": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.0",
     "pdf-lib": "^1.17.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
