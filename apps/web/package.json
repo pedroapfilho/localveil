@@ -23,7 +23,7 @@
     "@repo/redact-text": "workspace:*",
     "@repo/ui": "workspace:*",
     "lucide-react": "^1.34.0",
-    "motion": "^12.42.2",
+    "motion": "^13.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "workerpool": "^10.0.3",
