@@ -15,7 +15,7 @@ vi.mock("@repo/ocr", async (importOriginal) => ({
   },
 }));
 
-const { redactPath } = await import("./redact-path.ts");
+const { redactPath } = await import("./redact-path");
 
 const IDENTITY_CARD = new URL("../fixtures/identity-card.pdf", import.meta.url).pathname;
 const PLAIN = new URL("../../../fixtures/sample.pdf", import.meta.url).pathname;

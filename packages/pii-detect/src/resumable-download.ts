@@ -1,4 +1,4 @@
-import type { ChunkStore } from "./chunk-store.ts";
+import type { ChunkStore } from "./chunk-store";
 
 type Probe = { etag: string; total: number };
 

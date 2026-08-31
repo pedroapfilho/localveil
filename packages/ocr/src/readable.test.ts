@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { assessReading } from "./readable.ts";
-import type { Recognition } from "./recognize.ts";
+import { assessReading } from "./readable";
+import type { Recognition } from "./recognize";
 
 const BOX = { x0: 0, x1: 10, y0: 0, y1: 10 };
 

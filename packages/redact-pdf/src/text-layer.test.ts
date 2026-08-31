@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { textLayerWords } from "./text-layer.ts";
+import { textLayerWords } from "./text-layer";
 
 const VIEWPORT = { transform: [2, 0, 0, -2, 0, 400] };
 

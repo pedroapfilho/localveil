@@ -4,7 +4,7 @@ import type { Detect, Span } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { textRedactor } from "./index.ts";
+import { textRedactor } from "./index";
 
 const PII = [
   "John Smith",

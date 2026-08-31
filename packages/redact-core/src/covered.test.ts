@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isCovered } from "./covered.ts";
+import { isCovered } from "./covered";
 
 const box = { x0: 10, x1: 20, y0: 10, y1: 20 };
 

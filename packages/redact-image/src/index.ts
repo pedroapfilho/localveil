@@ -23,7 +23,7 @@ import {
   tokensFromSpans,
 } from "@repo/redact-core";
 
-import { betterReading, binarizeForOcr, shouldRetryOcr } from "./ocr-retry.ts";
+import { betterReading, binarizeForOcr, shouldRetryOcr } from "./ocr-retry";
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 

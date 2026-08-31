@@ -2,7 +2,7 @@ import type { PiiLabel } from "@repo/redact-core";
 import { patternSpans } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { loadCorpus, parseMarked } from "./corpus.ts";
+import { loadCorpus, parseMarked } from "./corpus";
 
 const LABELS: Array<PiiLabel> = [
   "account_number",

@@ -1,6 +1,6 @@
-import type { ChunkStore } from "./chunk-store.ts";
-import { createIndexedDbChunkStore } from "./chunk-store.ts";
-import { downloadResumable } from "./resumable-download.ts";
+import type { ChunkStore } from "./chunk-store";
+import { createIndexedDbChunkStore } from "./chunk-store";
+import { downloadResumable } from "./resumable-download";
 
 type ResumableCache = {
   match: (name: string) => Promise<Response | undefined>;

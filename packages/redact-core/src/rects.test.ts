@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { spansToRects } from "./rects.ts";
-import type { Span } from "./types.ts";
-import { buildWordIndex } from "./word-index.ts";
+import { spansToRects } from "./rects";
+import type { Span } from "./types";
+import { buildWordIndex } from "./word-index";
 
 const box = (x0: number, y0: number, x1: number, y1: number) => ({ x0, x1, y0, y1 });
 

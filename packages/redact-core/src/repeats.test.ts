@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { spansForTokens, tokensFromSpans } from "./repeats.ts";
-import type { Span } from "./types.ts";
+import { spansForTokens, tokensFromSpans } from "./repeats";
+import type { Span } from "./types";
 
 const span = (start: number, end: number, label: Span["label"] = "private_person"): Span => ({
   end,

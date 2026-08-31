@@ -1,9 +1,9 @@
 import type { PiiLabel, Span } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import type { LabelledSpan } from "./corpus.ts";
-import type { Counts } from "./score.ts";
-import { addCounts, countMatches, emptyCounts, mergeSpans, scoreOf, totalCounts } from "./score.ts";
+import type { LabelledSpan } from "./corpus";
+import type { Counts } from "./score";
+import { addCounts, countMatches, emptyCounts, mergeSpans, scoreOf, totalCounts } from "./score";
 
 const want = (start: number, end: number, label: PiiLabel = "private_person"): LabelledSpan => ({
   end,

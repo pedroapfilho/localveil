@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { encodeGlinerInput } from "./gliner-encode.ts";
+import { encodeGlinerInput } from "./gliner-encode";
 
 const FRAME = { cls: 1, sep: 2 };
 

@@ -2,7 +2,7 @@ import type { Detect, Span } from "@repo/redact-core";
 import { defaultDecisions, redactFile } from "@repo/redact-core";
 import { describe, expect, it, vi } from "vitest";
 
-import { textRedactor } from "./index.ts";
+import { textRedactor } from "./index";
 
 const span = (start: number, end: number): Span => ({
   end,

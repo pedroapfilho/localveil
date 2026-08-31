@@ -11,9 +11,9 @@ import {
   tokensFromSpans,
 } from "@repo/redact-core";
 
-import { maskRanges } from "./mask.ts";
-import { csvFieldSpans } from "./structured-csv.ts";
-import { jsonFieldSpans } from "./structured-json.ts";
+import { maskRanges } from "./mask";
+import { csvFieldSpans } from "./structured-csv";
+import { jsonFieldSpans } from "./structured-json";
 
 const TEXT_EXTENSIONS = new Set([".csv", ".json", ".log", ".md", ".txt"]);
 

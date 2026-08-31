@@ -2,7 +2,7 @@ import type { Unzipped } from "fflate";
 import { unzip } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { buildZip, uniqueFilename } from "./zip.ts";
+import { buildZip, uniqueFilename } from "./zip";
 
 const entryNames = async (archive: Blob) => {
   const bytes = new Uint8Array(await archive.arrayBuffer());

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChunkStore, Manifest } from "./chunk-store.ts";
-import type { DownloadOptions } from "./resumable-download.ts";
-import { downloadResumable } from "./resumable-download.ts";
+import type { ChunkStore, Manifest } from "./chunk-store";
+import type { DownloadOptions } from "./resumable-download";
+import { downloadResumable } from "./resumable-download";
 
 const URL_UNDER_TEST = "https://example.com/model.onnx_data";
 

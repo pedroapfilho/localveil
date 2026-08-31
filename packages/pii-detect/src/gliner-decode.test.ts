@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { SpanCandidate } from "./gliner-decode.ts";
-import { decodeSpans, suppressOverlaps, toLogits } from "./gliner-decode.ts";
+import type { SpanCandidate } from "./gliner-decode";
+import { decodeSpans, suppressOverlaps, toLogits } from "./gliner-decode";
 
 type LogitsDims = { batch?: number; entities: number; widths: number; words: number };
 

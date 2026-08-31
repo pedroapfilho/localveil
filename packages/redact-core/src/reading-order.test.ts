@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { inReadingOrder } from "./reading-order.ts";
-import type { WordInput } from "./word-index.ts";
+import { inReadingOrder } from "./reading-order";
+import type { WordInput } from "./word-index";
 
 const LINE = 20;
 

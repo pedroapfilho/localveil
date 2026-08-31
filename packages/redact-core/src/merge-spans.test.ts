@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
-import type { Span } from "./types.ts";
+import { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
+import type { Span } from "./types";
 
 const span = (start: number, end: number, score = 0.9): Span => ({
   end,

@@ -1,7 +1,7 @@
 import type { Detect } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { redactPath } from "./redact-path.ts";
+import { redactPath } from "./redact-path";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 const IDENTITY_CARD = new URL("../fixtures/identity-card.pdf", import.meta.url).pathname;

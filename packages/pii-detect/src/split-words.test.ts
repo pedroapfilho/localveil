@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitWords } from "./split-words.ts";
+import { splitWords } from "./split-words";
 
 describe("splitWords", () => {
   it("keeps an accented name as one word", () => {

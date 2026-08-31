@@ -1,5 +1,5 @@
-import type { Redactor } from "./types.ts";
-import { UnsupportedFileError } from "./unsupported-file-error.ts";
+import type { Redactor } from "./types";
+import { UnsupportedFileError } from "./unsupported-file-error";
 
 type RedactorRegistry = {
   resolve: (file: File) => Redactor;

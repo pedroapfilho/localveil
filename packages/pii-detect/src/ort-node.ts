@@ -5,10 +5,10 @@ import path from "node:path";
 
 import * as ort from "onnxruntime-node";
 
-import { readBytes } from "./fetch-bytes.ts";
-import { toLogits } from "./gliner-decode.ts";
-import { toFeeds } from "./gliner-feeds.ts";
-import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime.ts";
+import { readBytes } from "./fetch-bytes";
+import { toLogits } from "./gliner-decode";
+import { toFeeds } from "./gliner-feeds";
+import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime";
 
 const CACHE_DIR = path.join(homedir(), ".cache", "localveil", "models");
 

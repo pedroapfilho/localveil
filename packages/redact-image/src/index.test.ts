@@ -12,7 +12,7 @@ vi.mock("@repo/ocr", async (importOriginal) => ({
   readImageText: mocks.readImageText,
 }));
 
-import { imageRedactor } from "./index.ts";
+import { imageRedactor } from "./index";
 
 const bitmap = { close: vi.fn(), height: 1, width: 2 };
 const contexts: Array<{

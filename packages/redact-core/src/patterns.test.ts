@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isCnpj, isCpf, isIban, luhn, patternSpans } from "./patterns.ts";
+import { isCnpj, isCpf, isIban, luhn, patternSpans } from "./patterns";
 
 const covered = (text: string) =>
   patternSpans(text).map(({ end, start }) => text.slice(start, end));

@@ -1,5 +1,5 @@
-import { absorbNested } from "./merge-spans.ts";
-import type { Decisions, Detection, Span } from "./types.ts";
+import { absorbNested } from "./merge-spans";
+import type { Decisions, Detection, Span } from "./types";
 
 const APPLY_SCORE = 0.65;
 

@@ -1,6 +1,6 @@
 import type { PiiLabel, Span } from "@repo/redact-core";
 
-import type { LabelledSpan } from "./corpus.ts";
+import type { LabelledSpan } from "./corpus";
 
 type Counts = { falseNegative: number; falsePositive: number; truePositive: number };
 

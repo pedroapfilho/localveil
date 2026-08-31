@@ -1,9 +1,9 @@
 import type { ImageLike } from "tesseract.js";
 
-import type { OcrLanguage } from "./languages.ts";
-import { detectLanguage } from "./languages.ts";
-import type { Recognition } from "./recognize.ts";
-import { recognizeWords } from "./recognize.ts";
+import type { OcrLanguage } from "./languages";
+import { detectLanguage } from "./languages";
+import type { Recognition } from "./recognize";
+import { recognizeWords } from "./recognize";
 
 type ImageReading = Recognition & { language: OcrLanguage };
 

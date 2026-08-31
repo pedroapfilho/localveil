@@ -1,4 +1,4 @@
-import type { Bbox, PositionedWord } from "./types.ts";
+import type { Bbox, PositionedWord } from "./types";
 
 type WordInput = { bbox: Bbox; text: string };
 

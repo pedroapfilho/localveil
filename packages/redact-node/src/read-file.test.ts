@@ -3,7 +3,7 @@ import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
 import { describe, expect, it } from "vitest";
 
-import { readFileAsFile, SUPPORTED_EXTENSIONS } from "./read-file.ts";
+import { readFileAsFile, SUPPORTED_EXTENSIONS } from "./read-file";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 

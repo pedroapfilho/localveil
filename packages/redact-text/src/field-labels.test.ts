@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { labelForField, normaliseField } from "./field-labels.ts";
+import { labelForField, normaliseField } from "./field-labels";
 
 describe("normaliseField", () => {
   it("folds case, separators and diacritics into one key", () => {

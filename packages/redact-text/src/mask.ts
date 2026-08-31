@@ -1,6 +1,6 @@
 import type { Range } from "@repo/redact-core";
 
-import { isLineBreak } from "./line-break.ts";
+import { isLineBreak } from "./line-break";
 
 const BLOCK = "█";
 

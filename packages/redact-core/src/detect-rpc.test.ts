@@ -2,8 +2,8 @@ import { MessageChannel } from "node:worker_threads";
 
 import { describe, expect, it } from "vitest";
 
-import { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
-import type { Span } from "./types.ts";
+import { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc";
+import type { Span } from "./types";
 
 const wire = () => {
   const channel = new MessageChannel();

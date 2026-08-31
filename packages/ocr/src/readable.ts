@@ -1,6 +1,6 @@
 import type { WordInput } from "@repo/redact-core";
 
-import type { Recognition } from "./recognize.ts";
+import type { Recognition } from "./recognize";
 
 const LEGIBLE_WORD = 60;
 

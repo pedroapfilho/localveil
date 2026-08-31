@@ -1,5 +1,5 @@
-import type { Counts } from "./score.ts";
-import { scoreOf } from "./score.ts";
+import type { Counts } from "./score";
+import { scoreOf } from "./score";
 
 type Row = { counts: Counts; name: string };
 
