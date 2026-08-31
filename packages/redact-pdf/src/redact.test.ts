@@ -37,13 +37,13 @@ const boxFor = (index: number): Bbox => ({
   y1: LINE_HEIGHT,
 });
 
-vi.mock("pdfjs-dist/build/pdf.worker.mjs", () => {
+vi.mock("#pdfjs-worker", () => {
   Object.assign(globalThis, { pdfjsWorker: {} });
 
   return {};
 });
 
-vi.mock("pdfjs-dist", () => ({
+vi.mock("#pdfjs", () => ({
   getDocument: () => ({
     destroy: () => {
       events.push("destroy");
