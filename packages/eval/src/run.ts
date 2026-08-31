@@ -14,12 +14,12 @@ import {
 } from "@repo/redact-core";
 import { structuralSpans } from "@repo/redact-text";
 
-import type { EvalDocument } from "./corpus.ts";
-import { loadCorpus } from "./corpus.ts";
-import type { Row } from "./report.ts";
-import { table } from "./report.ts";
-import type { Counts } from "./score.ts";
-import { addCounts, countMatches, totalCounts } from "./score.ts";
+import type { EvalDocument } from "./corpus";
+import { loadCorpus } from "./corpus";
+import type { Row } from "./report";
+import { table } from "./report";
+import type { Counts } from "./score";
+import { addCounts, countMatches, totalCounts } from "./score";
 
 type DocumentResult = {
   analysed: Map<PiiLabel, Counts>;

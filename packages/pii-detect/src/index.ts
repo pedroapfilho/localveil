@@ -1,3 +1,3 @@
-export { createDetector, MIN_SCORE, MODEL_ID } from "./detector.ts";
-export type { DetectorOptions } from "./detector.ts";
-export { isPiiLabel, PII_LABELS } from "./labels.ts";
+export { createDetector, MIN_SCORE, MODEL_ID } from "./detector";
+export type { DetectorOptions } from "./detector";
+export { isPiiLabel, PII_LABELS } from "./labels";

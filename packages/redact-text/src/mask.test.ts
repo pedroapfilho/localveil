@@ -2,7 +2,7 @@ import type { Span } from "@repo/redact-core";
 import { mergeOverlappingRanges } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { maskRanges } from "./mask.ts";
+import { maskRanges } from "./mask";
 
 const maskSpans = (text: string, spans: Array<Span>) =>
   maskRanges(text, mergeOverlappingRanges(spans));

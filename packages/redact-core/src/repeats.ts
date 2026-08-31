@@ -1,5 +1,5 @@
-import { APPLY_SCORE } from "./detections.ts";
-import type { PiiLabel, Span } from "./types.ts";
+import { APPLY_SCORE } from "./detections";
+import type { PiiLabel, Span } from "./types";
 
 type PiiToken = { label: PiiLabel; score: number; text: string };
 

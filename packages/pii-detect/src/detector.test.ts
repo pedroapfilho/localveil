@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
-import { createDetector, MAX_WIDTH } from "./detector.ts";
-import type { GlinerInput } from "./gliner-encode.ts";
-import { ENTITY_PROMPTS } from "./gliner-labels.ts";
+import { createDetector, MAX_WIDTH } from "./detector";
+import type { GlinerInput } from "./gliner-encode";
+import { ENTITY_PROMPTS } from "./gliner-labels";
 
 vi.mock("@huggingface/transformers", () => ({
   AutoTokenizer: { from_pretrained: vi.fn() },

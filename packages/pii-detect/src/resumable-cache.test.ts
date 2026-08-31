@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChunkStore, Manifest } from "./chunk-store.ts";
-import type { CacheProgress } from "./resumable-cache.ts";
-import { createResumableCache } from "./resumable-cache.ts";
+import type { ChunkStore, Manifest } from "./chunk-store";
+import type { CacheProgress } from "./resumable-cache";
+import { createResumableCache } from "./resumable-cache";
 
 const URL_UNDER_TEST = "https://example.com/model.onnx_data";
 const OTHER_URL = "https://example.com/tokenizer.json";

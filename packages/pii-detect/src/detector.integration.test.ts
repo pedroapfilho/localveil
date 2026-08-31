@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createDetector } from "./detector.ts";
+import { createDetector } from "./detector";
 
 describe.skipIf(process.env.PII_MODEL_TEST === undefined)(
   "createDetector against the real model",

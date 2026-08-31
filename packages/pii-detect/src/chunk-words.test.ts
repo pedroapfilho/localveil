@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { chunkWords } from "./chunk-words.ts";
-import { splitWords } from "./split-words.ts";
+import { chunkWords } from "./chunk-words";
+import { splitWords } from "./split-words";
 
 describe("chunkWords", () => {
   it("covers every word once with no overlap", () => {

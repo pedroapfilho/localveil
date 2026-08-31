@@ -6,8 +6,8 @@ import {
   defaultDecisions,
   describeSpans,
   keptSpans,
-} from "./detections.ts";
-import type { Detection, Span } from "./types.ts";
+} from "./detections";
+import type { Detection, Span } from "./types";
 
 const span = (start: number, end: number, score = 0.9): Span => ({
   end,

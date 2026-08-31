@@ -1,5 +1,5 @@
-import type { ChunkStore } from "./chunk-store.ts";
-import { CACHE_KEY } from "./resumable-cache.ts";
+import type { ChunkStore } from "./chunk-store";
+import { CACHE_KEY } from "./resumable-cache";
 
 const MODEL_HOST = "huggingface.co";
 

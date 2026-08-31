@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { OffscreenCanvasFactory } from "./canvas-factory.ts";
-import { NoFilterFactory } from "./filter-factory.ts";
+import { OffscreenCanvasFactory } from "./canvas-factory";
+import { NoFilterFactory } from "./filter-factory";
 
-import { documentOptions } from "./index.ts";
+import { documentOptions } from "./index";
 
 const options = documentOptions(new Uint8Array([1, 2, 3]));
 

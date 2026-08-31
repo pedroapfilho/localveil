@@ -1,4 +1,4 @@
-import type { PositionedWord, Rect, Span } from "./types.ts";
+import type { PositionedWord, Rect, Span } from "./types";
 
 const height = (word: PositionedWord) => word.bbox.y1 - word.bbox.y0;
 

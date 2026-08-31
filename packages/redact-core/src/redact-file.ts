@@ -1,5 +1,5 @@
-import { defaultDecisions } from "./detections.ts";
-import type { Detect, FileProgress, RedactionResult, Redactor } from "./types.ts";
+import { defaultDecisions } from "./detections";
+import type { Detect, FileProgress, RedactionResult, Redactor } from "./types";
 
 type WholeFile = {
   detect: Detect;

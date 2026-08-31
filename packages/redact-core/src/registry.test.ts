@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createRedactorRegistry } from "./registry.ts";
-import type { Redactor } from "./types.ts";
-import { UnsupportedFileError } from "./unsupported-file-error.ts";
+import { createRedactorRegistry } from "./registry";
+import type { Redactor } from "./types";
+import { UnsupportedFileError } from "./unsupported-file-error";
 
 const stub = (accepts: (file: File) => boolean): Redactor => ({
   accepts,

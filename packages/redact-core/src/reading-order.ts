@@ -1,4 +1,4 @@
-import type { WordInput } from "./word-index.ts";
+import type { WordInput } from "./word-index";
 
 type Extent = { x0: number; x1: number; y0: number; y1: number };
 

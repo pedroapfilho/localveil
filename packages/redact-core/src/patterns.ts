@@ -1,5 +1,5 @@
-import { absorbNested } from "./merge-spans.ts";
-import type { PiiLabel, Span } from "./types.ts";
+import { absorbNested } from "./merge-spans";
+import type { PiiLabel, Span } from "./types";
 
 type Pattern = {
   label: PiiLabel;

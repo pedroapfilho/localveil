@@ -1,5 +1,5 @@
-import { APPLY_SCORE } from "./detections.ts";
-import type { Detect, PiiLabel } from "./types.ts";
+import { APPLY_SCORE } from "./detections";
+import type { Detect, PiiLabel } from "./types";
 
 const BLOCK = "█";
 

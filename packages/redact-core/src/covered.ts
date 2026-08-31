@@ -1,4 +1,4 @@
-import type { Bbox, Rect } from "./types.ts";
+import type { Bbox, Rect } from "./types";
 
 const isCovered = (bbox: Bbox, rects: Array<Rect>) =>
   rects.some(

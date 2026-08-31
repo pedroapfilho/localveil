@@ -1,6 +1,6 @@
 import type { Span } from "@repo/redact-core";
 
-import { labelForField } from "./field-labels.ts";
+import { labelForField } from "./field-labels";
 
 const PAIR = /"(?<key>(?:[^"\\]|\\.)*)"\s*:\s*(?<value>"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?)/dgv;
 

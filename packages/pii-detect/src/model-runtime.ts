@@ -1,6 +1,6 @@
-import type { Logits } from "./gliner-decode.ts";
-import type { GlinerInput } from "./gliner-encode.ts";
-import type { ResumableCache } from "./resumable-cache.ts";
+import type { Logits } from "./gliner-decode";
+import type { GlinerInput } from "./gliner-encode";
+import type { ResumableCache } from "./resumable-cache";
 
 type ModelDevice = "wasm" | "webgpu";
 

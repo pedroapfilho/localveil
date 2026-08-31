@@ -2,9 +2,9 @@
 import type { StageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDetector } from "./detector.ts";
-import type { CacheProgress, ResumableCacheOptions } from "./resumable-cache.ts";
-import { createResumableCache } from "./resumable-cache.ts";
+import { createDetector } from "./detector";
+import type { CacheProgress, ResumableCacheOptions } from "./resumable-cache";
+import { createResumableCache } from "./resumable-cache";
 
 vi.mock("@huggingface/transformers", () => ({
   AutoTokenizer: { from_pretrained: vi.fn() },
@@ -17,7 +17,7 @@ vi.mock("#ort", () => ({
   pickDevice: vi.fn(),
 }));
 
-vi.mock("./resumable-cache.ts", () => ({
+vi.mock("./resumable-cache", () => ({
   createResumableCache: vi.fn(() => ({ match: vi.fn(), put: vi.fn() })),
 }));
 

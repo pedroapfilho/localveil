@@ -169,7 +169,7 @@ class FakeCanvas {
   }
 }
 
-const { pdfRedactor } = await import("./index.ts");
+const { pdfRedactor } = await import("./index");
 
 const file = () => new File([new Uint8Array([37, 80, 68, 70])], "statement.pdf");
 

@@ -1,4 +1,4 @@
-import type { GlinerInput } from "./gliner-encode.ts";
+import type { GlinerInput } from "./gliner-encode";
 
 type MakeTensor<T> = (
   type: "bool" | "int64",

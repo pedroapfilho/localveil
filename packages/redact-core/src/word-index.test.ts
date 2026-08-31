@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { Bbox } from "./types.ts";
-import { buildWordIndex } from "./word-index.ts";
+import type { Bbox } from "./types";
+import { buildWordIndex } from "./word-index";
 
 const box = (x0: number, y0: number, x1: number, y1: number): Bbox => ({ x0, x1, y0, y1 });
 

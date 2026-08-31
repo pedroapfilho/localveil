@@ -14,6 +14,6 @@ const createNodeDetector = (options: NodeRedactorOptions = {}): Promise<Detect> 
   });
 
 export { createNodeDetector };
-export { SUPPORTED_EXTENSIONS } from "./read-file.ts";
-export { redactPath } from "./redact-path.ts";
-export type { NodeRedactionOutput, NodeRedactionProgress } from "./redact-path.ts";
+export { SUPPORTED_EXTENSIONS } from "./read-file";
+export { redactPath } from "./redact-path";
+export type { NodeRedactionOutput, NodeRedactionProgress } from "./redact-path";

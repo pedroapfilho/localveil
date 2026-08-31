@@ -6,7 +6,7 @@ import type { Detect } from "@repo/redact-core";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { redactPath } from "./redact-path.ts";
+import { redactPath } from "./redact-path";
 
 type Placed = { at: [x: number, y: number]; text: string };
 

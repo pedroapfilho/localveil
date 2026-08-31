@@ -1,4 +1,4 @@
-import type { SourceWord } from "./split-words.ts";
+import type { SourceWord } from "./split-words";
 
 type WordChunk = { end: number; start: number; words: Array<SourceWord> };
 

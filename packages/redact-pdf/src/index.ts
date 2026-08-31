@@ -19,9 +19,9 @@ import {
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
-import { OffscreenCanvasFactory } from "./canvas-factory.ts";
-import { NoFilterFactory } from "./filter-factory.ts";
-import { textLayerWords } from "./text-layer.ts";
+import { OffscreenCanvasFactory } from "./canvas-factory";
+import { NoFilterFactory } from "./filter-factory";
+import { textLayerWords } from "./text-layer";
 
 const SCALE = 2;
 

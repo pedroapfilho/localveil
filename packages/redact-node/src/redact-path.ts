@@ -4,8 +4,8 @@ import { imageRedactor } from "@repo/redact-image";
 import { pdfRedactor } from "@repo/redact-pdf";
 import { textRedactor } from "@repo/redact-text";
 
-import { installCanvas } from "./canvas.ts";
-import { readFileAsFile } from "./read-file.ts";
+import { installCanvas } from "./canvas";
+import { readFileAsFile } from "./read-file";
 
 type NodeRedactionProgress = (fraction: number, stage: FileStageKey) => void;
 

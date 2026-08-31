@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { collectShouting, positionShouted, titleCased } from "./shouting.ts";
-import { splitWords } from "./split-words.ts";
+import { collectShouting, positionShouted, titleCased } from "./shouting";
+import { splitWords } from "./split-words";
 
 describe("titleCased", () => {
   it("lowers every letter of a shouted word but the first", () => {

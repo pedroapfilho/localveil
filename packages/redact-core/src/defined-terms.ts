@@ -1,4 +1,4 @@
-import type { Span } from "./types.ts";
+import type { Span } from "./types";
 
 const QUOTE = String.raw`["“”]`;
 

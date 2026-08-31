@@ -1,5 +1,5 @@
-import { describeError } from "./describe-error.ts";
-import type { Detect, Span } from "./types.ts";
+import { describeError } from "./describe-error";
+import type { Detect, Span } from "./types";
 
 type EventPort = {
   addEventListener: (type: "close" | "message", handle: (event: { data: unknown }) => void) => void;

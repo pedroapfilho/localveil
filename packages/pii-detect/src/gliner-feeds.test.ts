@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { GlinerInput } from "./gliner-encode.ts";
-import { toFeeds } from "./gliner-feeds.ts";
+import type { GlinerInput } from "./gliner-encode";
+import { toFeeds } from "./gliner-feeds";
 
 type Tensor = { data: Array<number>; dims: Array<number>; type: string };
 

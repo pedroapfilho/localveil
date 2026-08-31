@@ -7,7 +7,7 @@ import {
   binarizePixels,
   OCR_LUMINANCE_THRESHOLD,
   shouldRetryOcr,
-} from "./ocr-retry.ts";
+} from "./ocr-retry";
 
 const BOX = { x0: 0, x1: 10, y0: 0, y1: 10 };
 

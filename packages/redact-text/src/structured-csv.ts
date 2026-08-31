@@ -1,6 +1,6 @@
 import type { PiiLabel, Span } from "@repo/redact-core";
 
-import { labelForField } from "./field-labels.ts";
+import { labelForField } from "./field-labels";
 
 type Cell = { end: number; start: number; value: string };
 

@@ -13,7 +13,7 @@ const workerStub = () => ({
 const load = () => {
   vi.resetModules();
 
-  return import("./recognize.ts");
+  return import("./recognize");
 };
 
 beforeEach(() => {

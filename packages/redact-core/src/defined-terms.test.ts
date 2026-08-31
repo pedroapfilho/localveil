@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { definedTerms, dropDefinedTerms } from "./defined-terms.ts";
-import type { Span } from "./types.ts";
+import { definedTerms, dropDefinedTerms } from "./defined-terms";
+import type { Span } from "./types";
 
 const CONTRACT =
   "This Consulting Agreement (the “ Agreement ”) is made between Zora Labs, Inc., " +

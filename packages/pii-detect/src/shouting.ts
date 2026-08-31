@@ -1,5 +1,5 @@
-import type { SpanWord } from "./gliner-encode.ts";
-import type { SourceWord } from "./split-words.ts";
+import type { SpanWord } from "./gliner-encode";
+import type { SourceWord } from "./split-words";
 
 const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['’]\p{Lu}+)?/gv;
 

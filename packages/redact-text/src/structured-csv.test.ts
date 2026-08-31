@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { csvFieldSpans } from "./structured-csv.ts";
+import { csvFieldSpans } from "./structured-csv";
 
 const covered = (text: string) =>
   csvFieldSpans(text).map((span) => `${span.label}:${text.slice(span.start, span.end)}`);

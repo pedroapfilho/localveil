@@ -1,8 +1,8 @@
 import type { WordInput } from "@repo/redact-core";
 import type { Block, ImageLike, Word, Worker } from "tesseract.js";
 
-import type { OcrLanguage } from "./languages.ts";
-import { traineddataFor } from "./languages.ts";
+import type { OcrLanguage } from "./languages";
+import { traineddataFor } from "./languages";
 
 type RecognisedWord = WordInput & { confidence: number };
 

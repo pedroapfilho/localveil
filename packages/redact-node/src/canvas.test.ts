@@ -1,7 +1,7 @@
 import { documentOptions } from "@repo/redact-pdf";
 import { describe, expect, it } from "vitest";
 
-import { createNodeCanvas, installCanvas } from "./canvas.ts";
+import { createNodeCanvas, installCanvas } from "./canvas";
 
 const PNG_MAGIC = new Uint8Array([137, 80, 78, 71]);
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { batchInputs } from "./batch-inputs.ts";
-import type { GlinerInput } from "./gliner-encode.ts";
+import { batchInputs } from "./batch-inputs";
+import type { GlinerInput } from "./gliner-encode";
 
 const input = (tokens: number): GlinerInput => ({
   attentionMask: Array.from<number>({ length: tokens }).fill(1),

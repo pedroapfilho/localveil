@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { table } from "./report.ts";
+import { table } from "./report";
 
 const rows = [
   { counts: { falseNegative: 1, falsePositive: 1, truePositive: 3 }, name: "private_person" },

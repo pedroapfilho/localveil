@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { jsonFieldSpans } from "./structured-json.ts";
+import { jsonFieldSpans } from "./structured-json";
 
 const covered = (text: string) =>
   jsonFieldSpans(text).map((span) => `${span.label}:${text.slice(span.start, span.end)}`);

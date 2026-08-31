@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { detectLanguage, traineddataFor } from "./languages.ts";
+import { detectLanguage, traineddataFor } from "./languages";
 
 describe("detectLanguage", () => {
   it("recognises English prose", () => {

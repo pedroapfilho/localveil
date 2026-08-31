@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Detect, Span } from "./types.ts";
-import { survivingSpans } from "./verify.ts";
+import type { Detect, Span } from "./types";
+import { survivingSpans } from "./verify";
 
 const finding = (target: string): Detect =>
   vi.fn((text: string) => {

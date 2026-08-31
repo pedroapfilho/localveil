@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { tightenToVerified } from "./tighten.ts";
-import type { Span } from "./types.ts";
+import { tightenToVerified } from "./tighten";
+import type { Span } from "./types";
 
 const span = (start: number, end: number, score: number, label: Span["label"] = "account_number") =>
   ({ end, label, score, start }) satisfies Span;

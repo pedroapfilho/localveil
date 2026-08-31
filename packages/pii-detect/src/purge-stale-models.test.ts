@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { purgeStaleModels } from "./purge-stale-models.ts";
+import { purgeStaleModels } from "./purge-stale-models";
 
 const REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
 

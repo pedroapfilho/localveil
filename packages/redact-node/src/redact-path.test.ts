@@ -46,7 +46,7 @@ vi.mock("@repo/redact-image", async (importOriginal) => {
   };
 });
 
-const { redactPath } = await import("./redact-path.ts");
+const { redactPath } = await import("./redact-path");
 
 const detecting = (target: string): Detect =>
   vi.fn((text: string) => {

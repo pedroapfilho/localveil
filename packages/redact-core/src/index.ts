@@ -1,24 +1,24 @@
-export { isCovered } from "./covered.ts";
-export { describeError } from "./describe-error.ts";
+export { isCovered } from "./covered";
+export { describeError } from "./describe-error";
 export {
   APPLY_SCORE,
   dedupeDetections,
   defaultDecisions,
   describeSpans,
   keptSpans,
-} from "./detections.ts";
-export { definedTerms, dropDefinedTerms } from "./defined-terms.ts";
-export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc.ts";
-export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc.ts";
-export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans.ts";
-export type { ChunkSpans, Range } from "./merge-spans.ts";
-export { redactFile } from "./redact-file.ts";
-export { patternSpans } from "./patterns.ts";
-export { inReadingOrder } from "./reading-order.ts";
-export { spansForTokens, tokensFromSpans } from "./repeats.ts";
-export type { PiiToken } from "./repeats.ts";
-export { createRedactorRegistry } from "./registry.ts";
-export type { RedactorRegistry } from "./registry.ts";
+} from "./detections";
+export { definedTerms, dropDefinedTerms } from "./defined-terms";
+export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc";
+export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc";
+export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
+export type { ChunkSpans, Range } from "./merge-spans";
+export { redactFile } from "./redact-file";
+export { patternSpans } from "./patterns";
+export { inReadingOrder } from "./reading-order";
+export { spansForTokens, tokensFromSpans } from "./repeats";
+export type { PiiToken } from "./repeats";
+export { createRedactorRegistry } from "./registry";
+export type { RedactorRegistry } from "./registry";
 export type {
   Analysis,
   ApplyRequest,
@@ -39,13 +39,13 @@ export type {
   Span,
   StageKey,
   WarningKey,
-} from "./types.ts";
-export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error.ts";
-export { survivingSpans } from "./verify.ts";
-export type { Survivor } from "./verify.ts";
-export { spansToRects } from "./rects.ts";
-export { tightenToVerified } from "./tighten.ts";
-export { buildWordIndex } from "./word-index.ts";
-export type { WordIndex, WordInput } from "./word-index.ts";
-export { buildZip, toArrayBuffer, uniqueFilename } from "./zip.ts";
-export type { ZipEntry } from "./zip.ts";
+} from "./types";
+export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error";
+export { survivingSpans } from "./verify";
+export type { Survivor } from "./verify";
+export { spansToRects } from "./rects";
+export { tightenToVerified } from "./tighten";
+export { buildWordIndex } from "./word-index";
+export type { WordIndex, WordInput } from "./word-index";
+export { buildZip, toArrayBuffer, uniqueFilename } from "./zip";
+export type { ZipEntry } from "./zip";

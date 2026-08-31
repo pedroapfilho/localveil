@@ -10,22 +10,22 @@ import {
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
-import { batchInputs } from "./batch-inputs.ts";
-import type { ChunkStore } from "./chunk-store.ts";
-import { createIndexedDbChunkStore } from "./chunk-store.ts";
-import { chunkWords } from "./chunk-words.ts";
-import type { Logits } from "./gliner-decode.ts";
-import { decodeSpans, suppressOverlaps } from "./gliner-decode.ts";
-import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode.ts";
-import { encodeGlinerInput } from "./gliner-encode.ts";
-import { ENTITY_PROMPTS } from "./gliner-labels.ts";
-import { MODEL_FILE } from "./model-runtime.ts";
-import type { ModelDevice } from "./model-runtime.ts";
-import { purgeStaleModels } from "./purge-stale-models.ts";
-import type { ResumableCache } from "./resumable-cache.ts";
-import { createResumableCache } from "./resumable-cache.ts";
-import { collectShouting, positionShouted } from "./shouting.ts";
-import { splitWords } from "./split-words.ts";
+import { batchInputs } from "./batch-inputs";
+import type { ChunkStore } from "./chunk-store";
+import { createIndexedDbChunkStore } from "./chunk-store";
+import { chunkWords } from "./chunk-words";
+import type { Logits } from "./gliner-decode";
+import { decodeSpans, suppressOverlaps } from "./gliner-decode";
+import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
+import { encodeGlinerInput } from "./gliner-encode";
+import { ENTITY_PROMPTS } from "./gliner-labels";
+import { MODEL_FILE } from "./model-runtime";
+import type { ModelDevice } from "./model-runtime";
+import { purgeStaleModels } from "./purge-stale-models";
+import type { ResumableCache } from "./resumable-cache";
+import { createResumableCache } from "./resumable-cache";
+import { collectShouting, positionShouted } from "./shouting";
+import { splitWords } from "./split-words";
 
 const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
 
