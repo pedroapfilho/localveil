@@ -69,28 +69,34 @@ const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   "type" in payload &&
   payload.type === "progress";
 
+type WorkerTask = {
+  cancel: () => void;
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
+  then: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
+};
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool's exec result is untyped; this guard is its parser
+const isWorkerTask = (task: unknown): task is WorkerTask =>
+  typeof task === "object" &&
+  task !== null &&
+  "cancel" in task &&
+  typeof task.cancel === "function" &&
+  "then" in task &&
+  typeof task.then === "function";
+
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool's exec result is untyped; this function is its parser
 const asPooledTask = (task: unknown): PooledTask => {
-  if (typeof task !== "object" || task === null) {
-    throw new TypeError("workerpool returned no task object");
+  if (!isWorkerTask(task)) {
+    throw new TypeError("workerpool returned a task that cannot be cancelled or settled");
   }
-
-  if (!("cancel" in task) || typeof task.cancel !== "function") {
-    throw new TypeError("workerpool returned a task that cannot be cancelled");
-  }
-
-  if (!("then" in task) || typeof task.then !== "function") {
-    throw new TypeError("workerpool returned a task that never settles");
-  }
-
-  const { cancel, then } = task;
 
   return {
     cancel: () => {
-      cancel.call(task);
+      task.cancel();
     },
     settle: (onDone, onFail) => {
-      then.call(task, onDone, onFail);
+      // oxlint-disable-next-line promise/catch-or-return, promise/prefer-catch, promise/prefer-await-to-then -- workerpool's task is a thenable, not a Promise; then(onDone, onFail) is its settle contract
+      task.then(onDone, onFail);
     },
   };
 };
@@ -304,4 +310,4 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 };
 
 export { createRedactionPool, SILENCE_LIMIT };
-export type { ApplyRequest, JobRequest, RedactionPool, RedactionPoolOptions };
+export type { ApplyRequest, JobRequest, RedactionPool, RedactionPoolOptions, WorkerTask };
