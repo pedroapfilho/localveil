@@ -18,12 +18,15 @@ class FakeTask {
     readonly options: ExecOptions,
   ) {}
 
-  // oxlint-disable-next-line unicorn/no-thenable
+  /* oxlint-disable unicorn/no-thenable */
+  // fallow-ignore-next-line unused-class-member -- called through worker-pool.ts asPooledTask
   then(onDone: (result: Analysis | RedactionResult) => void, onFail: (error: unknown) => void) {
     this.onDone = onDone;
     this.onFail = onFail;
   }
+  /* oxlint-enable unicorn/no-thenable */
 
+  // fallow-ignore-next-line unused-class-member -- called through worker-pool.ts asPooledTask
   cancel() {
     this.cancelled = true;
   }
