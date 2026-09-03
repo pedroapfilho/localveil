@@ -3,11 +3,12 @@ import type { Analysis, RedactionResult } from "@repo/redact-core";
 import { vi } from "vitest";
 
 import type { ModelHostOptions } from "./model-host";
+import type { WorkerTask } from "./worker-pool";
 import type { ProgressEvent } from "./worker-protocol";
 
 type ExecOptions = { on: (payload: unknown) => void; transfer: Array<unknown> };
 
-class FakeTask {
+class FakeTask implements WorkerTask {
   cancelled = false;
 
   private onDone?: (result: Analysis | RedactionResult) => void;
@@ -18,15 +19,12 @@ class FakeTask {
     readonly options: ExecOptions,
   ) {}
 
-  /* oxlint-disable unicorn/no-thenable */
-  // fallow-ignore-next-line unused-class-member -- called through worker-pool.ts asPooledTask
+  // oxlint-disable-next-line unicorn/no-thenable
   then(onDone: (result: Analysis | RedactionResult) => void, onFail: (error: unknown) => void) {
     this.onDone = onDone;
     this.onFail = onFail;
   }
-  /* oxlint-enable unicorn/no-thenable */
 
-  // fallow-ignore-next-line unused-class-member -- called through worker-pool.ts asPooledTask
   cancel() {
     this.cancelled = true;
   }
