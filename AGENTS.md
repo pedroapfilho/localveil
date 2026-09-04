@@ -58,4 +58,4 @@ The detection weights are large and are never committed. `.gitignore` excludes `
 
 - Everything runs client-side. A change that introduces a network call for anything but the weights and a Tesseract language pack breaks the product's core promise.
 - Workers are addressed by URL (`new URL("model-worker.ts", import.meta.url)`), not by import specifier, so those strings keep their extension.
-- This repo is registered in the orchestrator (`~/dev/orchestrator`) as the `tool` profile's base: its tsconfig presets and root devDependency versions are the verifier baseline for that profile. Change them deliberately.
+- This repo is registered in the orchestrator (`~/dev/orchestrator`) as the `tool` profile's base: its tsconfig presets and root devDependency versions are the check baseline for that profile. Change them deliberately.
