@@ -53,6 +53,49 @@ const STATUS_TONES = {
   running: "text-foreground",
 } satisfies Record<JobStatus, string>;
 
+const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
+  const { t } = useTranslations();
+  const { status } = job;
+  const busy = status === "running";
+  const inFlight = status === "queued" || busy;
+  const describeResult = () => {
+    if (job.status !== "done") {
+      return undefined;
+    }
+
+    return job.result.redactionCount === 0
+      ? t("files.noRedactions")
+      : t("files.redactions", { count: job.result.redactionCount });
+  };
+
+  const stage = stageOf(job);
+  const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
+
+  return (
+    <>
+      <AttachmentDescription className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}>
+        {busy ? (
+          <LoaderCircleIcon aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" />
+        ) : (
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+        )}
+
+        <span>{t(STATUS_KEYS[status])}</span>
+
+        {detail === undefined ? null : (
+          <>
+            <span aria-hidden>·</span>
+
+            <span className="text-muted-foreground truncate">{detail}</span>
+          </>
+        )}
+      </AttachmentDescription>
+
+      {inFlight ? <Progress className="mt-1.5" label={name} value={progressOf(job)} /> : null}
+    </>
+  );
+};
+
 type JobRowProps = {
   index: number;
   job: Job;
@@ -76,8 +119,6 @@ const JobRow = ({
   const { file, id, path, status } = job;
   const name = path ?? file.name;
 
-  const busy = status === "running";
-  const inFlight = status === "queued" || busy;
   const warnings = job.status === "done" ? job.result.warnings : [];
   const failure = job.status === "error";
   const reviewing = job.status === "reviewing";
@@ -94,19 +135,6 @@ const JobRow = ({
   const handleSelect = () => {
     onSelect(id, !selected);
   };
-
-  const describeResult = () => {
-    if (job.status !== "done") {
-      return undefined;
-    }
-
-    return job.result.redactionCount === 0
-      ? t("files.noRedactions")
-      : t("files.redactions", { count: job.result.redactionCount });
-  };
-
-  const stage = stageOf(job);
-  const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
 
   return (
     <m.li
@@ -134,32 +162,7 @@ const JobRow = ({
             <AttachmentContent>
               <AttachmentTitle title={name}>{name}</AttachmentTitle>
 
-              <AttachmentDescription
-                className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}
-              >
-                {busy ? (
-                  <LoaderCircleIcon
-                    aria-hidden
-                    className="size-3 shrink-0 motion-safe:animate-spin"
-                  />
-                ) : (
-                  <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
-                )}
-
-                <span>{t(STATUS_KEYS[status])}</span>
-
-                {detail === undefined ? null : (
-                  <>
-                    <span aria-hidden>·</span>
-
-                    <span className="text-muted-foreground truncate">{detail}</span>
-                  </>
-                )}
-              </AttachmentDescription>
-
-              {inFlight ? (
-                <Progress className="mt-1.5" label={name} value={progressOf(job)} />
-              ) : null}
+              <JobStatusSummary job={job} name={name} />
             </AttachmentContent>
 
             <AttachmentActions>

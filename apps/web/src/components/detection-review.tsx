@@ -213,4 +213,4 @@ const DetectionReview = ({
   );
 };
 
-export { DetectionReview, groupByLabel };
+export { DetectionReview };
