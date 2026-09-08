@@ -23,7 +23,7 @@ const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) =>
   renderWithI18n(
     <DetectionReview
       covered={
-        covered ?? detections.filter((entry) => entry.confidence >= 0.65).map((entry) => entry.id)
+        covered ?? detections.flatMap((entry) => (entry.confidence >= 0.65 ? [entry.id] : []))
       }
       detections={detections}
       onApply={onApply}
