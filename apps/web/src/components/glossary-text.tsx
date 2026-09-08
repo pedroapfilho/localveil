@@ -54,17 +54,20 @@ const GlossaryText = ({ children }: { children: string }) => {
     () => new RegExp(`(${[...named.keys()].map(quote).join("|")})`, "gv"),
     [named],
   );
+  const occurrences = new Map<GlossaryTermName, number>();
 
   return (
     <span>
-      {children.split(pattern).map((part, index) => {
+      {children.split(pattern).map((part) => {
         const name = named.get(part);
 
-        return name === undefined ? (
-          part
-        ) : (
-          <GlossaryTerm key={`${part}-${String(index)}`} label={part} name={name} />
-        );
+        if (name === undefined) {
+          return part;
+        }
+
+        const occurrence = (occurrences.get(name) ?? 0) + 1;
+        occurrences.set(name, occurrence);
+        return <GlossaryTerm key={`${name}-${String(occurrence)}`} label={part} name={name} />;
       })}
     </span>
   );
