@@ -1,7 +1,9 @@
 overrides:
   # Security: force patched transitive releases to clear pnpm audit advisories.
   # Each pin is the lowest patched version within the already-resolved major.
+  adm-zip: "^0.6.0"
   brace-expansion: "^5.0.9"
+  sharp: "^0.35.4"
 
 packages:
   - apps/*
