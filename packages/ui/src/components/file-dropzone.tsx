@@ -130,7 +130,9 @@ const FileDropzone = ({
           <p className="text-muted-foreground text-base text-pretty sm:text-sm">{hint}</p>
 
           {formats === undefined ? null : (
-            <p className="text-muted-foreground mt-4 max-w-[44ch] text-sm text-pretty">{formats}</p>
+            <p className="text-muted-foreground mt-4 max-w-(--container-measure-summary) text-sm text-pretty">
+              {formats}
+            </p>
           )}
         </MenuTrigger>
 

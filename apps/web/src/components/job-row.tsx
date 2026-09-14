@@ -174,7 +174,7 @@ const JobRow = ({
                 >
                   <ChevronDownIcon
                     aria-hidden
-                    className="size-4 shrink-0 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] in-data-panel-open:rotate-180 motion-reduce:transition-none"
+                    className="ease-out-expo size-4 shrink-0 transition-transform duration-200 in-data-panel-open:rotate-180 motion-reduce:transition-none"
                   />
                 </CollapsibleTrigger>
               ) : null}

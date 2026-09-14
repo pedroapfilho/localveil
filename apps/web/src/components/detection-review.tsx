@@ -152,9 +152,7 @@ const DetectionReview = ({
       </p>
 
       <ScrollArea className="max-h-80">
-        <div className="flex flex-col [&>*]:[contain-intrinsic-size:auto_28px] [&>*]:[content-visibility:auto]">
-          {rows.map(renderRow)}
-        </div>
+        <div className="[&>*]:detection-row flex flex-col">{rows.map(renderRow)}</div>
       </ScrollArea>
 
       {maybe.length === 0 ? null : (

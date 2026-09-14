@@ -35,9 +35,9 @@ const ScrollArea = ({ children, className, viewportClassName, ...props }: Scroll
   >
     <ScrollAreaPrimitive.Viewport
       className={cn(
-        // max-h-[inherit] carries a max-height set on the root down to the viewport: h-full alone
+        // max-h-inherit carries a max-height set on the root down to the viewport: h-full alone
         // resolves to auto against an auto-height root, leaving nothing to scroll against.
-        "focus-visible:outline-ring size-full max-h-[inherit] overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2",
+        "focus-visible:outline-ring max-h-inherit size-full overscroll-contain focus-visible:outline-2 focus-visible:-outline-offset-2",
         viewportClassName,
       )}
       data-slot="scroll-area-viewport"

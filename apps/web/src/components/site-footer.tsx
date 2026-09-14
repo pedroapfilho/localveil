@@ -15,11 +15,11 @@ const SiteFooter = () => {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-6 py-10 sm:py-12">
         <h2 className="text-base font-medium sm:text-sm">{t("footer.heading")}</h2>
 
-        <p className="text-muted-foreground max-w-[56ch] text-base text-pretty sm:text-sm">
+        <p className="text-muted-foreground max-w-(--container-measure-footer) text-base text-pretty sm:text-sm">
           {t("footer.summary")}
         </p>
 
-        <p className="text-muted-foreground max-w-[56ch] text-base text-pretty sm:text-sm">
+        <p className="text-muted-foreground max-w-(--container-measure-footer) text-base text-pretty sm:text-sm">
           {t("footer.offline")}
         </p>
 

@@ -18,7 +18,7 @@ const fillOf = (bar: HTMLElement) => {
     throw new TypeError("Progress rendered no fill to measure");
   }
 
-  return fill.style.transform;
+  return fill.style.getPropertyValue("--progress-fraction");
 };
 
 describe("Progress", () => {
@@ -41,11 +41,11 @@ describe("Progress", () => {
     expect(percentOf(renderProgress(Number.NaN))).toBe(0);
   });
 
-  it("draws the fill with a transform", () => {
-    expect(fillOf(renderProgress(0.42))).toBe("scaleX(0.42)");
+  it("passes the fraction to the fill", () => {
+    expect(fillOf(renderProgress(0.42))).toBe("0.42");
   });
 
   it("draws nothing at all at zero", () => {
-    expect(fillOf(renderProgress(0))).toBe("scaleX(0)");
+    expect(fillOf(renderProgress(0))).toBe("0");
   });
 });

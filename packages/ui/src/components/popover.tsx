@@ -31,10 +31,7 @@ const PopoverContent = ({
   ...props
 }: ComponentProps<typeof PopoverPrimitive.Popup> & { sideOffset?: number }) => (
   <PopoverPrimitive.Portal>
-    <PopoverPrimitive.Positioner
-      className="z-50 max-w-[min(20rem,calc(100vw-2rem))]"
-      sideOffset={sideOffset}
-    >
+    <PopoverPrimitive.Positioner className="max-w-popover z-50" sideOffset={sideOffset}>
       <PopoverPrimitive.Popup
         className={cn(
           "bg-popover text-popover-foreground ring-foreground/10 data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 origin-(--transform-origin) rounded-xl p-3 shadow-md ring-1 duration-150 outline-none",

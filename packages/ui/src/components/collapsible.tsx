@@ -29,7 +29,7 @@ const CollapsiblePanel = ({
 }: ComponentProps<typeof CollapsiblePrimitive.Panel>) => (
   <CollapsiblePrimitive.Panel
     className={cn(
-      "h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none",
+      "transition-height ease-out-expo h-(--collapsible-panel-height) overflow-hidden duration-200 data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none",
       className,
     )}
     data-slot="collapsible-panel"
