@@ -26,10 +26,7 @@ const GlossaryTerm = ({ label, name }: GlossaryTermProps) => {
 
   return (
     <Popover>
-      <PopoverTrigger
-        className="cursor-help underline decoration-current/40 decoration-dotted decoration-from-font underline-offset-4 hover:decoration-current data-popup-open:decoration-current"
-        openOnHover
-      >
+      <PopoverTrigger className="cursor-help" openOnHover variant="glossary">
         {label}
       </PopoverTrigger>
 

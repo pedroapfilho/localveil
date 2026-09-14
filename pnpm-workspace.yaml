@@ -64,6 +64,7 @@ minimumReleaseAgeExclude:
   - "@napi-rs/canvas-win32-arm64-msvc@1.0.3"
   - "@napi-rs/canvas-win32-x64-msvc@1.0.3"
   - "@napi-rs/canvas@1.0.3"
+  - "@shadcn/lint@0.1.0"
 
 onlyBuiltDependencies:
   - "@tailwindcss/oxide"

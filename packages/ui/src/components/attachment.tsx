@@ -7,6 +7,7 @@ import { Button } from "./button";
 type AttachmentState = "done" | "error" | "idle" | "processing" | "uploading";
 
 type AttachmentProps = ComponentProps<"div"> & {
+  collapsible?: boolean;
   orientation?: "horizontal" | "vertical";
   size?: "default" | "sm" | "xs";
   state?: AttachmentState;
@@ -14,6 +15,7 @@ type AttachmentProps = ComponentProps<"div"> & {
 
 const Attachment = ({
   className,
+  collapsible = false,
   orientation = "horizontal",
   size = "default",
   state = "done",
@@ -26,6 +28,7 @@ const Attachment = ({
       size === "sm" && "gap-2 p-2",
       size === "xs" && "gap-2 p-1.5",
       state === "error" && "ring-destructive/40",
+      collapsible && "gap-0",
       className,
     )}
     data-orientation={orientation}
@@ -70,9 +73,22 @@ const AttachmentTitle = ({ className, ...props }: ComponentProps<"p">) => (
   />
 );
 
-const AttachmentDescription = ({ className, ...props }: ComponentProps<"p">) => (
+const AttachmentDescription = ({
+  className,
+  tone = "muted",
+  ...props
+}: ComponentProps<"p"> & { tone?: "muted" | "success" | "destructive" | "default" }) => (
   <p
-    className={cn("text-muted-foreground text-base sm:text-sm", className)}
+    className={cn(
+      "text-base sm:text-sm",
+      {
+        "text-destructive": tone === "destructive",
+        "text-foreground": tone === "default",
+        "text-muted-foreground": tone === "muted",
+        "text-success": tone === "success",
+      },
+      className,
+    )}
     data-slot="attachment-description"
     {...props}
   />

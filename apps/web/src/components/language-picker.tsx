@@ -26,7 +26,7 @@ const LanguagePicker = () => {
       }}
       value={locale}
     >
-      <SelectTrigger aria-label={t("app.language")} className="border-transparent">
+      <SelectTrigger aria-label={t("app.language")} variant="ghost">
         <SelectValue>
           {(value) => (typeof value === "string" && isLocale(value) ? LOCALE_NAMES[value] : "")}
         </SelectValue>

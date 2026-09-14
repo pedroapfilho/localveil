@@ -59,3 +59,7 @@ The detection weights are large and are never committed. `.gitignore` excludes `
 - Everything runs client-side. A change that introduces a network call for anything but the weights and a Tesseract language pack breaks the product's core promise.
 - Workers are addressed by URL (`new URL("model-worker.ts", import.meta.url)`), not by import specifier, so those strings keep their extension.
 - This repo is registered in the orchestrator (`~/dev/orchestrator`) as the `tool` profile's base: its tsconfig presets and root devDependency versions are the check baseline for that profile. Change them deliberately.
+
+## Design-system linting
+
+Run `pnpm lint` after changes and fix every error. `oxlint.config.ts` registers `@shadcn/lint` and enforces component contracts, known Tailwind classes, and readable component class names. Primitives in `packages/ui/src/components` own their internal styles. Use component variants and attachment tones for appearance; callers may arrange popover content, scroll areas, and attachment descriptions through their documented contracts. `apps/web/components.json` resolves the shared theme, including `scroll-fade` and `no-scrollbar`. The exact `foo`, `bar`, and `baz` allowances apply only to the class-merging test fixture.

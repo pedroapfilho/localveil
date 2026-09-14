@@ -9,11 +9,13 @@ const Collapsible = ({ ...props }: ComponentProps<typeof CollapsiblePrimitive.Ro
 
 const CollapsibleTrigger = ({
   className,
+  variant = "default",
   ...props
-}: ComponentProps<typeof CollapsiblePrimitive.Trigger>) => (
+}: ComponentProps<typeof CollapsiblePrimitive.Trigger> & { variant?: "default" | "muted" }) => (
   <CollapsiblePrimitive.Trigger
     className={cn(
       "focus-visible:outline-ring outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+      variant === "muted" && "text-muted-foreground hover:text-foreground rounded-md",
       className,
     )}
     data-slot="collapsible-trigger"

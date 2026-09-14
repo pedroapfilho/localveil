@@ -46,12 +46,12 @@ const ATTACHMENT_STATES = {
 } as const;
 
 const STATUS_TONES = {
-  done: "text-success",
-  error: "text-destructive",
-  queued: "text-muted-foreground",
-  reviewing: "text-foreground",
-  running: "text-foreground",
-} satisfies Record<JobStatus, string>;
+  done: "success",
+  error: "destructive",
+  queued: "muted",
+  reviewing: "default",
+  running: "default",
+} as const satisfies Record<JobStatus, string>;
 
 const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
   const { t } = useTranslations();
@@ -73,7 +73,7 @@ const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
 
   return (
     <>
-      <AttachmentDescription className={`flex items-center gap-1.5 ${STATUS_TONES[status]}`}>
+      <AttachmentDescription className="flex items-center gap-1.5" tone={STATUS_TONES[status]}>
         {busy ? (
           <LoaderCircleIcon aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" />
         ) : (
@@ -145,7 +145,7 @@ const JobRow = ({
       transition={APPEAR}
     >
       <Collapsible onOpenChange={setChosen} open={open}>
-        <Attachment className="flex-col gap-0" state={ATTACHMENT_STATES[status]}>
+        <Attachment collapsible orientation="vertical" state={ATTACHMENT_STATES[status]}>
           <div className="flex w-full gap-3">
             <span className="flex h-lh items-center text-base sm:text-sm">
               <Checkbox
@@ -169,7 +169,8 @@ const JobRow = ({
               {hasDetails ? (
                 <CollapsibleTrigger
                   aria-label={t("files.details", { name })}
-                  className="text-muted-foreground hover:text-foreground flex size-7 items-center justify-center rounded-md"
+                  className="flex size-7 items-center justify-center"
+                  variant="muted"
                 >
                   <ChevronDownIcon
                     aria-hidden
@@ -201,7 +202,7 @@ const JobRow = ({
                 ) : null}
 
                 {job.status === "error" ? (
-                  <AttachmentDescription className="text-destructive text-pretty">
+                  <AttachmentDescription className="text-pretty" tone="destructive">
                     {job.error}
                   </AttachmentDescription>
                 ) : null}

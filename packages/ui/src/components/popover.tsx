@@ -9,11 +9,14 @@ const Popover = ({ ...props }: ComponentProps<typeof PopoverPrimitive.Root>) => 
 
 const PopoverTrigger = ({
   className,
+  variant = "default",
   ...props
-}: ComponentProps<typeof PopoverPrimitive.Trigger>) => (
+}: ComponentProps<typeof PopoverPrimitive.Trigger> & { variant?: "default" | "glossary" }) => (
   <PopoverPrimitive.Trigger
     className={cn(
       "focus-visible:outline-ring outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+      variant === "glossary" &&
+        "underline decoration-current/40 decoration-dotted decoration-from-font underline-offset-4 hover:decoration-current data-popup-open:decoration-current",
       className,
     )}
     data-slot="popover-trigger"
