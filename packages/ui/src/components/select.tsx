@@ -19,11 +19,13 @@ const SelectValue = ({ ...props }: ComponentProps<typeof SelectPrimitive.Value>)
 const SelectTrigger = ({
   children,
   className,
+  variant = "default",
   ...props
-}: ComponentProps<typeof SelectPrimitive.Trigger>) => (
+}: ComponentProps<typeof SelectPrimitive.Trigger> & { variant?: "default" | "ghost" }) => (
   <SelectPrimitive.Trigger
     className={cn(
       "border-input bg-background hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 flex h-9 w-fit items-center justify-between gap-2 rounded-lg border px-3 py-2 text-base whitespace-nowrap outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:text-sm [&_svg]:pointer-events-none [&_svg]:shrink-0",
+      variant === "ghost" && "border-transparent",
       className,
     )}
     data-slot="select-trigger"

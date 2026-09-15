@@ -4,7 +4,7 @@ import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { AnimatePresence } from "motion/react";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 
 import type { Job } from "../store";
 
@@ -15,6 +15,10 @@ const VISIBLE_ROWS = 4;
 const ROW_HEIGHT = 88;
 
 const BLEED = 4;
+
+const scrollStyle: CSSProperties & { "--job-list-height": string } = {
+  "--job-list-height": `${String(VISIBLE_ROWS * ROW_HEIGHT + BLEED * 2)}px`,
+};
 
 type JobListProps = {
   jobs: Array<Job>;
@@ -104,8 +108,8 @@ const JobList = ({
       </div>
 
       <ScrollArea
-        className={scrolls ? "-m-1" : "-m-1 max-h-none"}
-        style={scrolls ? { maxHeight: VISIBLE_ROWS * ROW_HEIGHT + BLEED * 2 } : undefined}
+        className={scrolls ? "-m-1 max-h-(--job-list-height)" : "-m-1 max-h-none"}
+        style={scrollStyle}
         viewportClassName={scrolls ? "scroll-fade no-scrollbar p-1" : "p-1"}
       >
         <ul aria-live="polite" className="flex flex-col gap-2" role="list">

@@ -61,7 +61,7 @@ const App = () => {
   const queued = jobs.length > 0;
 
   return (
-    <div className="isolate grid min-h-dvh grid-rows-[1fr_auto]">
+    <div className="grid-rows-content-footer isolate grid min-h-dvh">
       {/* oxlint-disable-next-line react-doctor/no-layout-shifting-interaction-state -- the skip link leaves the flow on focus (focus:absolute), so surrounding content cannot jump */}
       <a
         className="focus:bg-background focus:ring-ring sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:rounded-lg focus:px-3 focus:py-2 focus:ring-2"
@@ -83,7 +83,7 @@ const App = () => {
               {t("app.name")}
             </h1>
 
-            <p className="text-muted-foreground mx-auto max-w-[48ch] text-base text-pretty sm:text-lg">
+            <p className="text-muted-foreground mx-auto max-w-(--container-measure-body) text-base text-pretty sm:text-lg">
               {t("app.tagline")}
             </p>
           </div>

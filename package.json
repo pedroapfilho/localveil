@@ -24,6 +24,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@shadcn/lint": "0.1.0",
     "fallow": "^3.24.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.0",

@@ -22,12 +22,7 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <Button
-        className="focus-visible:outline-ring w-full focus-visible:outline-2 focus-visible:outline-offset-2 sm:w-auto"
-        disabled={!ready}
-        onClick={onDownload}
-        size="lg"
-      >
+      <Button className="w-full sm:w-auto" disabled={!ready} onClick={onDownload} size="lg">
         <DownloadIcon aria-hidden data-icon="inline-start" />
 
         {t("download.button", { count: completedJobs(jobs).length })}

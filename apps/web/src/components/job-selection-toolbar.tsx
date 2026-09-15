@@ -45,7 +45,7 @@ const JobSelectionToolbar = ({ all, count, onRemove, onToggleAll }: JobSelection
 
           <span
             aria-hidden
-            className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+            className="size-touch-target absolute top-1/2 left-1/2 -translate-1/2 pointer-fine:hidden"
           />
         </Button>
       </div>

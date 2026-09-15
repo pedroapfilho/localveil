@@ -1,5 +1,5 @@
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
-import type { ComponentProps } from "react";
+import type { ComponentProps, CSSProperties } from "react";
 
 import { cn } from "../lib/utils";
 
@@ -18,6 +18,9 @@ const clampFraction = (value: number) => {
 
 const Progress = ({ className, label, value, ...props }: ProgressProps) => {
   const fraction = clampFraction(value);
+  const fillStyle: CSSProperties & { "--progress-fraction": number } = {
+    "--progress-fraction": fraction,
+  };
 
   return (
     <ProgressPrimitive.Root
@@ -30,9 +33,9 @@ const Progress = ({ className, label, value, ...props }: ProgressProps) => {
     >
       <ProgressPrimitive.Track className="bg-muted h-1 w-full overflow-hidden rounded-full">
         <ProgressPrimitive.Indicator
-          className="bg-primary h-full w-full origin-left transition-transform duration-200 ease-linear motion-reduce:transition-none"
+          className="progress-fill bg-primary h-full w-full origin-left transition-transform duration-200 ease-linear motion-reduce:transition-none"
           data-slot="progress-indicator"
-          style={{ transform: `scaleX(${String(fraction)})` }}
+          style={fillStyle}
         />
       </ProgressPrimitive.Track>
     </ProgressPrimitive.Root>

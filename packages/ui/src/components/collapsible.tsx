@@ -9,11 +9,13 @@ const Collapsible = ({ ...props }: ComponentProps<typeof CollapsiblePrimitive.Ro
 
 const CollapsibleTrigger = ({
   className,
+  variant = "default",
   ...props
-}: ComponentProps<typeof CollapsiblePrimitive.Trigger>) => (
+}: ComponentProps<typeof CollapsiblePrimitive.Trigger> & { variant?: "default" | "muted" }) => (
   <CollapsiblePrimitive.Trigger
     className={cn(
       "focus-visible:outline-ring outline-none focus-visible:outline-2 focus-visible:outline-offset-2",
+      variant === "muted" && "text-muted-foreground hover:text-foreground rounded-md",
       className,
     )}
     data-slot="collapsible-trigger"
@@ -27,7 +29,7 @@ const CollapsiblePanel = ({
 }: ComponentProps<typeof CollapsiblePrimitive.Panel>) => (
   <CollapsiblePrimitive.Panel
     className={cn(
-      "h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none",
+      "transition-height ease-out-expo h-(--collapsible-panel-height) overflow-hidden duration-200 data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none",
       className,
     )}
     data-slot="collapsible-panel"
