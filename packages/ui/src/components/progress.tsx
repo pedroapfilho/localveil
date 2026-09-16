@@ -1,46 +1,63 @@
 import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
-import type { ComponentProps, CSSProperties } from "react";
+import { cn } from "cn";
 
-import { cn } from "../lib/utils";
-
-type ProgressProps = Omit<ComponentProps<typeof ProgressPrimitive.Root>, "value"> & {
-  label: string;
-  value: number;
+const ProgressTrack = ({ className, ...props }: ProgressPrimitive.Track.Props) => {
+  return (
+    <ProgressPrimitive.Track
+      className={cn(
+        "bg-muted relative flex h-1 w-full items-center overflow-x-hidden rounded-full",
+        className,
+      )}
+      data-slot="progress-track"
+      {...props}
+    />
+  );
 };
 
-const clampFraction = (value: number) => {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.min(1, Math.max(0, value));
+const ProgressIndicator = ({ className, ...props }: ProgressPrimitive.Indicator.Props) => {
+  return (
+    <ProgressPrimitive.Indicator
+      className={cn("bg-primary h-full transition-all", className)}
+      data-slot="progress-indicator"
+      {...props}
+    />
+  );
 };
 
-const Progress = ({ className, label, value, ...props }: ProgressProps) => {
-  const fraction = clampFraction(value);
-  const fillStyle: CSSProperties & { "--progress-fraction": number } = {
-    "--progress-fraction": fraction,
-  };
-
+const Progress = ({ children, className, value, ...props }: ProgressPrimitive.Root.Props) => {
   return (
     <ProgressPrimitive.Root
-      aria-label={label}
-      className={cn("w-full", className)}
+      className={cn("flex flex-wrap gap-3", className)}
       data-slot="progress"
-      max={100}
-      value={Math.round(fraction * 100)}
+      value={value}
       {...props}
     >
-      <ProgressPrimitive.Track className="bg-muted h-1 w-full overflow-hidden rounded-full">
-        <ProgressPrimitive.Indicator
-          className="progress-fill bg-primary h-full w-full origin-left transition-transform duration-200 ease-linear motion-reduce:transition-none"
-          data-slot="progress-indicator"
-          style={fillStyle}
-        />
-      </ProgressPrimitive.Track>
+      {children}
+      <ProgressTrack>
+        <ProgressIndicator />
+      </ProgressTrack>
     </ProgressPrimitive.Root>
   );
 };
 
-export { Progress };
-export type { ProgressProps };
+const ProgressLabel = ({ className, ...props }: ProgressPrimitive.Label.Props) => {
+  return (
+    <ProgressPrimitive.Label
+      className={cn("text-sm font-medium", className)}
+      data-slot="progress-label"
+      {...props}
+    />
+  );
+};
+
+const ProgressValue = ({ className, ...props }: ProgressPrimitive.Value.Props) => {
+  return (
+    <ProgressPrimitive.Value
+      className={cn("text-muted-foreground ml-auto text-sm tabular-nums", className)}
+      data-slot="progress-value"
+      {...props}
+    />
+  );
+};
+
+export { Progress, ProgressTrack, ProgressIndicator, ProgressLabel, ProgressValue };

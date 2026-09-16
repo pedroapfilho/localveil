@@ -2,11 +2,15 @@ import { FolderOpenIcon, UploadIcon } from "lucide-react";
 import type { ChangeEvent, DragEvent } from "react";
 import { useRef, useState } from "react";
 
+import {
+  DropdownMenu as Menu,
+  DropdownMenuContent as MenuContent,
+  DropdownMenuItem as MenuItem,
+  DropdownMenuTrigger as MenuTrigger,
+} from "../components/dropdown-menu";
 import type { SelectedFile, Selection } from "../lib/dropped-files";
 import { droppedFiles, pickedDirectoryFiles, selectedFiles } from "../lib/dropped-files";
 import { cn } from "../lib/utils";
-
-import { Menu, MenuContent, MenuItem, MenuTrigger } from "./menu";
 
 type FileDropzoneProps = {
   accept?: string;
@@ -113,13 +117,19 @@ const FileDropzone = ({
     >
       <Menu>
         <MenuTrigger
-          className={cn(
-            "group border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/70 focus-visible:outline-ring data-dragging:border-primary data-dragging:bg-primary/5 flex w-full cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed px-6 py-12 text-center focus-visible:outline-2 focus-visible:outline-offset-2 data-disabled:cursor-not-allowed data-disabled:opacity-60 sm:py-14",
-            className,
-          )}
           data-dragging={dragging || undefined}
           data-slot="file-dropzone"
           disabled={disabled}
+          render={
+            <button
+              aria-label={label}
+              className={cn(
+                "group border-foreground/15 bg-muted/40 hover:border-foreground/30 hover:bg-muted/70 focus-visible:outline-ring data-dragging:border-primary data-dragging:bg-primary/5 flex w-full cursor-pointer flex-col items-center gap-1 rounded-2xl border border-dashed px-6 py-12 text-center focus-visible:outline-2 focus-visible:outline-offset-2 data-disabled:cursor-not-allowed data-disabled:opacity-60 sm:py-14",
+                className,
+              )}
+              type="button"
+            />
+          }
         >
           <span className="bg-background ring-foreground/10 group-data-dragging:ring-primary/40 mb-3 flex size-11 items-center justify-center rounded-full shadow-xs ring-1 sm:size-10">
             <UploadIcon aria-hidden className="text-muted-foreground size-5 shrink-0 sm:size-4" />

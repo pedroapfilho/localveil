@@ -1,7 +1,7 @@
 import { useTranslations } from "@repo/i18n";
 import { buildZip, defaultDecisions } from "@repo/redact-core";
-import { toast } from "@repo/ui/components/sonner";
 import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";

@@ -232,4 +232,4 @@ const patternSpans = (text: string): Array<Span> => {
   ).toSorted((left, right) => left.start - right.start);
 };
 
-export { isCnpj, isCpf, isIban, isSpanishId, luhn, patternSpans };
+export { isCnpj, isCpf, isIban, luhn, patternSpans };

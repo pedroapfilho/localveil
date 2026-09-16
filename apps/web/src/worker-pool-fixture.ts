@@ -202,4 +202,3 @@ export {
   taskAt,
   workerpoolDouble,
 };
-export type { ExecOptions, FakeTask };

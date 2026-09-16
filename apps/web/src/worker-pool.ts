@@ -309,5 +309,5 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
   };
 };
 
-export { createRedactionPool, SILENCE_LIMIT };
+export { createRedactionPool };
 export type { ApplyRequest, JobRequest, RedactionPool, RedactionPoolOptions, WorkerTask };

@@ -26,7 +26,16 @@ const GlossaryTerm = ({ label, name }: GlossaryTermProps) => {
 
   return (
     <Popover>
-      <PopoverTrigger className="cursor-help" openOnHover variant="glossary">
+      <PopoverTrigger
+        openOnHover
+        render={
+          <button
+            aria-label={label}
+            className="cursor-help underline decoration-current/40 decoration-dotted decoration-from-font underline-offset-4 hover:decoration-current data-popup-open:decoration-current"
+            type="button"
+          />
+        }
+      >
         {label}
       </PopoverTrigger>
 

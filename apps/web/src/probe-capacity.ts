@@ -13,4 +13,4 @@ const probeCapacity = () => {
   return { maxWorkers: Math.min(Math.max(Math.min(byCores, byMemory), 1), WORKER_CAP) };
 };
 
-export { probeCapacity, WORKER_CAP };
+export { probeCapacity };

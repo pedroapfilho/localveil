@@ -93,7 +93,7 @@ const JobList = ({
                 <Checkbox
                   aria-label={t("files.selectAll")}
                   checked={false}
-                  onChange={handleSelectAll}
+                  onCheckedChange={handleSelectAll}
                 />
               </span>
 
@@ -107,12 +107,8 @@ const JobList = ({
         )}
       </div>
 
-      <ScrollArea
-        className={scrolls ? "-m-1 max-h-(--job-list-height)" : "-m-1 max-h-none"}
-        style={scrollStyle}
-        viewportClassName={scrolls ? "scroll-fade no-scrollbar p-1" : "p-1"}
-      >
-        <ul aria-live="polite" className="flex flex-col gap-2" role="list">
+      <ScrollArea className={scrolls ? "-m-1 h-(--job-list-height)" : "-m-1"} style={scrollStyle}>
+        <ul aria-live="polite" className="flex flex-col gap-2 p-1" role="list">
           <AnimatePresence initial={false}>
             {jobs.map((job, index) => (
               <JobRow
