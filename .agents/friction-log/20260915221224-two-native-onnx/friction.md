@@ -22,3 +22,5 @@ Install the workspace on Ubuntu and run `pnpm --filter @repo/pii-detect test` wi
 ## Context
 
 The first CI check workflow exposed this during component standardization. The PR aligns the native ABI; review the override when either direct runtime or Transformers changes version.
+
+Transformers also imports `onnxruntime-common` without declaring it. A package extension declares that direct dependency so isolated Vercel installs can resolve the browser bundle.

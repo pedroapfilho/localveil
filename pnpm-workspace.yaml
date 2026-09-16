@@ -80,3 +80,9 @@ peerDependencyRules:
     "@typescript-eslint/tsconfig-utils>typescript": "7"
     "@typescript-eslint/typescript-estree>typescript": "7"
     "@typescript-eslint/utils>typescript": "7"
+
+packageExtensions:
+  # Transformers imports this directly but omits it from its dependency manifest.
+  "@huggingface/transformers@4.2.0":
+    dependencies:
+      onnxruntime-common: "1.29.0"
