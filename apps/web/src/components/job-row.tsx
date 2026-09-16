@@ -9,9 +9,15 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@repo/ui/components/attachment";
+import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "@repo/ui/components/collapsible";
-import { Progress } from "@repo/ui/components/progress";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@repo/ui/components/collapsible";
+import { FractionProgress } from "@repo/ui/compositions/fraction-progress";
+import { cn } from "@repo/ui/lib/utils";
 import {
   ChevronDownIcon,
   FileTextIcon,
@@ -46,11 +52,11 @@ const ATTACHMENT_STATES = {
 } as const;
 
 const STATUS_TONES = {
-  done: "success",
-  error: "destructive",
-  queued: "muted",
-  reviewing: "default",
-  running: "default",
+  done: "text-success",
+  error: "text-destructive",
+  queued: "text-muted-foreground",
+  reviewing: "text-foreground",
+  running: "text-foreground",
 } as const satisfies Record<JobStatus, string>;
 
 const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
@@ -73,25 +79,29 @@ const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
 
   return (
     <>
-      <AttachmentDescription className="flex items-center gap-1.5" tone={STATUS_TONES[status]}>
-        {busy ? (
-          <LoaderCircleIcon aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" />
-        ) : (
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
-        )}
+      <AttachmentDescription>
+        <span className={cn("flex items-center gap-1.5", STATUS_TONES[status])}>
+          {busy ? (
+            <LoaderCircleIcon aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" />
+          ) : (
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
+          )}
 
-        <span>{t(STATUS_KEYS[status])}</span>
+          <span>{t(STATUS_KEYS[status])}</span>
 
-        {detail === undefined ? null : (
-          <>
-            <span aria-hidden>·</span>
+          {detail === undefined ? null : (
+            <>
+              <span aria-hidden>·</span>
 
-            <span className="text-muted-foreground truncate">{detail}</span>
-          </>
-        )}
+              <span className="text-muted-foreground truncate">{detail}</span>
+            </>
+          )}
+        </span>
       </AttachmentDescription>
 
-      {inFlight ? <Progress className="mt-1.5" label={name} value={progressOf(job)} /> : null}
+      {inFlight ? (
+        <FractionProgress className="mt-1.5" label={name} value={progressOf(job)} />
+      ) : null}
     </>
   );
 };
@@ -145,81 +155,81 @@ const JobRow = ({
       transition={APPEAR}
     >
       <Collapsible onOpenChange={setChosen} open={open}>
-        <Attachment collapsible orientation="vertical" state={ATTACHMENT_STATES[status]}>
-          <div className="flex w-full gap-3">
-            <span className="flex h-lh items-center text-base sm:text-sm">
-              <Checkbox
-                aria-label={t("files.select", { name })}
-                checked={selected}
-                onChange={handleSelect}
-              />
-            </span>
+        <Attachment className="w-full" orientation="horizontal" state={ATTACHMENT_STATES[status]}>
+          <div className="w-full">
+            <div className="flex w-full gap-3">
+              <span className="flex h-lh items-center text-base sm:text-sm">
+                <Checkbox
+                  aria-label={t("files.select", { name })}
+                  checked={selected}
+                  onCheckedChange={handleSelect}
+                />
+              </span>
 
-            <AttachmentMedia>
-              <FileTextIcon aria-hidden className="size-4 shrink-0" />
-            </AttachmentMedia>
+              <AttachmentMedia>
+                <FileTextIcon aria-hidden className="size-4 shrink-0" />
+              </AttachmentMedia>
 
-            <AttachmentContent>
-              <AttachmentTitle title={name}>{name}</AttachmentTitle>
+              <AttachmentContent>
+                <AttachmentTitle title={name}>{name}</AttachmentTitle>
 
-              <JobStatusSummary job={job} name={name} />
-            </AttachmentContent>
+                <JobStatusSummary job={job} name={name} />
+              </AttachmentContent>
 
-            <AttachmentActions>
-              {hasDetails ? (
-                <CollapsibleTrigger
-                  aria-label={t("files.details", { name })}
-                  className="flex size-7 items-center justify-center"
-                  variant="muted"
-                >
-                  <ChevronDownIcon
-                    aria-hidden
-                    className="ease-out-expo size-4 shrink-0 transition-transform duration-200 in-data-panel-open:rotate-180 motion-reduce:transition-none"
-                  />
-                </CollapsibleTrigger>
-              ) : null}
-
-              <AttachmentAction aria-label={t("files.remove", { name })} onClick={handleRemove}>
-                <XIcon aria-hidden />
-              </AttachmentAction>
-            </AttachmentActions>
-          </div>
-
-          <CollapsiblePanel className="w-full">
-            <div className="pt-3">
-              <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
-                {job.status === "reviewing" ? (
-                  <DetectionReview
-                    covered={job.covered}
-                    detections={job.analysis.detections}
-                    onApply={() => {
-                      onApply(id);
-                    }}
-                    onCoveredChange={(next) => {
-                      onCoveredChange(id, next);
-                    }}
-                  />
-                ) : null}
-
-                {job.status === "error" ? (
-                  <AttachmentDescription className="text-pretty" tone="destructive">
-                    {job.error}
-                  </AttachmentDescription>
-                ) : null}
-
-                {warnings.map((warning) => (
-                  <p
-                    className="text-warning flex items-start gap-1.5 text-base text-pretty sm:text-sm"
-                    key={warning}
+              <AttachmentActions>
+                {hasDetails ? (
+                  <CollapsibleTrigger
+                    aria-label={t("files.details", { name })}
+                    className="flex size-7 items-center justify-center"
+                    render={<Button size="icon-sm" variant="ghost" />}
                   >
-                    <TriangleAlertIcon aria-hidden className="size-4 h-lh shrink-0" />
+                    <ChevronDownIcon
+                      aria-hidden
+                      className="ease-out-expo size-4 shrink-0 transition-transform duration-200 in-data-panel-open:rotate-180 motion-reduce:transition-none"
+                    />
+                  </CollapsibleTrigger>
+                ) : null}
 
-                    <GlossaryText>{t(warning)}</GlossaryText>
-                  </p>
-                ))}
-              </div>
+                <AttachmentAction aria-label={t("files.remove", { name })} onClick={handleRemove}>
+                  <XIcon aria-hidden />
+                </AttachmentAction>
+              </AttachmentActions>
             </div>
-          </CollapsiblePanel>
+
+            <CollapsibleContent className="w-full">
+              <div className="pt-3">
+                <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
+                  {job.status === "reviewing" ? (
+                    <DetectionReview
+                      covered={job.covered}
+                      detections={job.analysis.detections}
+                      onApply={() => {
+                        onApply(id);
+                      }}
+                      onCoveredChange={(next) => {
+                        onCoveredChange(id, next);
+                      }}
+                    />
+                  ) : null}
+
+                  {job.status === "error" ? (
+                    <p className="text-destructive text-sm text-pretty">{job.error}</p>
+                  ) : null}
+
+                  {warnings.map((warning) => (
+                    <p
+                      className="text-warning flex items-start gap-1.5 text-base text-pretty sm:text-sm"
+                      key={warning}
+                    >
+                      <TriangleAlertIcon aria-hidden className="size-4 h-lh shrink-0" />
+
+                      <GlossaryText>{t(warning)}</GlossaryText>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </CollapsibleContent>
+          </div>
         </Attachment>
       </Collapsible>
     </m.li>

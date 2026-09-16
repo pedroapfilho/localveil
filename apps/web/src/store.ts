@@ -82,8 +82,6 @@ type CompletedJob = Job & { result: JobResult; status: "done" };
 
 const isFinished = (job: Job) => job.status === "done" || job.status === "error";
 
-const isReviewing = (job: Job) => job.status === "reviewing";
-
 const progressOf = (job: Job) => {
   if (job.status === "done") {
     return 1;
@@ -103,14 +101,5 @@ const hasCompletedJobs = (jobs: Array<Job>) =>
 
 const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
 
-export {
-  completedJobs,
-  failedJobs,
-  hasCompletedJobs,
-  isFinished,
-  isReviewing,
-  progressOf,
-  stageOf,
-  useJobStore,
-};
+export { completedJobs, failedJobs, hasCompletedJobs, progressOf, stageOf, useJobStore };
 export type { CompletedJob, Job, JobInput, JobResult, JobSource, JobState, JobStatus };

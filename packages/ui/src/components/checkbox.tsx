@@ -1,45 +1,25 @@
-import type { ComponentProps } from "react";
+import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
+import { cn } from "cn";
+import { CheckIcon } from "lucide-react";
 
-import { cn } from "../lib/utils";
-
-type CheckboxProps = Omit<ComponentProps<"input">, "type"> & { indeterminate?: boolean };
-
-const Checkbox = ({ className, indeterminate = false, ...props }: CheckboxProps) => (
-  <span className={cn("group inline-grid size-5 grid-cols-1 sm:size-4", className)}>
-    <input
-      className="border-input checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary focus-visible:outline-ring disabled:border-input disabled:bg-muted disabled:checked:bg-muted col-start-1 row-start-1 appearance-none rounded-sm border bg-white focus-visible:outline-2 focus-visible:outline-offset-2 forced-colors:appearance-auto"
-      ref={(node) => {
-        if (node !== null) {
-          node.indeterminate = indeterminate;
-        }
-      }}
-      type="checkbox"
+const Checkbox = ({ className, ...props }: CheckboxPrimitive.Root.Props) => {
+  return (
+    <CheckboxPrimitive.Root
+      className={cn(
+        "peer rounded-checkbox border-input group-has-[:focus-visible]/field-label:not-data-checked:border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground group-has-[:focus-visible]/field-label:data-checked:border-primary dark:data-checked:bg-primary relative flex size-4 shrink-0 items-center justify-center border transition-colors outline-none group-has-disabled/field:opacity-50 group-has-[:focus-visible]/field-label:ring-0 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-3",
+        className,
+      )}
+      data-slot="checkbox"
       {...props}
-    />
-
-    <svg
-      className="group-has-disabled:stroke-muted-foreground pointer-events-none col-start-1 row-start-1 size-7/8 self-center justify-self-center stroke-white"
-      fill="none"
-      viewBox="0 0 14 14"
     >
-      <path
-        className="group-not-has-checked:opacity-0"
-        d="M3 8L6 11L11 3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-
-      <path
-        className="group-not-has-indeterminate:opacity-0"
-        d="M3 7H11"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-    </svg>
-  </span>
-);
+      <CheckboxPrimitive.Indicator
+        className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+        data-slot="checkbox-indicator"
+      >
+        <CheckIcon />
+      </CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
+  );
+};
 
 export { Checkbox };
-export type { CheckboxProps };

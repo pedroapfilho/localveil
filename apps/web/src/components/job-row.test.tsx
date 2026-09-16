@@ -105,14 +105,6 @@ const LOW_CONFIDENCE =
   "Some text was hard to read, so a little personal data may have been missed.";
 
 describe("JobRow", () => {
-  it("reserves no gap around the panel that animates open", () => {
-    const { container } = setup(pdf());
-
-    const attachment = container.querySelector('[data-slot="attachment"]');
-
-    expect(attachment?.className).toContain("gap-0");
-  });
-
   it("keeps the warnings behind the disclosure until it is opened", () => {
     setup(
       pdf({

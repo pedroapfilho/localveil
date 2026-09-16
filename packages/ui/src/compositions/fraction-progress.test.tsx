@@ -1,25 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { Progress } from "./progress";
+import { FractionProgress } from "./fraction-progress";
 
 const renderProgress = (value: number) => {
-  render(<Progress label="Downloading model" value={value} />);
+  render(<FractionProgress label="Downloading model" value={value} />);
 
   return screen.getByRole("progressbar", { name: "Downloading model" });
 };
 
 const percentOf = (bar: HTMLElement) => Number(bar.getAttribute("aria-valuenow"));
-
-const fillOf = (bar: HTMLElement) => {
-  const fill = bar.querySelector("[data-slot=progress-indicator]");
-
-  if (!(fill instanceof HTMLElement)) {
-    throw new TypeError("Progress rendered no fill to measure");
-  }
-
-  return fill.style.getPropertyValue("--progress-fraction");
-};
 
 describe("Progress", () => {
   it("reports the fraction as a percentage of 100", () => {
@@ -39,13 +29,5 @@ describe("Progress", () => {
 
   it("treats a non-finite value as no progress", () => {
     expect(percentOf(renderProgress(Number.NaN))).toBe(0);
-  });
-
-  it("passes the fraction to the fill", () => {
-    expect(fillOf(renderProgress(0.42))).toBe("0.42");
-  });
-
-  it("draws nothing at all at zero", () => {
-    expect(fillOf(renderProgress(0))).toBe("0");
   });
 });

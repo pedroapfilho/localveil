@@ -124,13 +124,13 @@ const DetectionReview = ({
 
     return (
       <label
+        aria-label={t("review.toggle", { preview: detection.preview })}
         className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
         key={detection.id}
       >
         <Checkbox
-          aria-label={t("review.toggle", { preview: detection.preview })}
           checked={painting.has(detection.id)}
-          onChange={() => {
+          onCheckedChange={() => {
             toggle(detection.id);
           }}
         />
@@ -166,13 +166,13 @@ const DetectionReview = ({
           <div className="flex flex-col">
             {maybe.map((detection) => (
               <label
+                aria-label={t("review.toggle", { preview: detection.preview })}
                 className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
                 key={detection.id}
               >
                 <Checkbox
-                  aria-label={t("review.toggle", { preview: detection.preview })}
                   checked={painting.has(detection.id)}
-                  onChange={() => {
+                  onCheckedChange={() => {
                     toggle(detection.id);
                   }}
                 />

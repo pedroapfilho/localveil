@@ -1,4 +1,6 @@
 overrides:
+  # Native runtimes share a Linux SONAME; tokenizer imports must use the detector's ABI.
+  "@huggingface/transformers>onnxruntime-node": "1.29.0"
   # Security: force patched transitive releases to clear pnpm audit advisories.
   # Each pin is the lowest patched version within the already-resolved major.
   adm-zip: "^0.6.0"
@@ -78,3 +80,9 @@ peerDependencyRules:
     "@typescript-eslint/tsconfig-utils>typescript": "7"
     "@typescript-eslint/typescript-estree>typescript": "7"
     "@typescript-eslint/utils>typescript": "7"
+
+packageExtensions:
+  # Transformers imports this directly but omits it from its dependency manifest.
+  "@huggingface/transformers@4.2.0":
+    dependencies:
+      onnxruntime-common: "1.29.0"

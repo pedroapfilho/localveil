@@ -24,7 +24,7 @@ const JobSelectionToolbar = ({ all, count, onRemove, onToggleAll }: JobSelection
           aria-label={t("files.selectAll")}
           checked={all}
           indeterminate={!all}
-          onChange={handleToggleAll}
+          onCheckedChange={handleToggleAll}
         />
       </span>
 

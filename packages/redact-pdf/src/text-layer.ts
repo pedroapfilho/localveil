@@ -86,4 +86,4 @@ const textLayerWords = ({ items, viewport }: Layer): Array<WordInput> => {
 };
 
 export { textLayerWords };
-export type { Layer, LayerItem };
+export type { Layer };

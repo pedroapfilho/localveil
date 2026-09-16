@@ -4,7 +4,9 @@
     "oxlint.config.ts",
     "apps/web/src/main.tsx",
     "apps/web/src/redact-worker.ts",
-    "packages/pii-detect/src/ort-browser.ts"
+    "packages/pii-detect/src/ort-browser.ts",
+    "apps/cli/src/file-worker.ts",
+    "apps/web/src/wasm-check.ts"
   ],
   "ignoreDependencies": ["@vitest/coverage-v8", "jsdom", "react-dom"],
   "ignoreUnresolvedImports": ["postcss-load-config"],

@@ -1,8 +1,8 @@
 import { useTranslations } from "@repo/i18n";
-import { FileDropzone } from "@repo/ui/components/file-dropzone";
-import { toast } from "@repo/ui/components/sonner";
+import { FileDropzone } from "@repo/ui/compositions/file-dropzone";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
 import { AnimatePresence, m } from "motion/react";
+import { toast } from "sonner";
 
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
