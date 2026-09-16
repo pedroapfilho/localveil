@@ -1,4 +1,6 @@
 overrides:
+  # Native runtimes share a Linux SONAME; tokenizer imports must use the detector's ABI.
+  "@huggingface/transformers>onnxruntime-node": "1.29.0"
   # Security: force patched transitive releases to clear pnpm audit advisories.
   # Each pin is the lowest patched version within the already-resolved major.
   adm-zip: "^0.6.0"
