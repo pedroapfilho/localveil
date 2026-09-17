@@ -17,5 +17,6 @@
   "rules": {
     "private-type-leaks": "off"
   },
-  "usedClassMembers": ["add*Filter", "createSelectionStyle", "create", "reset", "destroy"]
+  "usedClassMembers": ["add*Filter", "createSelectionStyle", "create", "reset", "destroy"],
+  "ignorePatterns": [".github/ci/*.mjs"]
 }
