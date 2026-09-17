@@ -62,7 +62,7 @@ jobs:
             turbo-${{ runner.os }}-${{ runner.arch }}-node24-check-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}-
             turbo-${{ runner.os }}-${{ runner.arch }}-node24-check-push-main-
       - run: node .github/ci/ci.mjs run check -- pnpm check:shadcn
-      - run: node .github/ci/ci.mjs run build -- pnpm build
+      - run: node .github/ci/ci.mjs run check -- pnpm build
       - run: node .github/ci/ci.mjs run check -- pnpm exec oxlint .
       - run: node .github/ci/ci.mjs run check -- pnpm format:check
       - run: node .github/ci/ci.mjs run typecheck -- pnpm typecheck
