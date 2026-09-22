@@ -10,6 +10,11 @@ updates:
     cooldown:
       default-days: 4
     groups:
+      onnxruntime:
+        applies-to: version-updates
+        patterns:
+          - "@huggingface/transformers"
+          - "onnxruntime-*"
       non-major:
         applies-to: version-updates
         update-types:
