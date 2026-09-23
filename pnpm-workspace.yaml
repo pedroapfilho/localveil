@@ -1,6 +1,6 @@
 overrides:
-  # Native runtimes share a Linux SONAME; tokenizer imports must use the detector's ABI.
-  "@huggingface/transformers>onnxruntime-node": "1.29.0"
+  # Native runtimes share a Linux SONAME, so Transformers must load the detector's runtime.
+  "@huggingface/transformers>onnxruntime-node": "catalog:"
   # Security: force patched transitive releases to clear pnpm audit advisories.
   # Each pin is the lowest patched version within the already-resolved major.
   adm-zip: "^0.6.0"
@@ -10,6 +10,10 @@ overrides:
 packages:
   - apps/*
   - packages/*
+
+catalog:
+  onnxruntime-node: 1.30.0
+  onnxruntime-web: 1.30.0
 
 allowBuilds:
   esbuild: true
@@ -68,12 +72,6 @@ minimumReleaseAgeExclude:
   - "@napi-rs/canvas@1.0.3"
   - "@shadcn/lint@0.1.0"
 
-onlyBuiltDependencies:
-  - "@tailwindcss/oxide"
-  - esbuild
-  - lightningcss
-  - unrs-resolver
-
 peerDependencyRules:
   allowedVersions:
     "@typescript-eslint/project-service>typescript": "7"
@@ -83,6 +81,6 @@ peerDependencyRules:
 
 packageExtensions:
   # Transformers imports this directly but omits it from its dependency manifest.
-  "@huggingface/transformers@4.2.0":
+  "@huggingface/transformers":
     dependencies:
-      onnxruntime-common: "1.29.0"
+      onnxruntime-common: "1.30.0"
