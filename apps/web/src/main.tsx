@@ -19,7 +19,12 @@ createRoot(container).render(
   <StrictMode>
     <LazyMotion features={domAnimation} strict>
       <MotionConfig reducedMotion="user">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          forcedTheme="light"
+          storageKey="localveil-theme"
+        >
           <I18nProvider>
             <App />
 
