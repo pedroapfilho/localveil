@@ -10,9 +10,16 @@ const fakeStore = (statuses: Record<string, ModelStatus> = {}) => {
   const removed: Array<string> = [];
 
   const store: ModelStore = {
-    downloadModel: (model: ModelSpec, onProgress: (fraction: number) => void) =>
+    downloadModel: (
+      model: ModelSpec,
+      onProgress: (fraction: number) => void,
+      signal?: AbortSignal,
+    ) =>
       new Promise<void>((resolve, reject) => {
         downloads.push({ onProgress, settle: { fail: reject, finish: resolve } });
+        signal?.addEventListener("abort", () => {
+          reject(new DOMException("The download was stopped", "AbortError"));
+        });
         statuses[model.id] = { bytes: model.bytes, state: "ready" };
       }),
     inspectModel: (model: ModelSpec) => Promise.resolve(statuses[model.id] ?? { state: "absent" }),
@@ -77,6 +84,7 @@ describe("what is downloaded", () => {
     expect(library.getState().entries).toEqual({
       "gliner-multi-pii": { status: { bytes: 10, state: "ready" } },
       "gliner-pii-base": { status: { state: "absent" } },
+      "gliner-pii-edge": { status: { state: "absent" } },
     });
   });
 
@@ -99,6 +107,7 @@ describe("what is downloaded", () => {
     expect(library.getState().entries["gliner-pii-base"]).toEqual({
       progress: undefined,
       status: { bytes: 196_757_174, state: "ready" },
+      stoppable: false,
     });
   });
 
@@ -115,6 +124,34 @@ describe("what is downloaded", () => {
 
     await expect(finished).rejects.toThrow("offline");
     expect(library.getState().entries["gliner-pii-base"]?.progress).toBeUndefined();
+  });
+
+  it("stops a download it started and lets the failure through as an abort", async () => {
+    const { downloads, store } = fakeStore();
+    const library = createModelLibrary(store);
+    const finished = library.getState().download("gliner-pii-base");
+
+    await vi.waitFor(() => {
+      expect(downloads).toHaveLength(1);
+    });
+
+    expect(library.getState().entries["gliner-pii-base"]?.stoppable).toBe(true);
+
+    library.getState().cancel("gliner-pii-base");
+
+    await expect(finished).rejects.toThrow(/stopped/v);
+    expect(library.getState().entries["gliner-pii-base"]).toMatchObject({
+      progress: undefined,
+      stoppable: false,
+    });
+  });
+
+  it("does not offer to stop a download the model worker is running", () => {
+    const library = createModelLibrary(fakeStore().store);
+
+    library.getState().reportProgress("gliner-pii-base", 0.2);
+
+    expect(library.getState().entries["gliner-pii-base"]).toEqual({ progress: 0.2 });
   });
 
   it("removes a model and reports it gone", async () => {

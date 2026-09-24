@@ -57,6 +57,7 @@ const inspectModel = async (
 const downloadModel = async (
   model: ModelSpec,
   onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
   store: ChunkStore = createIndexedDbChunkStore(),
 ): Promise<void> => {
   if (!("caches" in globalThis)) {
@@ -70,6 +71,7 @@ const downloadModel = async (
         onProgress(Math.min(loaded / total, 1));
       }
     },
+    signal,
     store,
   });
 

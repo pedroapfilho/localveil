@@ -49,6 +49,7 @@ const readKept = async (file: string) => {
 const fetchKept = async (
   url: string,
   onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> => {
   const file = cachePathFor(url);
   const kept = await readKept(file);
@@ -59,7 +60,7 @@ const fetchKept = async (
     return new Uint8Array(kept.buffer, kept.byteOffset, kept.byteLength);
   }
 
-  const bytes = await readBytes(await fetch(url), onProgress);
+  const bytes = await readBytes(await fetch(url, { signal }), onProgress);
 
   await keepOnDisk(file, bytes);
 

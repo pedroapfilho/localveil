@@ -1,4 +1,4 @@
-import { AutoTokenizer, env } from "@huggingface/transformers";
+import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, ModelProgress, Span } from "@repo/redact-core";
 import {
   describeError,
@@ -11,13 +11,13 @@ import {
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
-import type { ModelId } from "./catalog";
-import { DEFAULT_MODEL_ID, modelById, MODELS, weightsUrl } from "./catalog";
+import type { ModelId, ModelSpec } from "./catalog";
+import { DEFAULT_MODEL_ID, modelById, MODELS, tokenizerUrls, weightsUrl } from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import { chunkWords } from "./chunk-words";
 import type { Logits } from "./gliner-decode";
-import { decodeSpans, suppressOverlaps } from "./gliner-decode";
+import { decodeSpans, decodeTokenSpans, suppressOverlaps } from "./gliner-decode";
 import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
 import { encodeGlinerInput } from "./gliner-encode";
 import type { ModelDevice } from "./model-runtime";
@@ -48,12 +48,8 @@ type DetectorOptions = {
   resumableCache?: boolean;
 };
 
-const installResumableCache = (
-  report: ModelProgress,
-  store: ChunkStore,
-  weights: string,
-): ResumableCache => {
-  const cache = createResumableCache({
+const weightsCache = (report: ModelProgress, store: ChunkStore, weights: string): ResumableCache =>
+  createResumableCache({
     onProgress: ({ loaded, name, total }) => {
       if (name !== weights || total === 0) {
         return;
@@ -64,13 +60,34 @@ const installResumableCache = (
     store,
   });
 
-  env.useCustomCache = true;
-  env.customCache = cache;
+const parseJson = (bytes: Uint8Array, url: string): object => {
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
 
-  return cache;
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new TypeError(`${url} is not a JSON object`);
+  }
+
+  return parsed;
 };
 
-type Tokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;
+const ignoreProgress = () => undefined;
+
+/* transformers.js checks whether tokenizer_config.json exists at `main` before it loads a tokenizer,
+   whatever revision it is handed, so its loader makes an unpinned request on every load and fails
+   outright with the network off. The two files are fetched here instead, pinned like the weights and
+   kept in the same cache. DebertaV2Tokenizer, the class two of the models name, differs from the
+   base class only in returning token type ids, which GLiNER never takes. */
+const loadTokenizer = async (spec: ModelSpec, cache: ResumableCache | undefined) => {
+  const [tokenizerJson, tokenizerConfig] = await Promise.all(
+    tokenizerUrls(spec).map(async (url) =>
+      parseJson(await fetchModelBytes(url, { cache, onProgress: ignoreProgress }), url),
+    ),
+  );
+
+  return new PreTrainedTokenizer(tokenizerJson, tokenizerConfig);
+};
+
+type Tokenizer = PreTrainedTokenizer;
 
 const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   const frame = tokenizer.encode("", { add_special_tokens: true });
@@ -100,8 +117,8 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   const spec = modelById(model);
   const weights = weightsUrl(spec);
   const chunks = createIndexedDbChunkStore();
-  const cache = resumableCache ? installResumableCache(report, chunks, weights) : undefined;
-  const tokenizer = await AutoTokenizer.from_pretrained(spec.repo, { revision: spec.revision });
+  const cache = resumableCache ? weightsCache(report, chunks, weights) : undefined;
+  const tokenizer = await loadTokenizer(spec, cache);
   const frame = frameOf(tokenizer);
 
   const encodeCache = new Map<string, Array<number>>();
@@ -183,7 +200,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const encoded = encodeGlinerInput({
       encodeWord,
       frame,
-      maxWidth: spec.maxWidth,
+      maxWidth: spec.decoding === "span" ? spec.maxWidth : 0,
       prompts,
       words,
     });
@@ -193,14 +210,17 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   const spansOf = (input: GlinerInput, logits: Logits, item: number): Array<Span> => {
     const { keptWords } = input;
+    const asked = {
+      entityCount: prompts.length,
+      item,
+      logits,
+      threshold: minScore,
+      wordCount: keptWords.length,
+    };
     const found = suppressOverlaps(
-      decodeSpans({
-        entityCount: prompts.length,
-        item,
-        logits,
-        threshold: minScore,
-        wordCount: keptWords.length,
-      }),
+      spec.decoding === "span"
+        ? decodeSpans(asked)
+        : decodeTokenSpans({ ...asked, maxWidth: spec.maxWidth }),
     );
 
     return found.map((candidate) => {

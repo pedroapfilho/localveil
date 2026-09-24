@@ -8,8 +8,7 @@ import type { CacheProgress, ResumableCacheOptions } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
 
 vi.mock("@huggingface/transformers", () => ({
-  AutoTokenizer: { from_pretrained: vi.fn() },
-  env: {},
+  PreTrainedTokenizer: vi.fn(),
 }));
 
 vi.mock("#ort", () => ({

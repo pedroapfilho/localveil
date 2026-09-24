@@ -23,7 +23,13 @@ const useModelPicker = (): ModelPickerProps => {
     try {
       await useModelLibrary.getState().download(id);
       toast.success(t("models.downloaded", { name }));
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        toast.info(t("models.downloadStopped", { name }));
+
+        return;
+      }
+
       toast.error(t("models.downloadFailed", { name }));
     }
   };
@@ -56,6 +62,9 @@ const useModelPicker = (): ModelPickerProps => {
       if (!busy) {
         useModelLibrary.getState().select(id);
       }
+    },
+    onStop: (id) => {
+      useModelLibrary.getState().cancel(id);
     },
     selected,
   };

@@ -42,9 +42,8 @@ const describeStatus = (status: ModelStatus) => {
     return "downloaded";
   }
 
-  return status.state === "partial"
-    ? `${String(Math.floor((status.loaded / status.total) * 100))}% downloaded`
-    : "not downloaded";
+  // The CLI keeps whole files only, so partial means some of a model's files are missing.
+  return status.state === "partial" ? "partly downloaded" : "not downloaded";
 };
 
 const formatModelTable = (rows: ReadonlyArray<Listed>) => {

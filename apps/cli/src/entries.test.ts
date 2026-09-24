@@ -112,7 +112,7 @@ describe("resolveArguments", () => {
     const directory = await makeDirectory();
 
     await expect(resolveArguments(["--model", "gpt"], directory)).rejects.toThrow(
-      /gliner-multi-pii, gliner-pii-base, not gpt/v,
+      /gliner-multi-pii, gliner-pii-base, gliner-pii-edge, not gpt/v,
     );
     await expect(resolveArguments(["--model"], directory)).rejects.toThrow(/nothing/v);
   });

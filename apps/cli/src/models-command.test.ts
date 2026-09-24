@@ -95,7 +95,7 @@ describe("localveil models", () => {
     expect(code).toBe(1);
     expect(calls).toEqual([]);
     expect(err).toContain(
-      "There is no model called gpt. Choose one of gliner-multi-pii, gliner-pii-base.",
+      "There is no model called gpt. Choose one of gliner-multi-pii, gliner-pii-base, gliner-pii-edge.",
     );
   });
 

@@ -14,6 +14,7 @@ type ResumableCacheOptions = {
   chunkSize?: number;
   fetchRange?: typeof fetch;
   onProgress?: (progress: CacheProgress) => void;
+  signal?: AbortSignal;
   store?: ChunkStore;
 };
 
@@ -27,10 +28,16 @@ const warnStorageFailed = (name: string, cause: unknown) => {
   console.warn(`Could not keep ${name} in the browser cache`, cause);
 };
 
-const underLock = (name: string, run: () => Promise<Response>) => {
+// A stopped download also gives up its place in the queue for the lock, not only the fetch.
+const underLock = (name: string, signal: AbortSignal | undefined, run: () => Promise<Response>) => {
   const { locks } = globalThis.navigator;
+  const key = `localveil-model:${name}`;
 
-  return locks === undefined ? run() : locks.request(`localveil-model:${name}`, run);
+  if (locks === undefined) {
+    return run();
+  }
+
+  return signal === undefined ? locks.request(key, run) : locks.request(key, { signal }, run);
 };
 
 const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCache => {
@@ -39,6 +46,7 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
     chunkSize = CHUNK_SIZE,
     fetchRange = fetch,
     onProgress,
+    signal,
     store = createIndexedDbChunkStore(),
   } = options;
 
@@ -55,7 +63,7 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
         return hit;
       }
 
-      return underLock(name, async () => {
+      return underLock(name, signal, async () => {
         const arrived = await cache.match(name);
 
         if (arrived !== undefined) {
@@ -68,6 +76,7 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
           onProgress: (loaded, total) => {
             onProgress?.({ loaded, name, total });
           },
+          signal,
           store,
         });
 

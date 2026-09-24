@@ -24,13 +24,13 @@ vi.mock("./disk-cache", async (importOriginal) => {
 
 const MODEL = modelById("gliner-pii-base");
 
-const keep = async () => {
-  const file = path.join(scratch.directory, MODEL.file);
-
-  await writeFile(file, new Uint8Array(12));
-
-  return file;
+const keep = async (files: Array<string>) => {
+  await Promise.all(
+    files.map((file) => writeFile(path.join(scratch.directory, file), new Uint8Array(12))),
+  );
 };
+
+const EVERYTHING = ["tokenizer.json", "tokenizer_config.json", MODEL.file];
 
 beforeEach(async () => {
   scratch.directory = await mkdtemp(path.join(tmpdir(), "localveil-models-"));
@@ -42,24 +42,38 @@ afterEach(async () => {
 });
 
 describe("the CLI's model store", () => {
-  it("reports a kept file as ready, with where it lives", async () => {
-    const file = await keep();
+  it("reports a model ready once its weights and tokenizer are all on disk", async () => {
+    await keep(EVERYTHING);
 
-    await expect(inspectModel(MODEL)).resolves.toEqual({ bytes: 12, path: file, state: "ready" });
+    await expect(inspectModel(MODEL)).resolves.toEqual({
+      bytes: 12,
+      path: path.join(scratch.directory, MODEL.file),
+      state: "ready",
+    });
   });
 
-  it("reports a missing file as absent", async () => {
+  it("does not call weights without their tokenizer ready, since they cannot load offline", async () => {
+    await keep([MODEL.file]);
+
+    await expect(inspectModel(MODEL)).resolves.toMatchObject({ state: "partial" });
+  });
+
+  it("reports a model with no weights on disk as absent", async () => {
+    await keep(["tokenizer.json"]);
+
     await expect(inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
   });
 
-  it("downloads a model that is not kept", async () => {
+  it("downloads the tokenizer before the weights", async () => {
     await downloadModel(MODEL, () => undefined);
 
-    expect(fetchKept).toHaveBeenCalledOnce();
+    expect(vi.mocked(fetchKept).mock.calls.map(([url]) => url.split("/").at(-1))).toEqual(
+      EVERYTHING,
+    );
   });
 
-  it("does not read a kept model back into memory just to download it again", async () => {
-    await keep();
+  it("fetches only what is missing, and does not read kept weights back into memory", async () => {
+    await keep(["tokenizer.json", MODEL.file]);
 
     const reported: Array<number> = [];
 
@@ -67,12 +81,14 @@ describe("the CLI's model store", () => {
       reported.push(fraction);
     });
 
-    expect(fetchKept).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchKept).mock.calls.map(([url]) => url.split("/").at(-1))).toEqual([
+      "tokenizer_config.json",
+    ]);
     expect(reported).toEqual([1]);
   });
 
-  it("deletes a kept model, and does not mind one that was never there", async () => {
-    await keep();
+  it("deletes every file of a model, and does not mind one that was never there", async () => {
+    await keep(EVERYTHING);
     await removeModel(MODEL);
     await removeModel(MODEL);
 

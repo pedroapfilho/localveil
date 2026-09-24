@@ -18,6 +18,7 @@ const renderPicker = (overrides: Partial<ModelPickerProps> = {}) => {
     onOpen: vi.fn<() => void>(),
     onRemove: vi.fn<(id: ModelId) => void>(),
     onSelect: vi.fn<(id: ModelId) => void>(),
+    onStop: vi.fn<(id: ModelId) => void>(),
     selected: "gliner-multi-pii",
     ...overrides,
   };
@@ -142,6 +143,22 @@ describe("ModelPicker", () => {
 
     expect(row.getByText("Downloading · 42% of 197 MB")).toBeInTheDocument();
     expect(row.getByRole("progressbar", { name: "GLiNER PII base" })).toBeInTheDocument();
-    expect(row.queryByRole("button", { name: /^download|^remove/iv })).not.toBeInTheDocument();
+    expect(
+      row.queryByRole("button", { name: /^download|^remove|^stop/iv }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers to stop a download it started, which keeps what arrived", () => {
+    const { onStop } = renderPicker({
+      entries: entries({
+        "gliner-pii-base": { progress: 0.42, status: { state: "absent" }, stoppable: true },
+      }),
+    });
+
+    open();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop downloading GLiNER PII base" }));
+
+    expect(onStop).toHaveBeenCalledWith("gliner-pii-base");
   });
 });

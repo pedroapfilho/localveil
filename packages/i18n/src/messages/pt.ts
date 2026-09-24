@@ -54,6 +54,8 @@ const pt: Messages = {
   "models.download": "Baixar {name}",
   "models.downloaded": "{name} foi baixado e funciona sem internet.",
   "models.downloadFailed": "Não foi possível baixar {name}.",
+  "models.downloadStopped":
+    "O download de {name} parou. Na próxima vez ele continua de onde parou.",
   "models.heading": "Modelo de detecção",
   "models.inUse": "Em uso",
   "models.remove": "Remover {name} deste navegador",
@@ -63,9 +65,12 @@ const pt: Messages = {
   "models.status.downloading": "Baixando · {percent}% de {size}",
   "models.status.partial": "Baixado em parte · {percent}% de {size}",
   "models.status.ready": "Baixado · {size}",
+  "models.stop": "Parar o download de {name}",
   "models.summary.gliner-multi-pii": "Português, espanhol e inglês. O mais preciso.",
   "models.summary.gliner-pii-base":
     "Treinado em inglês. Um quarto do download, mas deixa passar mais nomes e endereços.",
+  "models.summary.gliner-pii-edge":
+    "Treinado em inglês. De longe o menor download, mas deixa passar cerca de metade dos nomes.",
   "models.trigger": "Modelo de detecção: {name}",
   "models.use": "Usar {name}",
   "review.apply": "Aplicar",

@@ -24,7 +24,18 @@ const input = (tokens: number, spans: number, kept = tokens): GlinerInput => ({
   wordsMask: Array.from<number>({ length: tokens }).fill(2),
 });
 
-const feed = (inputs: Array<GlinerInput>) => toFeeds(inputs, tensor);
+const SPAN_INPUTS = [
+  "input_ids",
+  "attention_mask",
+  "words_mask",
+  "text_lengths",
+  "span_idx",
+  "span_mask",
+];
+
+const TOKEN_INPUTS = ["input_ids", "attention_mask", "words_mask", "text_lengths"];
+
+const feed = (inputs: Array<GlinerInput>) => toFeeds(inputs, tensor, SPAN_INPUTS);
 
 describe("toFeeds", () => {
   it("shapes a single input with a leading batch of one", () => {
@@ -80,5 +91,17 @@ describe("toFeeds", () => {
 
     expect(feeds.span_mask.type).toBe("bool");
     expect(feeds.input_ids.type).toBe("int64");
+  });
+
+  it("builds only the inputs a token-level graph declares", () => {
+    const feeds = toFeeds([input(3, 0)], tensor, TOKEN_INPUTS);
+
+    expect(Object.keys(feeds).toSorted()).toEqual(TOKEN_INPUTS.toSorted());
+  });
+
+  it("refuses a graph that asks for an input it cannot build", () => {
+    expect(() => toFeeds([input(3, 2)], tensor, ["input_ids", "token_type_ids"])).toThrow(
+      /token_type_ids/v,
+    );
   });
 });

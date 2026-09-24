@@ -20,7 +20,7 @@ const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promi
 
   return async (inputs) => {
     const results = await session.run(
-      toFeeds(inputs, (type, data, dims) => new ort.Tensor(type, data, dims)),
+      toFeeds(inputs, (type, data, dims) => new ort.Tensor(type, data, dims), session.inputNames),
     );
 
     return toLogits(results[output]);

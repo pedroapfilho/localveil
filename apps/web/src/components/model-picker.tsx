@@ -27,6 +27,7 @@ import {
   DownloadIcon,
   LoaderCircleIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 
 import type { ModelEntry } from "../model-library";
@@ -36,6 +37,7 @@ type PickerModel = ModelSpec & { id: ModelId };
 const SUMMARY_KEYS = {
   "gliner-multi-pii": "models.summary.gliner-multi-pii",
   "gliner-pii-base": "models.summary.gliner-pii-base",
+  "gliner-pii-edge": "models.summary.gliner-pii-edge",
 } as const satisfies Record<ModelId, MessageKey>;
 
 const MEGABYTE = 1_000_000;
@@ -58,6 +60,7 @@ type ModelRowProps = {
   onDownload: (id: ModelId) => void;
   onRemove: (id: ModelId) => void;
   onSelect: (id: ModelId) => void;
+  onStop: (id: ModelId) => void;
   selected: boolean;
 };
 
@@ -68,6 +71,7 @@ const ModelRow = ({
   onDownload,
   onRemove,
   onSelect,
+  onStop,
   selected,
 }: ModelRowProps) => {
   const { locale, t } = useTranslations();
@@ -162,6 +166,17 @@ const ModelRow = ({
             </AttachmentAction>
           ) : null}
 
+          {downloading && entry.stoppable === true ? (
+            <AttachmentAction
+              aria-label={t("models.stop", { name })}
+              onClick={() => {
+                onStop(id);
+              }}
+            >
+              <XIcon aria-hidden />
+            </AttachmentAction>
+          ) : null}
+
           {kept && !working ? (
             <AttachmentAction
               aria-label={t("models.remove", { name })}
@@ -186,6 +201,7 @@ type ModelPickerProps = {
   onOpen: () => void;
   onRemove: (id: ModelId) => void;
   onSelect: (id: ModelId) => void;
+  onStop: (id: ModelId) => void;
   selected: ModelId;
 };
 
@@ -197,6 +213,7 @@ const ModelPicker = ({
   onOpen,
   onRemove,
   onSelect,
+  onStop,
   selected,
 }: ModelPickerProps) => {
   const { t } = useTranslations();
@@ -247,6 +264,7 @@ const ModelPicker = ({
               onDownload={onDownload}
               onRemove={onRemove}
               onSelect={onSelect}
+              onStop={onStop}
               selected={model.id === selected}
             />
           ))}

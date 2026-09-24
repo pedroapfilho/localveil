@@ -6,7 +6,11 @@ type ModelStatus =
   | { bytes: number; path?: string; state: "ready" };
 
 type ModelStore = {
-  downloadModel: (model: ModelSpec, onProgress: (fraction: number) => void) => Promise<void>;
+  downloadModel: (
+    model: ModelSpec,
+    onProgress: (fraction: number) => void,
+    signal?: AbortSignal,
+  ) => Promise<void>;
   inspectModel: (model: ModelSpec) => Promise<ModelStatus>;
   removeModel: (model: ModelSpec) => Promise<void>;
 };

@@ -136,6 +136,34 @@ beforeEach(() => {
 });
 
 describe("downloadResumable", () => {
+  it("stops when told to and keeps what it banked for the next attempt", async () => {
+    const body = bodyOf(16);
+    const first = rangeServer(body);
+    const controller = new AbortController();
+    const { chunks, store } = memoryStore();
+
+    const stoppingAfterSecond: typeof fetch = async (input, init) => {
+      const response = await first.fetchRange(input, init);
+
+      if (parseRange(init).start === 4) {
+        controller.abort();
+      }
+
+      return response;
+    };
+
+    await expect(
+      run(stoppingAfterSecond, store, { concurrency: 1, signal: controller.signal }),
+    ).rejects.toThrow(/abort/iv);
+    expect([...(chunks.get(URL_UNDER_TEST)?.keys() ?? [])]).toEqual([0, 4]);
+
+    const second = rangeServer(body);
+    const blob = await run(second.fetchRange, store);
+
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(body);
+    expect(startsOf(second.calls)).toEqual([8, 12]);
+  });
+
   it("assembles the whole body from several ranges", async () => {
     const body = bodyOf(10);
     const { fetchRange } = rangeServer(body);

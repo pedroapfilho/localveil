@@ -54,6 +54,7 @@ const es: Messages = {
   "models.download": "Descargar {name}",
   "models.downloaded": "{name} está descargado y funciona sin conexión.",
   "models.downloadFailed": "No se pudo descargar {name}.",
+  "models.downloadStopped": "La descarga de {name} se detuvo. La próxima vez sigue donde quedó.",
   "models.heading": "Modelo de detección",
   "models.inUse": "En uso",
   "models.remove": "Quitar {name} de este navegador",
@@ -63,9 +64,12 @@ const es: Messages = {
   "models.status.downloading": "Descargando · {percent}% de {size}",
   "models.status.partial": "Descargado en parte · {percent}% de {size}",
   "models.status.ready": "Descargado · {size}",
+  "models.stop": "Detener la descarga de {name}",
   "models.summary.gliner-multi-pii": "Portugués, español e inglés. El más preciso.",
   "models.summary.gliner-pii-base":
     "Entrenado en inglés. Un cuarto de la descarga, pero se le escapan más nombres y direcciones.",
+  "models.summary.gliner-pii-edge":
+    "Entrenado en inglés. La descarga más pequeña con diferencia, pero se le escapa cerca de la mitad de los nombres.",
   "models.trigger": "Modelo de detección: {name}",
   "models.use": "Usar {name}",
   "review.apply": "Aplicar",

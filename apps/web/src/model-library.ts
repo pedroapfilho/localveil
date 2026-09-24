@@ -16,9 +16,11 @@ type ModelEntry = {
   progress?: number;
   removing?: boolean;
   status?: ModelStatus;
+  stoppable?: boolean;
 };
 
 type ModelLibrary = {
+  cancel: (id: ModelId) => void;
   download: (id: ModelId) => Promise<void>;
   entries: Partial<Record<ModelId, ModelEntry>>;
   refresh: (id?: ModelId) => Promise<void>;
@@ -75,16 +77,31 @@ const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
       }
     };
 
+    // Only a download started from the picker can be stopped from it; one the model worker started
+    // for a dropped file is what that file is waiting on.
+    const stoppers = new Map<ModelId, AbortController>();
+
     return {
+      cancel: (id) => {
+        stoppers.get(id)?.abort();
+      },
       download: async (id) => {
-        patch(id, { progress: 0 });
+        const stopper = new AbortController();
+
+        stoppers.set(id, stopper);
+        patch(id, { progress: 0, stoppable: true });
 
         try {
-          await store.downloadModel(modelById(id), (fraction) => {
-            patch(id, { progress: fraction });
-          });
+          await store.downloadModel(
+            modelById(id),
+            (fraction) => {
+              patch(id, { progress: fraction });
+            },
+            stopper.signal,
+          );
         } finally {
-          patch(id, { progress: undefined });
+          stoppers.delete(id);
+          patch(id, { progress: undefined, stoppable: false });
           await inspect(id);
         }
       },

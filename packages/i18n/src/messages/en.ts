@@ -51,6 +51,7 @@ const en = {
   "models.download": "Download {name}",
   "models.downloaded": "{name} is downloaded and works offline.",
   "models.downloadFailed": "Could not download {name}.",
+  "models.downloadStopped": "{name} stopped downloading. It picks up where it left off next time.",
   "models.heading": "Detection model",
   "models.inUse": "In use",
   "models.remove": "Remove {name} from this browser",
@@ -60,9 +61,12 @@ const en = {
   "models.status.downloading": "Downloading · {percent}% of {size}",
   "models.status.partial": "Partly downloaded · {percent}% of {size}",
   "models.status.ready": "Downloaded · {size}",
+  "models.stop": "Stop downloading {name}",
   "models.summary.gliner-multi-pii": "Portuguese, Spanish and English. The most accurate.",
   "models.summary.gliner-pii-base":
     "Trained on English. A quarter of the download, but misses more names and addresses.",
+  "models.summary.gliner-pii-edge":
+    "Trained on English. The smallest download by far, but it misses about half the names.",
   "models.trigger": "Detection model: {name}",
   "models.use": "Use {name}",
   "review.apply": "Apply redactions",

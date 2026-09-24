@@ -124,6 +124,7 @@ describe("downloadModel in the browser", () => {
       (fraction) => {
         reported.push(fraction);
       },
+      undefined,
       memoryStore(),
     );
 
@@ -133,18 +134,32 @@ describe("downloadModel in the browser", () => {
     expect(reported.every((fraction) => fraction >= 0 && fraction <= 1)).toBe(true);
   });
 
+  it("stops before fetching anything when it is already told to stop", async () => {
+    const entries = memoryCaches();
+    const asked = serveRanges();
+    const controller = new AbortController();
+
+    controller.abort();
+
+    await expect(
+      downloadModel(MODEL, () => undefined, controller.signal, memoryStore()),
+    ).rejects.toThrow(/abort/iv);
+    expect(asked).toEqual([]);
+    expect(entries.size).toBe(0);
+  });
+
   it("fetches nothing for a model that is already kept", async () => {
     memoryCaches([TOKENIZER, TOKENIZER_CONFIG, WEIGHTS]);
 
     const asked = serveRanges();
 
-    await downloadModel(MODEL, () => undefined, memoryStore());
+    await downloadModel(MODEL, () => undefined, undefined, memoryStore());
 
     expect(asked).toEqual([]);
   });
 
   it("refuses where the browser has no Cache Storage to keep it in", async () => {
-    await expect(downloadModel(MODEL, () => undefined, memoryStore())).rejects.toThrow(
+    await expect(downloadModel(MODEL, () => undefined, undefined, memoryStore())).rejects.toThrow(
       /Cache Storage/v,
     );
   });
