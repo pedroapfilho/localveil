@@ -1,3 +1,4 @@
+import type { ModelId } from "@repo/pii-detect/models";
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect wraps a wasm model runtime; the module seam is the only practical hermetic substitute */
 /* oxlint-disable anti-slop/no-unknown-parameters -- the serveDetect double mirrors the untyped MessagePort wire */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,9 +7,10 @@ import type { ModelRequest } from "./worker-protocol";
 
 const detect = vi.fn(() => Promise.resolve([]));
 const serveDetect = vi.fn();
+const createDetector = vi.fn((_options: { model: string }) => Promise.resolve(detect));
 
 vi.mock("@repo/pii-detect", () => ({
-  createDetector: () => Promise.resolve(detect),
+  createDetector: (options: { model: string }) => createDetector(options),
 }));
 
 vi.mock("@repo/redact-core", () => ({
@@ -36,9 +38,9 @@ const loadWorkerNamed = async (name: string) => {
   return captured;
 };
 
-const connectRequest = (port: MessagePort) =>
+const connectRequest = (port: MessagePort, model: ModelId = "gliner-multi-pii") =>
   new MessageEvent("message", {
-    data: { channel: "a", port, type: "connect" } satisfies ModelRequest,
+    data: { channel: "a", model, port, type: "connect" } satisfies ModelRequest,
   });
 
 afterEach(() => {
@@ -56,6 +58,23 @@ describe("model worker", () => {
 
     port1.close();
     port2.close();
+  });
+
+  it("loads the model the connect request names, once", async () => {
+    const [listen] = await loadWorkerNamed("");
+    const first = new MessageChannel();
+    const second = new MessageChannel();
+
+    listen?.(connectRequest(first.port2, "gliner-pii-base"));
+    listen?.(connectRequest(second.port2, "gliner-pii-base"));
+
+    expect(createDetector.mock.calls.map(([options]) => options.model)).toEqual([
+      "gliner-pii-base",
+    ]);
+
+    for (const port of [first.port1, first.port2, second.port1, second.port2]) {
+      port.close();
+    }
   });
 
   it("stands down when it comes up as an ONNX Runtime thread", async () => {

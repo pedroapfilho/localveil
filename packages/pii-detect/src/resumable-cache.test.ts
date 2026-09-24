@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChunkStore, Manifest } from "./chunk-store";
+import { memoryStore } from "./chunk-store-fixture";
 import type { CacheProgress } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
 
@@ -8,43 +8,6 @@ const URL_UNDER_TEST = "https://example.com/model.onnx_data";
 const OTHER_URL = "https://example.com/tokenizer.json";
 
 const BODY = Uint8Array.from({ length: 12 }, (_entry, index) => index);
-
-const memoryStore = (): ChunkStore => {
-  const chunks = new Map<string, Map<number, ArrayBuffer>>();
-  const manifests = new Map<string, Manifest>();
-
-  return {
-    append: (url, start, bytes) => {
-      const existing = chunks.get(url) ?? new Map<number, ArrayBuffer>();
-
-      existing.set(start, bytes);
-      chunks.set(url, existing);
-
-      return Promise.resolve();
-    },
-    clear: (url) => {
-      chunks.delete(url);
-      manifests.delete(url);
-
-      return Promise.resolve();
-    },
-    listUrls: () => Promise.resolve([...manifests.keys()]),
-    readManifest: (url) => Promise.resolve(manifests.get(url)),
-    readOffsets: (url) =>
-      Promise.resolve([...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).keys()]),
-    readParts: (url) =>
-      Promise.resolve(
-        [...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).entries()]
-          .toSorted(([left], [right]) => left - right)
-          .map(([, bytes]) => new Blob([bytes])),
-      ),
-    writeManifest: (url, manifest) => {
-      manifests.set(url, manifest);
-
-      return Promise.resolve();
-    },
-  };
-};
 
 const memoryCaches = () => {
   const entries = new Map<string, Response>();

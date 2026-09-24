@@ -3,6 +3,7 @@ import { buildZip, defaultDecisions } from "@repo/redact-core";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
+import { useModelLibrary } from "./model-library";
 import { probeCapacity } from "./probe-capacity";
 import { completedJobs, useJobStore } from "./store";
 import type { JobInput } from "./store";
@@ -10,6 +11,8 @@ import type { RedactionPool } from "./worker-pool";
 import { createRedactionPool } from "./worker-pool";
 
 const ZIP_NAME = "localveil.zip";
+
+const MODEL_TOAST = "model-load";
 
 type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
 
@@ -76,6 +79,7 @@ const useRedaction = () => {
 
     const pool = createRedactionPool({
       maxWorkers: probeCapacity().maxWorkers,
+      model: useModelLibrary.getState().selected,
       onAnalysed: (id, analysis) => {
         const { jobs, setState } = useJobStore.getState();
         const job = jobs.find((entry) => entry.id === id);
@@ -115,6 +119,10 @@ const useRedaction = () => {
 
       onModelLost: (reason) => {
         const lost = modelRef.current;
+        const { refresh, reportProgress, selected } = useModelLibrary.getState();
+
+        reportProgress(selected, undefined);
+        void refresh(selected);
 
         modelRef.current = { kind: "lost", reason };
 
@@ -127,7 +135,7 @@ const useRedaction = () => {
         toast.error(reason);
       },
 
-      onModelProgress: (_fraction, stage) => {
+      onModelProgress: (fraction, stage) => {
         if (stage === "model.slowDevice") {
           if (!saidSlowRef.current) {
             saidSlowRef.current = true;
@@ -138,9 +146,16 @@ const useRedaction = () => {
         }
 
         const pending = modelRef.current;
+        const { refresh, reportProgress, selected } = useModelLibrary.getState();
+
+        if (stage === "model.downloading") {
+          reportProgress(selected, fraction);
+        }
 
         if (stage === "model.ready") {
           modelRef.current = { kind: "ready" };
+          reportProgress(selected, undefined);
+          void refresh(selected);
 
           if (pending.kind === "loading") {
             pending.deferred.resolve();
@@ -159,6 +174,7 @@ const useRedaction = () => {
 
         toast.promise(started.promise, {
           error: translateRef.current("model.failed"),
+          id: MODEL_TOAST,
           loading: translateRef.current("model.downloading"),
           success: translateRef.current("model.ready"),
         });
@@ -181,6 +197,25 @@ const useRedaction = () => {
       poolRef.current = null;
     };
   }, [ensurePool]);
+
+  useEffect(
+    () =>
+      useModelLibrary.subscribe((state, previous) => {
+        if (state.selected === previous.selected) {
+          return;
+        }
+
+        // A load that was under way belonged to the old model; its toast would never settle.
+        if (modelRef.current.kind === "loading") {
+          toast.dismiss(MODEL_TOAST);
+        }
+
+        modelRef.current = { kind: "idle" };
+        previous.reportProgress(previous.selected, undefined);
+        poolRef.current?.setModel(state.selected);
+      }),
+    [],
+  );
 
   const submit = useCallback(
     (files: Array<JobInput>) => {

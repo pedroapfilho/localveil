@@ -2,12 +2,13 @@ import { render } from "ink";
 
 import { App } from "./app";
 import { resolveArguments } from "./entries";
+import { runModelsCommand } from "./models-command";
 
 const workingDirectory = process.cwd();
 
-const resolveOrExit = async () => {
+const resolveOrExit = async (args: ReadonlyArray<string>) => {
   try {
-    return await resolveArguments(process.argv.slice(2), workingDirectory);
+    return await resolveArguments(args, workingDirectory);
   } catch (error) {
     // oxlint-disable-next-line eslint/no-console
     console.error(error instanceof Error ? error.message : String(error));
@@ -16,18 +17,31 @@ const resolveOrExit = async () => {
   }
 };
 
-const resolved = await resolveOrExit();
+const redact = async (args: ReadonlyArray<string>) => {
+  const { directory, jobs, model, selection } = await resolveOrExit(args);
 
-const { directory, jobs, selection } = resolved;
+  const instance = render(
+    <App
+      initialDirectory={directory}
+      initialSelection={selection}
+      jobs={jobs}
+      model={model}
+      outputDirectory={workingDirectory}
+    />,
+    { exitOnCtrlC: false },
+  );
 
-const instance = render(
-  <App
-    initialDirectory={directory}
-    initialSelection={selection}
-    jobs={jobs}
-    outputDirectory={workingDirectory}
-  />,
-  { exitOnCtrlC: false },
-);
+  await instance.waitUntilExit();
+};
 
-await instance.waitUntilExit();
+const args = process.argv.slice(2);
+
+// A folder that happens to be called models is still reachable as ./models.
+if (args[0] === "models") {
+  process.exitCode = await runModelsCommand(args.slice(1), {
+    err: process.stderr,
+    out: process.stdout,
+  });
+} else {
+  await redact(args);
+}

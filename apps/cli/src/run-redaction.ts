@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MessageChannel } from "node:worker_threads";
 
+import type { ModelId } from "@repo/pii-detect/models";
 import {
   buildZip,
   describeError,
@@ -61,6 +62,7 @@ type RunResult = {
 type RunOptions = {
   files: ReadonlyArray<string>;
   jobs?: number;
+  model?: ModelId;
   onFileProgress: (progress: RunProgress) => void;
   onModelProgress: (fraction: number) => void;
   outputDirectory: string;
@@ -106,12 +108,13 @@ const writeArchive = async (
 const runRedaction = async ({
   files,
   jobs,
+  model,
   onFileProgress,
   onModelProgress,
   outputDirectory,
   signal,
 }: RunOptions): Promise<RunResult> => {
-  const detect = await createNodeDetector({ onModelProgress });
+  const detect = await createNodeDetector({ model, onModelProgress });
 
   const pool = workerpool.pool(WORKER_SCRIPT, {
     maxWorkers: jobs ?? defaultJobs(),

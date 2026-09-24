@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
-import { createDetector, MAX_WIDTH } from "./detector";
+import { DEFAULT_MODEL_ID, modelById } from "./catalog";
+import { createDetector } from "./detector";
 import type { GlinerInput } from "./gliner-encode";
-import { ENTITY_PROMPTS } from "./gliner-labels";
+import type { EntityPrompt } from "./gliner-labels";
 
 vi.mock("@huggingface/transformers", () => ({
   AutoTokenizer: { from_pretrained: vi.fn() },
@@ -53,11 +54,15 @@ const createHarness = () => {
   return { tokenizer: { encode }, wordsOf };
 };
 
-const promptIndex = (prompt: string) =>
-  ENTITY_PROMPTS.findIndex((entity) => entity.prompt === prompt);
+const { maxWidth: MAX_WIDTH, prompts: DEFAULT_PROMPTS } = modelById(DEFAULT_MODEL_ID);
 
-const logitsFor = (counts: Array<number>, hits: Array<Array<Hit>>) => {
-  const entities = ENTITY_PROMPTS.length;
+const logitsFor = (
+  counts: Array<number>,
+  hits: Array<Array<Hit>>,
+  prompts: ReadonlyArray<EntityPrompt> = DEFAULT_PROMPTS,
+) => {
+  const promptIndex = (prompt: string) => prompts.findIndex((entity) => entity.prompt === prompt);
+  const entities = prompts.length;
   const positions = Math.max(...counts);
   const perItem = positions * MAX_WIDTH * entities;
   const data = new Float32Array(counts.length * perItem).fill(-50);
@@ -74,7 +79,7 @@ const logitsFor = (counts: Array<number>, hits: Array<Array<Hit>>) => {
   return { data, dims: [counts.length, positions, MAX_WIDTH, entities] };
 };
 
-const setup = (respond: Respond) => {
+const setup = (respond: Respond, prompts: ReadonlyArray<EntityPrompt> = DEFAULT_PROMPTS) => {
   const { tokenizer, wordsOf } = createHarness();
 
   vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
@@ -90,6 +95,7 @@ const setup = (respond: Respond) => {
       logitsFor(
         inputs.map((input) => input.keptWords.length),
         inputs.map((input) => respond(wordsOf(input))),
+        prompts,
       ),
     );
   });
@@ -214,6 +220,39 @@ describe("createDetector", () => {
     vi.mocked(fetchModelBytes).mockRejectedValue(new Error("network down"));
 
     await expect(createDetector()).rejects.toThrow(/network down/v);
+  });
+});
+
+describe("choosing a model", () => {
+  it("loads the default model's tokenizer and weights when none is named", async () => {
+    setup(() => []);
+
+    await createDetector();
+
+    const { repo, revision } = modelById(DEFAULT_MODEL_ID);
+
+    expect(AutoTokenizer.from_pretrained).toHaveBeenCalledWith(repo, { revision });
+    expect(vi.mocked(fetchModelBytes).mock.calls.at(0)?.[0]).toContain(
+      `${repo}/resolve/${revision}`,
+    );
+  });
+
+  it("loads the named model and asks it in its own vocabulary", async () => {
+    const model = modelById("gliner-pii-base");
+    const { submitted } = setup(
+      (words) => (words[0] === "Ana" ? [{ end: 1, prompt: "name", start: 0 }] : []),
+      model.prompts,
+    );
+
+    const detect = await createDetector({ model: "gliner-pii-base" });
+    const spans = await detect("Ana Lima signed");
+
+    expect(AutoTokenizer.from_pretrained).toHaveBeenCalledWith(model.repo, {
+      revision: model.revision,
+    });
+    expect(vi.mocked(fetchModelBytes).mock.calls.at(0)?.[0]).toMatch(/model_quint8\.onnx$/v);
+    expect(submitted.length).toBe(1);
+    expect(spans).toEqual([{ end: 8, label: "private_person", score: 1, start: 0 }]);
   });
 });
 

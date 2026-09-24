@@ -1,6 +1,8 @@
 import { readdir, stat } from "node:fs/promises";
 import { dirname, extname, resolve } from "node:path";
 
+import type { ModelId } from "@repo/pii-detect/models";
+import { isModelId, MODELS } from "@repo/pii-detect/models";
 import { SUPPORTED_EXTENSIONS } from "@repo/redact-node";
 
 const PARENT_NAME = "..";
@@ -15,10 +17,11 @@ type DirectoryEntry = {
 type StartingPoint = {
   directory: string;
   jobs?: number;
+  model?: ModelId;
   selection: Array<string>;
 };
 
-type ParsedFlags = { jobs?: number; paths: Array<string> };
+type ParsedFlags = { jobs?: number; model?: ModelId; paths: Array<string> };
 
 const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
   const arg = args[at];
@@ -35,6 +38,7 @@ const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   const paths: Array<string> = [];
   let jobs: number | undefined;
+  let model: ModelId | undefined;
 
   for (let at = 0; at < args.length; at += 1) {
     const parallel = valueOf(args, at, "jobs");
@@ -53,10 +57,24 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
       continue;
     }
 
+    const chosen = valueOf(args, at, "model");
+
+    if (chosen !== undefined) {
+      if (chosen.value === undefined || !isModelId(chosen.value)) {
+        throw new RangeError(
+          `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${chosen.value ?? "nothing"}`,
+        );
+      }
+
+      model = chosen.value;
+      at += chosen.extra;
+      continue;
+    }
+
     paths.push(args[at]);
   }
 
-  return { jobs, paths };
+  return { jobs, model, paths };
 };
 
 const isSupported = (name: string): boolean =>
@@ -107,12 +125,13 @@ const resolveArguments = async (
   args: ReadonlyArray<string>,
   workingDirectory: string,
 ): Promise<StartingPoint> => {
-  const { jobs, paths } = parseFlags(args);
+  const { jobs, model, paths } = parseFlags(args);
 
   if (paths.length === 0) {
     return {
       directory: workingDirectory,
       ...(jobs !== undefined && { jobs }),
+      ...(model !== undefined && { model }),
       selection: [],
     };
   }
@@ -147,6 +166,7 @@ const resolveArguments = async (
   return {
     directory,
     ...(jobs !== undefined && { jobs }),
+    ...(model !== undefined && { model }),
     selection,
   };
 };

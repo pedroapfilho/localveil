@@ -11,6 +11,8 @@ import {
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
+import type { ModelId } from "./catalog";
+import { DEFAULT_MODEL_ID, modelById, MODELS, weightsUrl } from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import { chunkWords } from "./chunk-words";
@@ -18,20 +20,12 @@ import type { Logits } from "./gliner-decode";
 import { decodeSpans, suppressOverlaps } from "./gliner-decode";
 import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
 import { encodeGlinerInput } from "./gliner-encode";
-import { ENTITY_PROMPTS } from "./gliner-labels";
-import { MODEL_FILE } from "./model-runtime";
 import type { ModelDevice } from "./model-runtime";
 import { purgeStaleModels } from "./purge-stale-models";
 import type { ResumableCache } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
 import { collectShouting, positionShouted } from "./shouting";
 import { splitWords } from "./split-words";
-
-const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
-
-const MODEL_REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
-
-const MAX_WIDTH = 12;
 
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
@@ -47,20 +41,21 @@ type DetectorOptions = {
   batchSize?: number;
   maxWords?: number;
   minScore?: number;
+  model?: ModelId;
   onProgress?: ModelProgress;
   overlapWords?: number;
 
   resumableCache?: boolean;
 };
 
-const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILE}`;
-
-const isWeights = (name: string) => name.endsWith(`/${MODEL_FILE}`);
-
-const installResumableCache = (report: ModelProgress, store: ChunkStore): ResumableCache => {
+const installResumableCache = (
+  report: ModelProgress,
+  store: ChunkStore,
+  weights: string,
+): ResumableCache => {
   const cache = createResumableCache({
     onProgress: ({ loaded, name, total }) => {
-      if (!isWeights(name) || total === 0) {
+      if (name !== weights || total === 0) {
         return;
       }
 
@@ -92,6 +87,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     batchSize,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
+    model = DEFAULT_MODEL_ID,
     onProgress,
     overlapWords = OVERLAP_WORDS,
     resumableCache = "caches" in globalThis,
@@ -101,9 +97,11 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     onProgress?.(fraction, stage);
   };
 
+  const spec = modelById(model);
+  const weights = weightsUrl(spec);
   const chunks = createIndexedDbChunkStore();
-  const cache = resumableCache ? installResumableCache(report, chunks) : undefined;
-  const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, { revision: MODEL_REVISION });
+  const cache = resumableCache ? installResumableCache(report, chunks, weights) : undefined;
+  const tokenizer = await AutoTokenizer.from_pretrained(spec.repo, { revision: spec.revision });
   const frame = frameOf(tokenizer);
 
   const encodeCache = new Map<string, Array<number>>();
@@ -131,7 +129,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   const load = async (device: ModelDevice) => {
-    const bytes = await fetchModelBytes(MODEL_URL, { cache, onProgress: onDownload });
+    const bytes = await fetchModelBytes(weights, { cache, onProgress: onDownload });
 
     return createModelRunner(bytes, device);
   };
@@ -159,7 +157,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
         return await load("wasm");
       } catch (wasmError) {
         throw new Error(
-          `Could not load ${MODEL_ID} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
+          `Could not load ${spec.repo} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
           { cause: wasmError },
         );
       }
@@ -170,11 +168,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   if (cache !== undefined) {
     try {
-      await purgeStaleModels({
-        keepFiles: [MODEL_FILE],
-        revision: MODEL_REVISION,
-        store: chunks,
-      });
+      await purgeStaleModels({ models: MODELS, store: chunks });
     } catch (error) {
       // oxlint-disable-next-line eslint/no-console
       console.warn("Could not clear superseded model weights", error);
@@ -183,10 +177,16 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   report(1, "model.ready");
 
-  const prompts = ENTITY_PROMPTS.map((entity) => entity.prompt);
+  const prompts = spec.prompts.map((entity) => entity.prompt);
 
   const encodeChunk = (words: Array<SpanWord>) => {
-    const encoded = encodeGlinerInput({ encodeWord, frame, maxWidth: MAX_WIDTH, prompts, words });
+    const encoded = encodeGlinerInput({
+      encodeWord,
+      frame,
+      maxWidth: spec.maxWidth,
+      prompts,
+      words,
+    });
 
     return encoded.keptWords.length === 0 ? undefined : encoded;
   };
@@ -213,7 +213,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
       return {
         end: last.end,
-        label: ENTITY_PROMPTS[candidate.entity].label,
+        label: spec.prompts[candidate.entity].label,
         score: candidate.score,
         start: first.start,
       };
@@ -271,5 +271,5 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   });
 };
 
-export { createDetector, MAX_WIDTH, MIN_SCORE, MODEL_ID };
+export { createDetector, MIN_SCORE };
 export type { DetectorOptions };

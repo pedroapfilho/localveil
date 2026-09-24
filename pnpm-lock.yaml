@@ -65,6 +65,9 @@ importers:
       '@repo/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@repo/pii-detect':
+        specifier: workspace:*
+        version: link:../../packages/pii-detect
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../../packages/redact-core

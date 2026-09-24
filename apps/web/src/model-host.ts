@@ -1,3 +1,4 @@
+import type { ModelId } from "@repo/pii-detect/models";
 import type { ModelStageKey } from "@repo/redact-core";
 
 import type { ConnectRequest, DisconnectRequest, ModelResponse } from "./worker-protocol";
@@ -5,6 +6,7 @@ import type { ConnectRequest, DisconnectRequest, ModelResponse } from "./worker-
 const MAX_RESPAWNS = 3;
 
 type ModelHostOptions = {
+  model: ModelId;
   onLost: (reason: string, fatal: boolean) => void;
   onProgress: (fraction: number, stage: ModelStageKey) => void;
 };
@@ -26,7 +28,7 @@ const post = (worker: Worker, message: ConnectRequest | DisconnectRequest) => {
   worker.postMessage(message, transfer);
 };
 
-const createModelHost = ({ onLost, onProgress }: ModelHostOptions): ModelHost => {
+const createModelHost = ({ model, onLost, onProgress }: ModelHostOptions): ModelHost => {
   let state: HostState = { kind: "gone" };
 
   const spawn = (respawns: number): HostState => {
@@ -88,7 +90,7 @@ const createModelHost = ({ onLost, onProgress }: ModelHostOptions): ModelHost =>
         return false;
       }
 
-      post(state.worker, { channel, port, type: "connect" });
+      post(state.worker, { channel, model, port, type: "connect" });
 
       return true;
     },

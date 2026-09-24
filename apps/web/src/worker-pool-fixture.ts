@@ -48,9 +48,11 @@ class FakeTask implements WorkerTask {
 
 type Pooled = {
   connected: Array<string>;
+  destroyedHosts: number;
   disconnected: Array<string>;
   host: ModelHostOptions | undefined;
   modelGone: boolean;
+  models: Array<string>;
   overflowAfter: number;
   tasks: Array<FakeTask>;
   terminated: number;
@@ -58,9 +60,11 @@ type Pooled = {
 
 const pooled: Pooled = {
   connected: [],
+  destroyedHosts: 0,
   disconnected: [],
   host: undefined,
   modelGone: false,
+  models: [],
   overflowAfter: Number.POSITIVE_INFINITY,
   tasks: [],
   terminated: 0,
@@ -87,6 +91,7 @@ const reported: Reported = {
 const modelHostDouble = {
   createModelHost: (options: ModelHostOptions) => {
     pooled.host = options;
+    pooled.models.push(options.model);
 
     return {
       connect: (channel: string) => {
@@ -98,7 +103,9 @@ const modelHostDouble = {
 
         return true;
       },
-      destroy: () => {},
+      destroy: () => {
+        pooled.destroyedHosts += 1;
+      },
       disconnect: (channel: string) => {
         pooled.disconnected.push(channel);
       },
@@ -131,6 +138,7 @@ const workerpoolDouble = {
 
 const poolOptions = (maxWorkers: number) => ({
   maxWorkers,
+  model: "gliner-multi-pii" as const,
   onAnalysed: (id: string) => {
     reported.analysed.push(id);
   },
@@ -160,6 +168,8 @@ const resetFixture = () => {
   pooled.overflowAfter = Number.POSITIVE_INFINITY;
   pooled.terminated = 0;
   pooled.host = undefined;
+  pooled.destroyedHosts = 0;
+  pooled.models.length = 0;
   reported.done.length = 0;
   reported.errors.length = 0;
   reported.model.length = 0;
