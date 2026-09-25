@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChunkStore, Manifest } from "./chunk-store";
+import { memoryStore } from "./chunk-store-fixture";
 import type { CacheProgress } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
 
@@ -8,43 +8,6 @@ const URL_UNDER_TEST = "https://example.com/model.onnx_data";
 const OTHER_URL = "https://example.com/tokenizer.json";
 
 const BODY = Uint8Array.from({ length: 12 }, (_entry, index) => index);
-
-const memoryStore = (): ChunkStore => {
-  const chunks = new Map<string, Map<number, ArrayBuffer>>();
-  const manifests = new Map<string, Manifest>();
-
-  return {
-    append: (url, start, bytes) => {
-      const existing = chunks.get(url) ?? new Map<number, ArrayBuffer>();
-
-      existing.set(start, bytes);
-      chunks.set(url, existing);
-
-      return Promise.resolve();
-    },
-    clear: (url) => {
-      chunks.delete(url);
-      manifests.delete(url);
-
-      return Promise.resolve();
-    },
-    listUrls: () => Promise.resolve([...manifests.keys()]),
-    readManifest: (url) => Promise.resolve(manifests.get(url)),
-    readOffsets: (url) =>
-      Promise.resolve([...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).keys()]),
-    readParts: (url) =>
-      Promise.resolve(
-        [...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).entries()]
-          .toSorted(([left], [right]) => left - right)
-          .map(([, bytes]) => new Blob([bytes])),
-      ),
-    writeManifest: (url, manifest) => {
-      manifests.set(url, manifest);
-
-      return Promise.resolve();
-    },
-  };
-};
 
 const memoryCaches = () => {
   const entries = new Map<string, Response>();
@@ -68,6 +31,9 @@ const memoryCaches = () => {
   vi.stubGlobal("caches", { open: () => Promise.resolve(cache) });
 
   return {
+    allowWrites: () => {
+      refuse = false;
+    },
     entries,
     puts,
     refuseWrites: () => {
@@ -194,7 +160,7 @@ describe("createResumableCache", () => {
 
     vi.stubGlobal("navigator", {
       locks: {
-        request: (_name: string, run: () => Promise<Response>) => {
+        request: (_name: string, _options: LockOptions, run: () => Promise<Response>) => {
           entries.set(URL_UNDER_TEST, new Response("downloaded by the other tab"));
 
           return run();
@@ -251,24 +217,33 @@ describe("createResumableCache", () => {
     }
   });
 
-  it("writes a small file straight through without downloading anything", async () => {
-    const { puts } = memoryCaches();
+  it("rejects an explicit download when storage fails and resumes without fetching its chunks again", async () => {
+    const { allowWrites, entries, refuseWrites } = memoryCaches();
+    const store = memoryStore();
+    const fetchRange = rangeServer();
+    const cache = createResumableCache({ chunkSize: 5, fetchRange, store });
 
-    await createResumableCache({ fetchRange: rangeServer(), store: memoryStore() }).put(
-      URL_UNDER_TEST,
-      new Response("tokenizer.json"),
-    );
+    refuseWrites();
+    await expect(cache.download(URL_UNDER_TEST)).rejects.toThrow("QuotaExceededError");
+    expect(entries.has(URL_UNDER_TEST)).toBe(false);
+    await expect(store.readOffsets(URL_UNDER_TEST)).resolves.toEqual([0, 5, 10]);
+    const fetched = fetchRange.mock.calls.length;
 
-    expect(puts).toEqual([URL_UNDER_TEST]);
+    allowWrites();
+    await cache.download(URL_UNDER_TEST);
+
+    expect(fetchRange).toHaveBeenCalledTimes(fetched + 1);
+    expect(entries.has(URL_UNDER_TEST)).toBe(true);
+    await expect(store.readOffsets(URL_UNDER_TEST)).resolves.toEqual([]);
+    await expect(store.readManifest(URL_UNDER_TEST)).resolves.toBeUndefined();
   });
 
-  it("does not write a local path into the cache", async () => {
+  it("refuses an explicit download that is not a URL", async () => {
     const { puts } = memoryCaches();
 
-    await createResumableCache({ fetchRange: rangeServer(), store: memoryStore() }).put(
-      "/models/tokenizer.json",
-      new Response("tokenizer.json"),
-    );
+    await expect(
+      createResumableCache({ store: memoryStore() }).download("/models/tokenizer.json"),
+    ).rejects.toThrow(/not an HTTP URL/v);
 
     expect(puts).toEqual([]);
   });

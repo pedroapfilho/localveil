@@ -4,13 +4,19 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#model-store": {
+      "browser": "./src/model-store-browser.ts",
+      "default": "./src/model-store-node.ts"
+    },
     "#ort": {
       "browser": "./src/ort-browser.ts",
       "default": "./src/ort-node.ts"
     }
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./models": "./src/models.ts",
+    "./node": "./src/node.ts"
   },
   "scripts": {
     "clean": "rm -rf node_modules coverage",

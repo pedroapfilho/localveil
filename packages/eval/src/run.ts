@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { createDetector } from "@repo/pii-detect";
+import { createDetector, DEFAULT_MODEL_ID, isModelId, MODELS } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
 import {
   APPLY_SCORE,
@@ -104,8 +104,17 @@ const run = async () => {
     options: {
       filter: { type: "string" },
       json: { type: "boolean" },
+      model: { type: "string" },
     },
   });
+
+  const model = values.model ?? DEFAULT_MODEL_ID;
+
+  if (!isModelId(model)) {
+    throw new RangeError(
+      `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${model}`,
+    );
+  }
 
   const corpus = await loadCorpus();
   const chosen =
@@ -117,12 +126,15 @@ const run = async () => {
     throw new Error(`No corpus document matches ${String(values.filter)}`);
   }
 
-  note(`Scoring ${String(chosen.length)} documents. The first run downloads the model.`);
+  note(
+    `Scoring ${String(chosen.length)} documents with ${model}. The first run downloads the model.`,
+  );
 
   const floor = process.env.EVAL_MIN_SCORE;
 
   const detect = await createDetector({
     minScore: floor === undefined ? APPLY_SCORE : Number(floor),
+    model,
     onProgress: (fraction, stage) => {
       if (stage === "model.downloading") {
         note(`  ${stage} ${(fraction * 100).toFixed(0)}%`);

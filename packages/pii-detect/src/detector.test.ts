@@ -1,16 +1,18 @@
 /* oxlint-disable anti-slop/no-module-mocking -- the tokenizer and ONNX runtime are wasm engines; the module seam is the only practical hermetic substitute */
-import { AutoTokenizer } from "@huggingface/transformers";
+import { PreTrainedTokenizer } from "@huggingface/transformers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
-import { createDetector, MAX_WIDTH } from "./detector";
+import { DEFAULT_MODEL_ID, modelById, tokenizerUrls } from "./catalog";
+import { memoryStore } from "./chunk-store-fixture";
+import { createDetector } from "./detector";
 import type { GlinerInput } from "./gliner-encode";
-import { ENTITY_PROMPTS } from "./gliner-labels";
+import type { EntityPrompt } from "./gliner-labels";
+import { removeModel } from "./model-store-browser";
 
 vi.mock("@huggingface/transformers", () => ({
-  AutoTokenizer: { from_pretrained: vi.fn() },
-  env: {},
+  PreTrainedTokenizer: vi.fn(),
 }));
 
 vi.mock("#ort", () => ({
@@ -53,11 +55,37 @@ const createHarness = () => {
   return { tokenizer: { encode }, wordsOf };
 };
 
-const promptIndex = (prompt: string) =>
-  ENTITY_PROMPTS.findIndex((entity) => entity.prompt === prompt);
+const { maxWidth: MAX_WIDTH, prompts: DEFAULT_PROMPTS } = modelById(DEFAULT_MODEL_ID);
 
-const logitsFor = (counts: Array<number>, hits: Array<Array<Hit>>) => {
-  const entities = ENTITY_PROMPTS.length;
+type FakeTokenizer = ReturnType<typeof createHarness>["tokenizer"];
+
+// The detector builds the tokenizer itself from the JSON it fetched, so the fake stands in for the class.
+const fakeTokenizer = (tokenizer: FakeTokenizer) => {
+  vi.mocked(PreTrainedTokenizer).mockImplementation(function build() {
+    return tokenizer;
+  } as never);
+};
+
+const JSON_FILE = new TextEncoder().encode("{}");
+
+// Tokenizer files come back as JSON and the weights as bytes, the way both caches hand them over.
+const serveFiles = () => {
+  vi.mocked(fetchModelBytes).mockImplementation((url) =>
+    Promise.resolve(url.endsWith(".json") ? JSON_FILE : new Uint8Array()),
+  );
+};
+
+const fetchedUrls = () => vi.mocked(fetchModelBytes).mock.calls.map(([url]) => url);
+
+const weightsFetched = () => fetchedUrls().filter((url) => url.endsWith(".onnx"));
+
+const logitsFor = (
+  counts: Array<number>,
+  hits: Array<Array<Hit>>,
+  prompts: ReadonlyArray<EntityPrompt> = DEFAULT_PROMPTS,
+) => {
+  const promptIndex = (prompt: string) => prompts.findIndex((entity) => entity.prompt === prompt);
+  const entities = prompts.length;
   const positions = Math.max(...counts);
   const perItem = positions * MAX_WIDTH * entities;
   const data = new Float32Array(counts.length * perItem).fill(-50);
@@ -74,12 +102,12 @@ const logitsFor = (counts: Array<number>, hits: Array<Array<Hit>>) => {
   return { data, dims: [counts.length, positions, MAX_WIDTH, entities] };
 };
 
-const setup = (respond: Respond) => {
+const setup = (respond: Respond, prompts: ReadonlyArray<EntityPrompt> = DEFAULT_PROMPTS) => {
   const { tokenizer, wordsOf } = createHarness();
 
-  vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+  fakeTokenizer(tokenizer);
   vi.mocked(pickDevice).mockResolvedValue("webgpu");
-  vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+  serveFiles();
 
   const submitted: Array<GlinerInput> = [];
 
@@ -90,6 +118,7 @@ const setup = (respond: Respond) => {
       logitsFor(
         inputs.map((input) => input.keptWords.length),
         inputs.map((input) => respond(wordsOf(input))),
+        prompts,
       ),
     );
   });
@@ -100,7 +129,7 @@ const setup = (respond: Respond) => {
 };
 
 beforeEach(() => {
-  vi.mocked(AutoTokenizer.from_pretrained).mockReset();
+  vi.mocked(PreTrainedTokenizer).mockReset();
   vi.mocked(createModelRunner).mockReset();
   vi.mocked(fetchModelBytes).mockReset();
   vi.mocked(pickDevice).mockReset();
@@ -170,9 +199,9 @@ describe("createDetector", () => {
   it("retries once on wasm when the webgpu load fails", async () => {
     const { tokenizer } = createHarness();
 
-    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    fakeTokenizer(tokenizer);
     vi.mocked(pickDevice).mockResolvedValue("webgpu");
-    vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+    serveFiles();
     vi.mocked(createModelRunner)
       .mockRejectedValueOnce(new Error("no adapter"))
       .mockResolvedValueOnce(vi.fn(() => Promise.resolve(logitsFor([0], [[]]))));
@@ -185,10 +214,14 @@ describe("createDetector", () => {
       },
     });
 
-    const urls = vi.mocked(fetchModelBytes).mock.calls.map(([url]) => url);
+    const urls = weightsFetched();
 
     expect(urls.at(0)).toContain("model_q4.onnx");
-    expect(urls.at(1)).toBe(urls.at(0));
+    expect(urls).toHaveLength(1);
+    expect(vi.mocked(createModelRunner).mock.calls.map(([, device]) => device)).toEqual([
+      "webgpu",
+      "wasm",
+    ]);
     expect(stages).toContain("model.slowDevice");
     expect(stages.at(-1)).toBe("model.ready");
   });
@@ -196,9 +229,9 @@ describe("createDetector", () => {
   it("rejects with the original failure visible when wasm also fails", async () => {
     const { tokenizer } = createHarness();
 
-    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    fakeTokenizer(tokenizer);
     vi.mocked(pickDevice).mockResolvedValue("webgpu");
-    vi.mocked(fetchModelBytes).mockResolvedValue(new Uint8Array());
+    serveFiles();
     vi.mocked(createModelRunner)
       .mockRejectedValueOnce(new Error("no adapter"))
       .mockRejectedValueOnce(new Error("wasm unavailable"));
@@ -209,11 +242,131 @@ describe("createDetector", () => {
   it("does not swallow a load failure into an empty detection", async () => {
     const { tokenizer } = createHarness();
 
-    vi.mocked(AutoTokenizer.from_pretrained).mockResolvedValue(tokenizer as never);
+    fakeTokenizer(tokenizer);
     vi.mocked(pickDevice).mockResolvedValue("wasm");
     vi.mocked(fetchModelBytes).mockRejectedValue(new Error("network down"));
 
     await expect(createDetector()).rejects.toThrow(/network down/v);
+  });
+});
+
+describe("choosing a model", () => {
+  it("holds removal back until the worker has finished fetching its model files", async () => {
+    setup(() => []);
+    const started = Promise.withResolvers<undefined>();
+    const weights = Promise.withResolvers<Uint8Array>();
+
+    vi.mocked(fetchModelBytes).mockImplementation((url) => {
+      if (url.endsWith(".json")) {
+        return Promise.resolve(JSON_FILE);
+      }
+
+      started.resolve(undefined);
+
+      return weights.promise;
+    });
+
+    const loading = createDetector({ resumableCache: true });
+
+    await started.promise;
+    let removed = false;
+    const remove = async () => {
+      await removeModel(modelById(DEFAULT_MODEL_ID), memoryStore());
+      removed = true;
+    };
+    const removing = remove();
+
+    await removeModel(modelById("gliner-pii-edge"), memoryStore());
+    const removedDuringLoad = removed;
+
+    weights.resolve(new Uint8Array());
+    await Promise.all([loading, removing]);
+
+    expect(removedDuringLoad).toBe(false);
+    expect(removed).toBe(true);
+  });
+
+  it("loads the default model's tokenizer and weights when none is named", async () => {
+    setup(() => []);
+
+    await createDetector();
+
+    const model = modelById(DEFAULT_MODEL_ID);
+
+    expect(fetchedUrls()).toEqual(expect.arrayContaining(tokenizerUrls(model)));
+    expect(weightsFetched()).toEqual([
+      expect.stringContaining(`${model.repo}/resolve/${model.revision}`),
+    ]);
+    expect(PreTrainedTokenizer).toHaveBeenCalledOnce();
+  });
+
+  it("asks for nothing outside the pinned revision, so a cached model loads offline", async () => {
+    setup(() => []);
+
+    await createDetector({ model: "gliner-pii-edge" });
+
+    const { repo, revision } = modelById("gliner-pii-edge");
+
+    expect(fetchedUrls().every((url) => url.includes(`${repo}/resolve/${revision}/`))).toBe(true);
+  });
+
+  it("loads the named model and asks it in its own vocabulary", async () => {
+    const model = modelById("gliner-pii-base");
+    const { submitted } = setup(
+      (words) => (words[0] === "Ana" ? [{ end: 1, prompt: "name", start: 0 }] : []),
+      model.prompts,
+    );
+
+    const detect = await createDetector({ model: "gliner-pii-base" });
+    const spans = await detect("Ana Lima signed");
+
+    expect(fetchedUrls()).toEqual(expect.arrayContaining(tokenizerUrls(model)));
+    expect(weightsFetched()).toEqual([expect.stringMatching(/model_quint8\.onnx$/v)]);
+    expect(submitted.length).toBe(1);
+    expect(spans).toEqual([{ end: 8, label: "private_person", score: 1, start: 0 }]);
+  });
+});
+
+describe("a token-level model", () => {
+  it("builds no span pairs and joins each word's start, end and inside into a span", async () => {
+    const model = modelById("gliner-pii-edge");
+    const nameAt = model.prompts.findIndex((entity) => entity.prompt === "name");
+    const { tokenizer, wordsOf } = createHarness();
+    const submitted: Array<GlinerInput> = [];
+
+    const run = vi.fn((inputs: Array<GlinerInput>) => {
+      submitted.push(...inputs);
+
+      const words = Math.max(...inputs.map((input) => input.keptWords.length));
+      const entities = model.prompts.length;
+      const data = new Float32Array(inputs.length * words * entities * 3).fill(-50);
+
+      inputs.forEach((input, item) => {
+        const text = wordsOf(input);
+        const at = (word: number, role: number) =>
+          ((item * words + word) * entities + nameAt) * 3 + role;
+
+        if (text[0] === "Ana") {
+          data[at(0, 0)] = 50;
+          data[at(0, 2)] = 50;
+          data[at(1, 1)] = 50;
+          data[at(1, 2)] = 50;
+        }
+      });
+
+      return Promise.resolve({ data, dims: [inputs.length, words, entities, 3] });
+    });
+
+    fakeTokenizer(tokenizer);
+    vi.mocked(pickDevice).mockResolvedValue("wasm");
+    serveFiles();
+    vi.mocked(createModelRunner).mockResolvedValue(run);
+
+    const detect = await createDetector({ model: "gliner-pii-edge" });
+    const spans = await detect("Ana Lima signed");
+
+    expect(submitted.every((input) => input.spanIdx.length === 0)).toBe(true);
+    expect(spans).toEqual([{ end: 8, label: "private_person", score: 1, start: 0 }]);
   });
 });
 

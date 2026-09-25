@@ -35,9 +35,13 @@ For the terminal:
 pnpm --filter cli start                    # browse and pick files
 pnpm --filter cli start scan.pdf           # or name them up front
 pnpm --filter cli start --jobs 2 *.pdf     # cap how many files run at once
+pnpm --filter cli start --model gliner-pii-base scan.pdf   # use another detection model
+pnpm --filter cli start models             # list the models and which are downloaded
+pnpm --filter cli start models download gliner-pii-base
+pnpm --filter cli start models remove gliner-pii-base
 ```
 
-The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`. Without `--jobs` it runs half the core count, up to four files at once.
+The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`. Without `--jobs` it runs half the core count, up to four files at once. `models` is a subcommand only as the first argument, so a folder that happens to be called `models` is still reachable as `./models`.
 
 ## What gets covered
 
@@ -66,9 +70,29 @@ Two models run here, and neither is bundled. Both are downloaded on first use an
 
 Spans come from `gliner_multi_pii-v1`, a GLiNER model whose training languages include Portuguese and whose label set was built for exactly this: CPF, CNPJ and driver's licence numbers are things it was trained to recognise, not things it has to guess at.
 
-The weights are the ONNX export of that model, [`onnx-community/gliner_multi_pii-v1`](https://huggingface.co/onnx-community/gliner_multi_pii-v1), pinned to one commit rather than tracked on `main`. Unpinned, a download resumed across an update splices bytes from two revisions into a single file, and the cache key never moves when the model does. The tokenizer beside it loads through `@huggingface/transformers` at the same commit.
+The weights are the ONNX export of that model, [`onnx-community/gliner_multi_pii-v1`](https://huggingface.co/onnx-community/gliner_multi_pii-v1), pinned to one commit rather than tracked on `main`. Unpinned, a download resumed across an update splices bytes from two revisions into a single file, and the cache key never moves when the model does. The tokenizer's two files are fetched at the same commit and kept in the same cache as the weights, then handed to `@huggingface/transformers`. Its own loader checks whether `tokenizer_config.json` exists on `main` before it reads anything, whatever revision it is given, which made an unpinned request on every load and failed outright with the network off.
 
 One export, `model_q4.onnx`, is used in both the browser and the CLI: 4-bit weights with activations left in fp32. The dynamic-int8 export is a third of the size and scores correctly on native CPU, but it collapses in the browser, where a name scoring 0.999 natively came back at 0.17 on wasm and 0.09 on WebGPU. Re-quantizing per channel rather than per tensor does not rescue it; that was measured, not assumed, and the numbers are in `packages/eval/BASELINE.md`. The fp16-activation exports either cannot create a session at all, because the model's LSTM has no fp16 CPU kernel, or crush the person head on WebGPU. Carrying one file also means the terminal and the tab cannot disagree about a document, and it makes the WebGPU-to-wasm fallback a cache hit rather than a second download.
+
+### Choosing a model
+
+The detection model is a choice, made from the picker beside the language selector in the web app and with `--model` in the CLI. The catalogue lives in `packages/pii-detect/src/catalog.ts`, and every entry in it follows the rules above: a commit SHA rather than a branch, one export shared by the tab and the terminal, and each file run on native CPU, browser wasm and WebGPU before it is listed.
+
+| Model              | Weights                                                                                                                      | Download | Whole-analysis F1 | Recall |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------- | ------ |
+| `gliner-multi-pii` | [`onnx-community/gliner_multi_pii-v1`](https://huggingface.co/onnx-community/gliner_multi_pii-v1), `model_q4.onnx` (default) | 894 MB   | 98.6              | 100.0  |
+| `gliner-pii-base`  | [`knowledgator/gliner-pii-base-v1.0`](https://huggingface.co/knowledgator/gliner-pii-base-v1.0), `model_quint8.onnx`         | 197 MB   | 92.8              | 87.1   |
+| `gliner-pii-edge`  | [`knowledgator/gliner-pii-edge-v1.0`](https://huggingface.co/knowledgator/gliner-pii-edge-v1.0), `model_quint8.onnx`         | 46 MB    | 86.4              | 77.1   |
+
+The scores are the eval corpus's whole-analysis table at the 0.65 floor, and the full tables are in `packages/eval/BASELINE.md`. `gliner-pii-base` is a quarter of the download and slightly more precise (99.2 against 97.2), but it was trained on English, it asks for entities in its own vocabulary (`name`, `dob`, `location address`), and it misses about one name in five and every address the pattern layer does not already catch. Its int8 export survives the browser, unlike the multilingual one's: a name that scores 0.905 natively scores 0.905 on wasm and 0.904 on WebGPU, and its model card credits quantization-aware training for that. It is there for a machine that cannot spare the larger download, not as a default.
+
+`gliner-pii-edge` is a twentieth of the default's download and still precise (98.2), but it covers only about half the names, so the pattern layer and the review list carry more of the work. It is the one model whose tab and terminal do not agree to the digit. On the check sentence WebGPU matches native CPU exactly, while wasm scores the name about 0.05 higher (0.776 against 0.725) with the same labels and the same ranking. That is drift, not the collapse the multilingual model's int8 export shows, but on a name near the floor it can decide whether the tab covers what the terminal only suggests.
+
+Knowledgator also publishes small (83 MB) and large (648 MB) PII models. They were measured and left out: small scores 77.2 and large 84.3 at their best floors, so each is bigger and worse than a model already listed, and large finds under a third of the names at any floor.
+
+The picker says which models are downloaded, partly downloaded or absent, and can download, stop or remove each one. A stopped download keeps the ranges it banked, so the next one starts where it left off. Downloaded means every file the detector asks for is in Cache Storage, the tokenizer as well as the weights, so the next load makes no request at all; partly downloaded counts the ranges an interrupted download banked in IndexedDB. Switching replaces the model worker outright, because two sessions of that size do not fit side by side and terminating the worker is the only way to be sure the old one lets go. A switch waits while files are still reaching the model, so no file is analysed half by one model and half by the other. Files already in review keep the analysis their model gave them.
+
+A model can join the catalogue if it is GLiNER in either of its two shapes, set by `decoding` in the catalogue. A span-level graph takes `input_ids`, `attention_mask`, `words_mask`, `text_lengths`, `span_idx` and `span_mask`, and scores every span up to its widest as one output of shape `[batch, positions, widths, entities]`. A token-level graph takes the first four only and scores each word as a start, an end and inside, `[batch, words, entities, 3]`; the decoder follows GLiNER's own, joining a start to an end across words that all score inside and scoring the span by its weakest word. Feeds are built from the inputs the graph declares, so neither shape is sent a tensor it does not know. Token-level scores run lower, since a span is only as confident as its weakest word, which is why the shared floor was swept for each model before keeping it. Run a candidate through `pnpm --filter @repo/eval start --model <id>` and through `apps/web/wasm-check.html?model=<id>` on both devices before listing it.
 
 ### Where the model runs
 
@@ -132,9 +156,9 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 ## Privacy
 
 - **Files stay in the tab:** the app reads them with `FileReader`, processes them in a Web Worker, and writes them back through `Blob`. No `fetch` anywhere touches them.
-- **The only requests are the models:** the detection weights come from Hugging Face on first use, pinned to one revision, and the Tesseract language file for `eng`, `por` or `spa` is fetched the first time something scanned is read in that language. Both stay cached, and after that the page works with the network off. When a release changes the model, the superseded weights are deleted from the cache rather than left to sit there.
+- **The only requests are the models:** the detection weights come from Hugging Face on first use, pinned to one revision, and the Tesseract language file for `eng`, `por` or `spa` is fetched the first time something scanned is read in that language. Both stay cached, and after that the page works with the network off. Every catalogued model keeps its weights through a switch; weights for a revision or export the catalogue no longer lists are deleted from the cache rather than left to sit there, and the model picker removes any model on request.
 - **Nothing is stored server-side** because there is no server. The app is a static bundle.
-- **Language starts from the browser:** the interface follows `navigator.languages` across English, Portuguese and Spanish, and a picker in the corner overrides it. That choice is the only thing the app keeps in `localStorage`, and it is a language tag, not your data.
+- **Language starts from the browser:** the interface follows `navigator.languages` across English, Portuguese and Spanish, and a picker in the corner overrides it. That choice and the chosen detection model are the only things the app keeps in `localStorage`, and they are a language tag and a model name, not your data.
 
 `vercel.json` sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so the page is cross-origin isolated, which is what lets ONNX Runtime use `SharedArrayBuffer` and multithreaded wasm. The dev server sends the same pair.
 
@@ -315,4 +339,4 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.
 - **Recognition sets the ceiling on scanned input.** A blurry photo or a PDF with broken fonts yields text nothing can redact, and the app says so rather than guessing.
 - **A redacted PDF is images.** The text layer is rebuilt from recognised words, so it is searchable but not identical to the original, and the file is larger.
-- **The first run is a large download.** Once, resumable, and fetched several ranges at a time. The browser and the terminal run the same 4-bit weights, so they redact a document the same way, and the smaller exports are unusable for the reasons under [Models](#models).
+- **The first run is a large download.** Once, resumable, and fetched several ranges at a time. For a given model the browser and the terminal run the same weights, so they redact a document the same way. The smaller model trades recall for size, and the multilingual model's smaller exports are unusable, both for the reasons under [Models](#models).

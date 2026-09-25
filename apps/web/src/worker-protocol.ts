@@ -1,3 +1,4 @@
+import type { ModelId } from "@repo/pii-detect/models";
 import type {
   Analysis,
   Decisions,
@@ -14,7 +15,7 @@ type ApplyTask = (file: File, work: ApplyWork, port: MessagePort) => RedactionRe
 
 type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
 
-type ConnectRequest = { channel: string; port: MessagePort; type: "connect" };
+type ConnectRequest = { channel: string; model: ModelId; port: MessagePort; type: "connect" };
 
 type DisconnectRequest = { channel: string; type: "disconnect" };
 

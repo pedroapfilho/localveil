@@ -1,15 +1,24 @@
+import type * as ModelCatalog from "@repo/pii-detect/models";
+import { downloadModel } from "@repo/pii-detect/models";
 /* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
 import type * as RedactCore from "@repo/redact-core";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useModelLibrary } from "./model-library";
 import { progressOf, stageOf, useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 import { useRedaction } from "./use-redaction";
 import type { RedactionPoolOptions } from "./worker-pool";
 
 const archives = vi.hoisted(() => [] as Array<Array<{ blob: Blob; name: string }>>);
+
+vi.mock("@repo/pii-detect/models", async (importOriginal) => ({
+  ...(await importOriginal<typeof ModelCatalog>()),
+  downloadModel: vi.fn(),
+  inspectModel: vi.fn(() => Promise.resolve({ state: "absent" })),
+}));
 
 vi.mock("@repo/redact-core", async (importOriginal) => {
   const original = await importOriginal<typeof RedactCore>();
@@ -25,6 +34,7 @@ vi.mock("@repo/redact-core", async (importOriginal) => {
 });
 
 const cancelled: Array<string> = [];
+const switched: Array<string> = [];
 const submitted: Array<{ file: File; id: string }> = [];
 
 let destroyed = 0;
@@ -42,6 +52,9 @@ vi.mock("./worker-pool", () => ({
       },
       destroy: () => {
         destroyed += 1;
+      },
+      setModel: (model: string) => {
+        switched.push(model);
       },
       submit: (job: { file: File; id: string }) => {
         submitted.push(job);
@@ -144,6 +157,9 @@ const submitTwo = () => {
 
 beforeEach(() => {
   cancelled.length = 0;
+  switched.length = 0;
+  useModelLibrary.setState({ entries: {}, selected: "gliner-multi-pii" });
+  vi.spyOn(useModelLibrary.getState(), "refresh").mockResolvedValue();
   archives.length = 0;
   submitted.length = 0;
   destroyed = 0;
@@ -428,5 +444,90 @@ describe("clearing the list", () => {
     fireEvent.click(screen.getByRole("button", { name: "clear" }));
 
     expect(jobsNow()).toEqual([]);
+  });
+});
+
+describe("the chosen model", () => {
+  it("preserves a picker download and its Stop button when selection changes", async () => {
+    const finishDownload = vi.fn<() => void>();
+    const pending = new Promise<void>((resolve) => {
+      finishDownload.mockImplementation(resolve);
+    });
+
+    vi.mocked(downloadModel).mockImplementation((_model, onProgress) => {
+      onProgress(0.3);
+
+      return pending;
+    });
+    renderWithI18n(<Harness />);
+
+    let finished: Promise<void>;
+
+    await act(async () => {
+      finished = useModelLibrary.getState().download("gliner-multi-pii");
+      await Promise.resolve();
+    });
+    act(() => {
+      useModelLibrary.getState().select("gliner-pii-edge");
+    });
+
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]).toMatchObject({
+      progress: 0.3,
+      stoppable: true,
+    });
+
+    await act(async () => {
+      finishDownload();
+      await finished;
+    });
+  });
+
+  it("builds the pool for the model the picker has chosen", () => {
+    submitTwo();
+
+    expect(pool().model).toBe("gliner-multi-pii");
+  });
+
+  it("moves the pool to a newly chosen model", () => {
+    submitTwo();
+
+    act(() => {
+      useModelLibrary.getState().select("gliner-pii-base");
+    });
+
+    expect(switched).toEqual(["gliner-pii-base"]);
+    expect(pools).toBe(1);
+  });
+
+  it("dismisses the old model's loading notice when the model changes under it", () => {
+    const dismiss = vi.spyOn(toast, "dismiss").mockImplementation(() => "");
+
+    submitTwo();
+
+    act(() => {
+      pool().onModelProgress(0.1, "model.downloading");
+    });
+
+    act(() => {
+      useModelLibrary.getState().select("gliner-pii-base");
+    });
+
+    expect(dismiss).toHaveBeenCalledWith("model-load");
+  });
+
+  it("shows the worker's download on the chosen model and clears it once ready", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onModelProgress(0.3, "model.downloading");
+    });
+
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBe(0.3);
+
+    act(() => {
+      pool().onModelProgress(1, "model.ready");
+    });
+
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBeUndefined();
   });
 });

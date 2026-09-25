@@ -9,6 +9,7 @@ type DownloadOptions = {
   concurrency?: number;
   fetchRange: typeof fetch;
   onProgress: (loaded: number, total: number) => void;
+  signal?: AbortSignal;
   store: ChunkStore;
 };
 
@@ -19,8 +20,12 @@ const rangeHeader = (start: number, endInclusive: number) => ({
   Range: `bytes=${String(start)}-${String(endInclusive)}`,
 });
 
-const probe = async (url: string, fetchRange: typeof fetch): Promise<Probe> => {
-  const response = await fetchRange(url, { headers: rangeHeader(0, 0) });
+const probe = async (
+  url: string,
+  fetchRange: typeof fetch,
+  signal: AbortSignal | undefined,
+): Promise<Probe> => {
+  const response = await fetchRange(url, { headers: rangeHeader(0, 0), signal });
 
   if (response.status !== 206) {
     throw new Error(
@@ -60,8 +65,15 @@ const storedOffsets = async ({ chunkSize, etag, store, total, url }: Resume) => 
 };
 
 const downloadResumable = async (url: string, options: DownloadOptions): Promise<Blob> => {
-  const { chunkSize, concurrency = DEFAULT_CONCURRENCY, fetchRange, onProgress, store } = options;
-  const { etag, total } = await probe(url, fetchRange);
+  const {
+    chunkSize,
+    concurrency = DEFAULT_CONCURRENCY,
+    fetchRange,
+    onProgress,
+    signal,
+    store,
+  } = options;
+  const { etag, total } = await probe(url, fetchRange, signal);
   const held = await storedOffsets({ chunkSize, etag, store, total, url });
   const spanOf = (start: number) => Math.min(chunkSize, total - start);
   const queue = chunkStarts(total, chunkSize).filter((start) => !held.has(start));
@@ -76,6 +88,7 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   const bank = async (start: number) => {
     const response = await fetchRange(url, {
       headers: rangeHeader(start, start + spanOf(start) - 1),
+      signal,
     });
 
     if (response.status !== 206) {
@@ -97,8 +110,11 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
     onProgress(loaded, total);
   };
 
+  // A stop leaves every banked chunk and the manifest in place, so the next attempt resumes.
   const worker = async () => {
     while (!stopped) {
+      signal?.throwIfAborted();
+
       const start = queue.shift();
 
       if (start === undefined) {
@@ -138,8 +154,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
       `${url} assembled to ${String(blob.size)} bytes but should be ${String(total)}; the stored chunks are corrupt`,
     );
   }
-
-  await store.clear(url);
 
   return blob;
 };

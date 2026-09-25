@@ -49,6 +49,7 @@ const progress: Array<string> = [];
 
 const build = () =>
   createModelHost({
+    model: "gliner-multi-pii",
     onLost: (reason, fatal) => {
       lost.push({ fatal, reason });
     },
@@ -94,7 +95,9 @@ describe("createModelHost", () => {
 
     host.connect("c1", port1);
 
-    expect(workerAt(0).posted).toEqual([{ channel: "c1", port: port1, type: "connect" }]);
+    expect(workerAt(0).posted).toEqual([
+      { channel: "c1", model: "gliner-multi-pii", port: port1, type: "connect" },
+    ]);
   });
 
   it("can hang up on a channel whose port was never taken up", () => {

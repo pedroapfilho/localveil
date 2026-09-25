@@ -136,6 +136,34 @@ beforeEach(() => {
 });
 
 describe("downloadResumable", () => {
+  it("stops when told to and keeps what it banked for the next attempt", async () => {
+    const body = bodyOf(16);
+    const first = rangeServer(body);
+    const controller = new AbortController();
+    const { chunks, store } = memoryStore();
+
+    const stoppingAfterSecond: typeof fetch = async (input, init) => {
+      const response = await first.fetchRange(input, init);
+
+      if (parseRange(init).start === 4) {
+        controller.abort();
+      }
+
+      return response;
+    };
+
+    await expect(
+      run(stoppingAfterSecond, store, { concurrency: 1, signal: controller.signal }),
+    ).rejects.toThrow(/abort/iv);
+    expect([...(chunks.get(URL_UNDER_TEST)?.keys() ?? [])]).toEqual([0, 4]);
+
+    const second = rangeServer(body);
+    const blob = await run(second.fetchRange, store);
+
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(body);
+    expect(startsOf(second.calls)).toEqual([8, 12]);
+  });
+
   it("assembles the whole body from several ranges", async () => {
     const body = bodyOf(10);
     const { fetchRange } = rangeServer(body);
@@ -273,14 +301,14 @@ describe("downloadResumable", () => {
     expect(manifests.get(URL_UNDER_TEST)).toEqual({ chunkSize: 4, etag: "v1", total: 10 });
   });
 
-  it("drops the stored chunks once the file is complete", async () => {
+  it("keeps completed chunks until the caller has saved the assembled file", async () => {
     const { chunks, manifests, store } = memoryStore();
     const { fetchRange } = rangeServer(bodyOf(10));
 
     await run(fetchRange, store);
 
-    expect(chunks.get(URL_UNDER_TEST)).toBeUndefined();
-    expect(manifests.get(URL_UNDER_TEST)).toBeUndefined();
+    expect(chunks.get(URL_UNDER_TEST)?.size).toBeGreaterThan(0);
+    expect(manifests.get(URL_UNDER_TEST)).toBeDefined();
   });
 
   it("reports progress that never drops back, and ends on the full size", async () => {

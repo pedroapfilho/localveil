@@ -1,20 +1,9 @@
-import { createHash } from "node:crypto";
 import { copyFile, mkdir, rename, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 
-const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
-const MODEL_REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
-const MODEL_FILE = "model_q4.onnx";
-
-const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILE}`;
-
-const CACHE = path.join(homedir(), ".cache", "localveil", "models");
-
-const digest = createHash("sha256").update(MODEL_URL).digest("hex").slice(0, 16);
-
-const slot = path.join(CACHE, `${digest}-${MODEL_FILE}`);
-const kept = `${slot}.original`;
+import { DEFAULT_MODEL_ID, isModelId, modelById, MODELS } from "@repo/pii-detect";
+import { weightsPath } from "@repo/pii-detect/node";
 
 const note = (message: string) => {
   process.stderr.write(`${message}\n`);
@@ -30,6 +19,23 @@ const exists = async (file: string) => {
   }
 };
 
+const { positionals, values } = parseArgs({
+  allowPositionals: true,
+  options: { model: { type: "string" }, restore: { type: "boolean" } },
+});
+
+const model = values.model ?? DEFAULT_MODEL_ID;
+
+if (!isModelId(model)) {
+  throw new RangeError(
+    `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${model}`,
+  );
+}
+
+// The CLI's own cache slot for this model, so a candidate copied there is what the detector loads.
+const slot = weightsPath(modelById(model));
+const kept = `${slot}.original`;
+
 const restore = async () => {
   if (!(await exists(kept))) {
     note("nothing to restore");
@@ -43,7 +49,7 @@ const restore = async () => {
 };
 
 const swap = async (candidate: string) => {
-  await mkdir(CACHE, { recursive: true });
+  await mkdir(path.dirname(slot), { recursive: true });
 
   if ((await exists(slot)) && !(await exists(kept))) {
     await rename(slot, kept);
@@ -54,18 +60,18 @@ const swap = async (candidate: string) => {
 
   const { size } = await stat(slot);
 
-  note(`swapped in ${candidate} (${(size / 1024 / 1024).toFixed(0)} MB)`);
-  note("run: pnpm --filter @repo/eval start");
-  note("then: pnpm --filter @repo/eval swap --restore");
+  note(`swapped in ${candidate} (${(size / 1024 / 1024).toFixed(0)} MB) for ${model}`);
+  note(`run: pnpm --filter @repo/eval start --model ${model}`);
+  note(`then: pnpm --filter @repo/eval swap --model ${model} --restore`);
 };
 
-const candidate = process.argv[2];
+const [candidate] = positionals;
 
-if (candidate === undefined) {
-  note("usage: swap-model <candidate.onnx> | --restore");
-  process.exitCode = 1;
-} else if (candidate === "--restore") {
+if (values.restore === true) {
   await restore();
+} else if (candidate === undefined) {
+  note("usage: swap-model [--model <id>] <candidate.onnx> | --restore");
+  process.exitCode = 1;
 } else {
   await swap(candidate);
 }

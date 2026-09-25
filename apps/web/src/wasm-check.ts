@@ -1,11 +1,14 @@
-import { createDetector, MODEL_ID } from "@repo/pii-detect";
+import { createDetector, DEFAULT_MODEL_ID, isModelId, modelById } from "@repo/pii-detect";
+import { tokenizerUrls, weightsUrl } from "@repo/pii-detect/models";
 
 const CACHE_KEY = "transformers-cache";
-const MODEL_REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
 
-const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/model_q4.onnx`;
+const asked = new URLSearchParams(location.search).get("model") ?? DEFAULT_MODEL_ID;
+const MODEL = isModelId(asked) ? asked : DEFAULT_MODEL_ID;
 
-const TOKENIZER_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/tokenizer.json`;
+const MODEL_URL = weightsUrl(modelById(MODEL));
+
+const [TOKENIZER_URL] = tokenizerUrls(modelById(MODEL));
 
 const TEXT = "Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.";
 
@@ -70,9 +73,12 @@ const run = async () => {
 
   const batchSize = Number(new URLSearchParams(location.search).get("batch") ?? "1");
 
+  say(`model ${MODEL}`);
+
   const detect = await createDetector({
     batchSize,
     minScore: 0.05,
+    model: MODEL,
     onProgress: (fraction, stage) => {
       if (stage !== "model.downloading") {
         say(`stage ${stage}`);

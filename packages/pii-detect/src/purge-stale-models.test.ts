@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ModelSpec } from "./catalog";
+import { MODELS } from "./catalog";
 import { purgeStaleModels } from "./purge-stale-models";
 
 const REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
 
-const OPTIONS = { keepFiles: ["model_q4.onnx"], revision: REVISION };
+const OPTIONS = { models: MODELS };
 
 const request = (url: string) => ({ url });
 
@@ -56,6 +58,21 @@ describe("purgeStaleModels", () => {
     ]);
   });
 
+  it("keeps every catalogued model, not only the one in use", async () => {
+    const deleted = stubCaches([
+      `https://huggingface.co/onnx-community/gliner_multi_pii-v1/resolve/${REVISION}/onnx/model_q4.onnx`,
+      "https://huggingface.co/knowledgator/gliner-pii-base-v1.0/resolve/61726e0ad791dcab3e29339bbec3ad42ded65641/onnx/model_quint8.onnx",
+      "https://huggingface.co/knowledgator/gliner-pii-base-v1.0/resolve/61726e0ad791dcab3e29339bbec3ad42ded65641/tokenizer.json",
+      "https://huggingface.co/knowledgator/gliner-pii-base-v1.0/resolve/61726e0ad791dcab3e29339bbec3ad42ded65641/onnx/model_fp16.onnx",
+    ]);
+
+    await purgeStaleModels(OPTIONS);
+
+    expect(deleted).toEqual([
+      "https://huggingface.co/knowledgator/gliner-pii-base-v1.0/resolve/61726e0ad791dcab3e29339bbec3ad42ded65641/onnx/model_fp16.onnx",
+    ]);
+  });
+
   it("leaves entries that are not model downloads alone", async () => {
     const deleted = stubCaches(["https://example.com/other-thing.json"]);
 
@@ -90,9 +107,15 @@ const storeHolding = (urls: Array<string>) => {
   };
 };
 
-const options = (store: ReturnType<typeof storeHolding>["store"]) => ({
-  keepFiles: ["model_q4.onnx"],
+const MODEL: ModelSpec = {
+  ...MODELS[0],
+  file: "model_q4.onnx",
+  repo: "org/model",
   revision: "current",
+};
+
+const options = (store: ReturnType<typeof storeHolding>["store"]) => ({
+  models: [MODEL],
   store,
 });
 

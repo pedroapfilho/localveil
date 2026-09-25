@@ -1,4 +1,5 @@
 import { createDetector } from "@repo/pii-detect";
+import type { ModelId } from "@repo/pii-detect";
 import type { Detect } from "@repo/redact-core";
 import { serveDetect } from "@repo/redact-core";
 
@@ -9,32 +10,46 @@ const post = (message: ModelResponse) => {
   globalThis.postMessage(message);
 };
 
-let pendingDetector: Promise<Detect> | undefined;
+/* The host spawns one worker per model and replaces it on a switch, so a second model here would
+   only come from a stale connect; it still gets the model it asked for rather than the wrong one. */
+let pending: { detector: Promise<Detect>; model: ModelId } | undefined;
 
-const loadDetector = async () => {
-  pendingDetector ??= createDetector({
-    onProgress: (fraction, stage) => {
-      post({ fraction, stage, type: "model-progress" });
-    },
-  });
+const loadDetector = async (model: ModelId) => {
+  if (pending?.model !== model) {
+    pending = {
+      detector: createDetector({
+        model,
+        onProgress: (fraction, stage) => {
+          post({ fraction, stage, type: "model-progress" });
+        },
+      }),
+      model,
+    };
+  }
+
+  const loading = pending;
 
   try {
-    return await pendingDetector;
+    return await loading.detector;
   } catch (error) {
-    pendingDetector = undefined;
+    if (pending === loading) {
+      pending = undefined;
+    }
 
     throw error;
   }
 };
 
-const detect: Detect = async (text) => {
-  const ready = await loadDetector();
+const detectWith =
+  (model: ModelId): Detect =>
+  async (text) => {
+    const ready = await loadDetector(model);
 
-  return ready(text);
-};
+    return ready(text);
+  };
 
-const warmUp = async () => {
-  await loadDetector().catch(() => undefined);
+const warmUp = async (model: ModelId) => {
+  await loadDetector(model).catch(() => undefined);
 };
 
 const channels = new Map<string, MessagePort>();
@@ -54,14 +69,14 @@ if (!isEmscriptenThread) {
       return;
     }
 
-    const { channel, port } = event.data;
+    const { channel, model, port } = event.data;
 
     channels.set(channel, port);
     port.addEventListener("close", () => {
       hangUp(channel);
     });
 
-    void warmUp();
-    serveDetect(port, detect);
+    void warmUp(model);
+    serveDetect(port, detectWith(model));
   });
 }

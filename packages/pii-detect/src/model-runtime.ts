@@ -4,8 +4,6 @@ import type { ResumableCache } from "./resumable-cache";
 
 type ModelDevice = "wasm" | "webgpu";
 
-const MODEL_FILE = "model_q4.onnx";
-
 type RunModel = (inputs: Array<GlinerInput>) => Promise<Logits>;
 
 type FetchModelOptions = {
@@ -13,5 +11,4 @@ type FetchModelOptions = {
   onProgress: (fraction: number) => void;
 };
 
-export { MODEL_FILE };
 export type { FetchModelOptions, ModelDevice, RunModel };

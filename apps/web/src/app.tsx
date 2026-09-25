@@ -7,10 +7,12 @@ import { toast } from "sonner";
 import { DownloadPanel } from "./components/download-panel";
 import { JobList } from "./components/job-list";
 import { LanguagePicker } from "./components/language-picker";
+import { ModelPicker } from "./components/model-picker";
 import { SiteFooter } from "./components/site-footer";
 import { APPEAR, SLIDE } from "./motion";
 import { useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
+import { useModelPicker } from "./use-model-picker";
 import { useRedaction } from "./use-redaction";
 
 const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
@@ -38,6 +40,7 @@ const App = () => {
   const jobs = useJobStore((state) => state.jobs);
   const { applyDecisions, clear, downloadZip, remove, removeMany, setCovered, submit } =
     useRedaction();
+  const modelPicker = useModelPicker();
 
   useDocumentLocale();
 
@@ -71,7 +74,9 @@ const App = () => {
       </a>
 
       <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-10 px-6 pt-4 pb-16 sm:gap-12 sm:pb-20">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <ModelPicker {...modelPicker} />
+
           <LanguagePicker />
         </div>
 

@@ -131,3 +131,145 @@ private_url      100.0  100.0  100.0      5      0      0
 secret           100.0  100.0  100.0      5      0      0
 TOTAL             97.2  100.0   98.6    140      4      0
 ```
+
+## Other catalogued models
+
+`gliner-multi-pii` above is the default. The model picker and `--model` also offer the entries
+below, each scored with `pnpm --filter @repo/eval start --model <id>` against the same corpus and
+the same 0.65 floor. Re-running the default after the catalogue landed reproduced every table
+above unchanged.
+
+### `gliner-pii-base`
+
+|          |                                                                     |
+| -------- | ------------------------------------------------------------------- |
+| Date     | 2026-09-24                                                          |
+| Model    | `knowledgator/gliner-pii-base-v1.0`                                 |
+| Revision | `61726e0ad791dcab3e29339bbec3ad42ded65641`                          |
+| File     | `model_quint8.onnx` (197 MB)                                        |
+| Prompts  | its own card's vocabulary, `PII_BASE_PROMPTS` in `gliner-labels.ts` |
+
+The int8 export holds in the browser. On "Fatura para Mariana Duarte Rocha", the name scores
+0.9054 on native CPU, 0.9047 on browser wasm and 0.9042 on WebGPU.
+
+Detection, overlap matching:
+
+```
+label             prec    rec     f1     tp     fp     fn
+---------------------------------------------------------
+account_number    94.7  100.0   97.3     18      1      0
+private_address  100.0   60.0   75.0      9      0      6
+private_date     100.0  100.0  100.0     17      0      0
+private_email    100.0  100.0  100.0     24      0      0
+private_person   100.0   58.5   73.8     24      0     17
+private_phone    100.0  100.0  100.0     15      0      0
+private_url      100.0    0.0    0.0      0      0      5
+secret           100.0    0.0    0.0      0      0      5
+TOTAL             99.1   76.4   86.3    107      1     33
+```
+
+By language, overlap matching:
+
+```
+label   prec    rec     f1     tp     fp     fn
+-----------------------------------------------
+en      97.1   70.2   81.5     33      1     14
+es     100.0   68.6   81.4     24      0     11
+pt     100.0   86.2   92.6     50      0      8
+```
+
+Whole analysis, overlap matching:
+
+```
+label             prec    rec     f1     tp     fp     fn
+---------------------------------------------------------
+account_number    94.7  100.0   97.3     18      1      0
+private_address  100.0   60.0   75.0      9      0      6
+private_date     100.0  100.0  100.0     17      0      0
+private_email    100.0  100.0  100.0     24      0      0
+private_person   100.0   80.5   89.2     33      0      8
+private_phone    100.0  100.0  100.0     15      0      0
+private_url      100.0   60.0   75.0      3      0      2
+secret           100.0   60.0   75.0      3      0      2
+TOTAL             99.2   87.1   92.8    122      1     18
+
+```
+
+Its scores sit lower than the default's, which is why the floor was swept before keeping the shared
+one. Whole-analysis F1 by floor: 77.8 at 0.3, 87.9 at 0.4, 93.6 at 0.5, 92.8 at 0.65. The half
+point of F1 a model-specific floor would buy does not pay for a second calibration path through
+`redact-core`, so it runs at 0.65 like the default.
+
+### `gliner-pii-edge`
+
+|          |                                                                     |
+| -------- | ------------------------------------------------------------------- |
+| Date     | 2026-09-24                                                          |
+| Model    | `knowledgator/gliner-pii-edge-v1.0`                                 |
+| Revision | `9b7f39b0a2da971a5beea78d35f1539d4009c891`                          |
+| File     | `model_quint8.onnx` (46 MB)                                         |
+| Decoding | token-level                                                         |
+| Prompts  | its own card's vocabulary, `PII_BASE_PROMPTS` in `gliner-labels.ts` |
+
+On the check sentence the name scores 0.7245 on native CPU, 0.7245 on WebGPU and 0.7762 on browser
+wasm. Labels and ranking agree on all three; wasm runs slightly high rather than collapsing.
+
+Detection, overlap matching:
+
+```
+label             prec    rec     f1     tp     fp     fn
+---------------------------------------------------------
+account_number   100.0  100.0  100.0     18      0      0
+private_address  100.0   60.0   75.0      9      0      6
+private_date      94.4  100.0   97.1     17      1      0
+private_email    100.0  100.0  100.0     24      0      0
+private_person    90.0   22.0   35.3      9      1     32
+private_phone    100.0  100.0  100.0     15      0      0
+private_url      100.0    0.0    0.0      0      0      5
+secret           100.0    0.0    0.0      0      0      5
+TOTAL             97.9   65.7   78.6     92      2     48
+```
+
+By language, overlap matching:
+
+```
+label   prec    rec     f1     tp     fp     fn
+-----------------------------------------------
+en      96.2   53.2   68.5     25      1     22
+es     100.0   68.6   81.4     24      0     11
+pt      97.7   74.1   84.3     43      1     15
+```
+
+Whole analysis, overlap matching:
+
+```
+label             prec    rec     f1     tp     fp     fn
+---------------------------------------------------------
+account_number   100.0  100.0  100.0     18      0      0
+private_address  100.0   60.0   75.0      9      0      6
+private_date      94.4  100.0   97.1     17      1      0
+private_email    100.0  100.0  100.0     24      0      0
+private_person    95.0   46.3   62.3     19      1     22
+private_phone    100.0  100.0  100.0     15      0      0
+private_url      100.0   60.0   75.0      3      0      2
+secret           100.0   60.0   75.0      3      0      2
+TOTAL             98.2   77.1   86.4    108      2     32
+```
+
+A token-level span scores its weakest word, so the floor was swept before keeping the shared one.
+Whole-analysis F1 by floor: 51.2 at 0.25, 56.7 at 0.3, 70.1 at 0.4, 84.2 at 0.5, 86.4 at 0.65. Lower
+floors buy name recall (97.6 at 0.3) with precision the review list would have to absorb (46.0).
+
+### Measured and not listed
+
+Knowledgator's small and large PII models are token-level too. Neither earns a place: each is bigger
+and scores worse than a model already in the picker.
+
+| Model                                | File (size)                  | Best whole-analysis F1 | Name recall there |
+| ------------------------------------ | ---------------------------- | ---------------------- | ----------------- |
+| `knowledgator/gliner-pii-small-v1.0` | `model_quint8.onnx` (83 MB)  | 77.2 at 0.65           | 26.8              |
+| `knowledgator/gliner-pii-large-v1.0` | `model_quint8.onnx` (648 MB) | 84.3 at 0.25           | 31.7              |
+
+Small's F1 by floor: 60.6 at 0.25, 65.2 at 0.3, 72.1 at 0.4, 74.9 at 0.5, 77.2 at 0.65. Large holds
+between 83.3 and 84.3 across the same floors, and its name recall never passes 31.7, so no floor
+rescues it. Its fp32 export (1.76 GB) was not tried.

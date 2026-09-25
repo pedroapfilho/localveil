@@ -97,6 +97,26 @@ describe("resolveArguments", () => {
     await expect(resolveArguments(["--jobs"], directory)).rejects.toThrow(/nothing/v);
   });
 
+  it("takes a model either way round", async () => {
+    const directory = await makeDirectory();
+
+    await expect(
+      resolveArguments(["--model", "gliner-pii-base"], directory),
+    ).resolves.toMatchObject({ model: "gliner-pii-base" });
+    await expect(resolveArguments(["--model=gliner-pii-base"], directory)).resolves.toMatchObject({
+      model: "gliner-pii-base",
+    });
+  });
+
+  it("refuses a model it does not know, and says which ones it does", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--model", "gpt"], directory)).rejects.toThrow(
+      /gliner-multi-pii, gliner-pii-base, gliner-pii-edge, not gpt/v,
+    );
+    await expect(resolveArguments(["--model"], directory)).rejects.toThrow(/nothing/v);
+  });
+
   it("starts in the working directory when it is given nothing", async () => {
     const directory = await makeDirectory();
 

@@ -2,13 +2,13 @@
 import type { StageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_MODEL_ID, modelById, revisionUrl } from "./catalog";
 import { createDetector } from "./detector";
 import type { CacheProgress, ResumableCacheOptions } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
 
 vi.mock("@huggingface/transformers", () => ({
-  AutoTokenizer: { from_pretrained: vi.fn() },
-  env: {},
+  PreTrainedTokenizer: vi.fn(),
 }));
 
 vi.mock("#ort", () => ({
@@ -18,10 +18,10 @@ vi.mock("#ort", () => ({
 }));
 
 vi.mock("./resumable-cache", () => ({
-  createResumableCache: vi.fn(() => ({ match: vi.fn(), put: vi.fn() })),
+  createResumableCache: vi.fn(() => ({ download: vi.fn(), match: vi.fn() })),
 }));
 
-const HOST = "https://huggingface.co/onnx-community/gliner_multi_pii-v1/resolve/abc";
+const HOST = revisionUrl(modelById(DEFAULT_MODEL_ID)).slice(0, -1);
 
 const installedReporter = async () => {
   const reported: Array<{ fraction: number; stage: StageKey }> = [];

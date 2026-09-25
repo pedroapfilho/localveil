@@ -1,3 +1,4 @@
+import type { ModelId } from "@repo/pii-detect/models";
 import type { FileStageKey } from "@repo/redact-core";
 import { describeError } from "@repo/redact-core";
 import { useCallback, useRef, useState } from "react";
@@ -14,13 +15,14 @@ type RunProgressState = {
 
 type RedactionRunOptions = {
   jobs?: number;
+  model?: ModelId;
   onSettled: () => void;
   outputDirectory: string;
 };
 
 const INITIAL: RunProgressState = { fileIndex: 0, fraction: 0, modelFraction: null, stage: null };
 
-const useRedactionRun = ({ jobs, onSettled, outputDirectory }: RedactionRunOptions) => {
+const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionRunOptions) => {
   const [progress, setProgress] = useState(INITIAL);
   const [result, setResult] = useState<RunResult | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -43,6 +45,7 @@ const useRedactionRun = ({ jobs, onSettled, outputDirectory }: RedactionRunOptio
             await runRedaction({
               files,
               jobs,
+              model,
 
               onFileProgress: ({ fraction, index, stage }) => {
                 setProgress({ fileIndex: index, fraction, modelFraction: null, stage });
@@ -63,7 +66,7 @@ const useRedactionRun = ({ jobs, onSettled, outputDirectory }: RedactionRunOptio
 
       void execute();
     },
-    [jobs, onSettled, outputDirectory],
+    [jobs, model, onSettled, outputDirectory],
   );
 
   return { cancel, failure, progress, result, start };

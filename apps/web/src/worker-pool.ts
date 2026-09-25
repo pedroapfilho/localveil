@@ -1,3 +1,4 @@
+import type { ModelId } from "@repo/pii-detect/models";
 import type {
   Analysis,
   Decisions,
@@ -22,6 +23,7 @@ type ApplyRequest = { analysis: Analysis; decisions: Decisions; file: File; id: 
 
 type RedactionPoolOptions = {
   maxWorkers: number;
+  model: ModelId;
   onAnalysed: (id: string, analysis: Analysis) => void;
   onDone: (id: string, result: RedactionResult) => void;
   onError: (id: string, message: string, unsupported: boolean) => void;
@@ -34,6 +36,7 @@ type RedactionPool = {
   apply: (request: ApplyRequest) => void;
   cancel: (id: string) => void;
   destroy: () => void;
+  setModel: (model: ModelId) => void;
   submit: (job: JobRequest) => void;
 };
 
@@ -114,6 +117,8 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
   const { maxWorkers, onAnalysed, onDone, onError, onModelLost, onModelProgress, onProgress } =
     options;
 
+  let { model } = options;
+
   const jobs = new Map<string, LiveJob>();
 
   // oxlint-disable-next-line eslint/prefer-const
@@ -149,40 +154,44 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     onError(job.id, reason, false);
   };
 
-  host = createModelHost({
-    onLost: (reason, fatal) => {
-      // oxlint-disable-next-line unicorn/no-useless-spread
-      const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
+  const hostFor = (chosen: ModelId) =>
+    createModelHost({
+      model: chosen,
+      onLost: (reason, fatal) => {
+        // oxlint-disable-next-line unicorn/no-useless-spread
+        const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
 
-      // oxlint-disable-next-line unicorn/no-useless-spread
-      for (const job of [...jobs.values()]) {
-        if (job.watchdog !== undefined || fatal) {
-          give(job, reason);
+        // oxlint-disable-next-line unicorn/no-useless-spread
+        for (const job of [...jobs.values()]) {
+          if (job.watchdog !== undefined || fatal) {
+            give(job, reason);
+          }
         }
-      }
 
-      if (fatal) {
-        onModelLost(reason);
+        if (fatal) {
+          onModelLost(reason);
 
-        return;
-      }
-
-      for (const job of waiting) {
-        release(job);
-        job.task.cancel();
-        job.restart();
-      }
-    },
-    onProgress: (fraction, stage) => {
-      for (const job of jobs.values()) {
-        if (job.watchdog !== undefined) {
-          arm(job);
+          return;
         }
-      }
 
-      onModelProgress(fraction, stage);
-    },
-  });
+        for (const job of waiting) {
+          release(job);
+          job.task.cancel();
+          job.restart();
+        }
+      },
+      onProgress: (fraction, stage) => {
+        for (const job of jobs.values()) {
+          if (job.watchdog !== undefined) {
+            arm(job);
+          }
+        }
+
+        onModelProgress(fraction, stage);
+      },
+    });
+
+  host = hostFor(model);
 
   const pool = workerpool.pool(redactWorkerUrl, {
     maxWorkers,
@@ -304,6 +313,30 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
       host.destroy();
       void shutDownWith(pool);
+    },
+    /* A switch replaces the model worker outright: two sessions of nearly a gigabyte each do not fit
+       side by side, and terminating is the only way to be sure the old one lets go. Whatever was in
+       flight starts over on the new model rather than finishing half on each. */
+    setModel: (next) => {
+      if (next === model) {
+        return;
+      }
+
+      // oxlint-disable-next-line unicorn/no-useless-spread
+      const live = [...jobs.values()];
+
+      for (const job of live) {
+        release(job);
+        job.task.cancel();
+      }
+
+      model = next;
+      host.destroy();
+      host = hostFor(next);
+
+      for (const job of live) {
+        job.restart();
+      }
     },
     submit,
   };

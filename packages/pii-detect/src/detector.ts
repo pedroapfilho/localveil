@@ -1,4 +1,4 @@
-import { AutoTokenizer, env } from "@huggingface/transformers";
+import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, ModelProgress, Span } from "@repo/redact-core";
 import {
   describeError,
@@ -11,27 +11,30 @@ import {
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
+import { withCacheLock } from "./cache-lock";
+import type { ModelId, ModelSpec } from "./catalog";
+import {
+  DEFAULT_MODEL_ID,
+  modelById,
+  MODELS,
+  revisionUrl,
+  tokenizerUrls,
+  weightsUrl,
+} from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import { chunkWords } from "./chunk-words";
 import type { Logits } from "./gliner-decode";
-import { decodeSpans, suppressOverlaps } from "./gliner-decode";
+import { decodeSpans, decodeTokenSpans, suppressOverlaps } from "./gliner-decode";
 import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
 import { encodeGlinerInput } from "./gliner-encode";
-import { ENTITY_PROMPTS } from "./gliner-labels";
-import { MODEL_FILE } from "./model-runtime";
 import type { ModelDevice } from "./model-runtime";
 import { purgeStaleModels } from "./purge-stale-models";
 import type { ResumableCache } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
+import { settleAll } from "./settle-all";
 import { collectShouting, positionShouted } from "./shouting";
 import { splitWords } from "./split-words";
-
-const MODEL_ID = "onnx-community/gliner_multi_pii-v1";
-
-const MODEL_REVISION = "2e0397a7e8a250d76c37122232b3cbde42c8d629";
-
-const MAX_WIDTH = 12;
 
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
@@ -47,20 +50,17 @@ type DetectorOptions = {
   batchSize?: number;
   maxWords?: number;
   minScore?: number;
+  model?: ModelId;
   onProgress?: ModelProgress;
   overlapWords?: number;
 
   resumableCache?: boolean;
 };
 
-const MODEL_URL = `https://huggingface.co/${MODEL_ID}/resolve/${MODEL_REVISION}/onnx/${MODEL_FILE}`;
-
-const isWeights = (name: string) => name.endsWith(`/${MODEL_FILE}`);
-
-const installResumableCache = (report: ModelProgress, store: ChunkStore): ResumableCache => {
-  const cache = createResumableCache({
+const weightsCache = (report: ModelProgress, store: ChunkStore, weights: string): ResumableCache =>
+  createResumableCache({
     onProgress: ({ loaded, name, total }) => {
-      if (!isWeights(name) || total === 0) {
+      if (name !== weights || total === 0) {
         return;
       }
 
@@ -69,13 +69,36 @@ const installResumableCache = (report: ModelProgress, store: ChunkStore): Resuma
     store,
   });
 
-  env.useCustomCache = true;
-  env.customCache = cache;
+const parseJson = (bytes: Uint8Array, url: string): object => {
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
 
-  return cache;
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new TypeError(`${url} is not a JSON object`);
+  }
+
+  return parsed;
 };
 
-type Tokenizer = Awaited<ReturnType<typeof AutoTokenizer.from_pretrained>>;
+const ignoreProgress = () => undefined;
+
+/* transformers.js checks whether tokenizer_config.json exists at `main` before it loads a tokenizer,
+   whatever revision it is handed, so its loader makes an unpinned request on every load and fails
+   outright with the network off. The two files are fetched here instead, pinned like the weights and
+   kept in the same cache. DebertaV2Tokenizer, the class two of the models name, differs from the
+   base class only in returning token type ids, which GLiNER never takes. */
+const loadTokenizer = async (spec: ModelSpec, cache: ResumableCache | undefined) => {
+  const [tokenizerJson, tokenizerConfig] = await settleAll(
+    tokenizerUrls(spec).map((url) =>
+      fetchModelBytes(url, { cache, onProgress: ignoreProgress }).then((bytes) =>
+        parseJson(bytes, url),
+      ),
+    ),
+  );
+
+  return new PreTrainedTokenizer(tokenizerJson, tokenizerConfig);
+};
+
+type Tokenizer = PreTrainedTokenizer;
 
 const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   const frame = tokenizer.encode("", { add_special_tokens: true });
@@ -87,11 +110,40 @@ const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   return { cls: frame[0], sep: frame[1] };
 };
 
+const loadRunner = async (
+  bytes: Uint8Array,
+  device: ModelDevice,
+  repo: string,
+  report: ModelProgress,
+) => {
+  try {
+    return await createModelRunner(bytes, device);
+  } catch (firstError) {
+    if (device === "wasm") {
+      throw firstError;
+    }
+
+    // oxlint-disable-next-line eslint/no-console
+    console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
+    report(0, "model.slowDevice");
+
+    try {
+      return await createModelRunner(bytes, "wasm");
+    } catch (wasmError) {
+      throw new Error(
+        `Could not load ${repo} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
+        { cause: wasmError },
+      );
+    }
+  }
+};
+
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
   const {
     batchSize,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
+    model = DEFAULT_MODEL_ID,
     onProgress,
     overlapWords = OVERLAP_WORDS,
     resumableCache = "caches" in globalThis,
@@ -101,9 +153,25 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     onProgress?.(fraction, stage);
   };
 
+  const spec = modelById(model);
+  const weights = weightsUrl(spec);
   const chunks = createIndexedDbChunkStore();
-  const cache = resumableCache ? installResumableCache(report, chunks) : undefined;
-  const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID, { revision: MODEL_REVISION });
+  const cache = resumableCache ? weightsCache(report, chunks, weights) : undefined;
+  const loadFiles = async () => {
+    const tokenizer = await loadTokenizer(spec, cache);
+    // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- validate the small tokenizer before downloading the weights
+    const bytes = await fetchModelBytes(weights, {
+      cache,
+      onProgress: (fraction) => {
+        report(fraction, "model.downloading");
+      },
+    });
+
+    return { bytes, tokenizer };
+  };
+  const { bytes, tokenizer } = await (cache === undefined
+    ? loadFiles()
+    : withCacheLock(revisionUrl(spec), "shared", loadFiles));
   const frame = frameOf(tokenizer);
 
   const encodeCache = new Map<string, Array<number>>();
@@ -126,16 +194,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     return ids;
   };
 
-  const onDownload = (fraction: number) => {
-    report(fraction, "model.downloading");
-  };
-
-  const load = async (device: ModelDevice) => {
-    const bytes = await fetchModelBytes(MODEL_URL, { cache, onProgress: onDownload });
-
-    return createModelRunner(bytes, device);
-  };
-
   const device = await pickDevice();
   const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
@@ -143,38 +201,11 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     report(0, "model.slowDevice");
   }
 
-  const loadWithFallback = async () => {
-    try {
-      return await load(device);
-    } catch (firstError) {
-      if (device === "wasm") {
-        throw firstError;
-      }
-
-      // oxlint-disable-next-line eslint/no-console
-      console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
-      report(0, "model.slowDevice");
-
-      try {
-        return await load("wasm");
-      } catch (wasmError) {
-        throw new Error(
-          `Could not load ${MODEL_ID} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
-          { cause: wasmError },
-        );
-      }
-    }
-  };
-
-  const run = await loadWithFallback();
+  const run = await loadRunner(bytes, device, spec.repo, report);
 
   if (cache !== undefined) {
     try {
-      await purgeStaleModels({
-        keepFiles: [MODEL_FILE],
-        revision: MODEL_REVISION,
-        store: chunks,
-      });
+      await purgeStaleModels({ models: MODELS, store: chunks });
     } catch (error) {
       // oxlint-disable-next-line eslint/no-console
       console.warn("Could not clear superseded model weights", error);
@@ -183,24 +214,33 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   report(1, "model.ready");
 
-  const prompts = ENTITY_PROMPTS.map((entity) => entity.prompt);
+  const prompts = spec.prompts.map((entity) => entity.prompt);
 
   const encodeChunk = (words: Array<SpanWord>) => {
-    const encoded = encodeGlinerInput({ encodeWord, frame, maxWidth: MAX_WIDTH, prompts, words });
+    const encoded = encodeGlinerInput({
+      encodeWord,
+      frame,
+      maxWidth: spec.decoding === "span" ? spec.maxWidth : 0,
+      prompts,
+      words,
+    });
 
     return encoded.keptWords.length === 0 ? undefined : encoded;
   };
 
   const spansOf = (input: GlinerInput, logits: Logits, item: number): Array<Span> => {
     const { keptWords } = input;
+    const asked = {
+      entityCount: prompts.length,
+      item,
+      logits,
+      threshold: minScore,
+      wordCount: keptWords.length,
+    };
     const found = suppressOverlaps(
-      decodeSpans({
-        entityCount: prompts.length,
-        item,
-        logits,
-        threshold: minScore,
-        wordCount: keptWords.length,
-      }),
+      spec.decoding === "span"
+        ? decodeSpans(asked)
+        : decodeTokenSpans({ ...asked, maxWidth: spec.maxWidth }),
     );
 
     return found.map((candidate) => {
@@ -213,7 +253,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
       return {
         end: last.end,
-        label: ENTITY_PROMPTS[candidate.entity].label,
+        label: spec.prompts[candidate.entity].label,
         score: candidate.score,
         start: first.start,
       };
@@ -271,5 +311,5 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   });
 };
 
-export { createDetector, MAX_WIDTH, MIN_SCORE, MODEL_ID };
+export { createDetector, MIN_SCORE };
 export type { DetectorOptions };

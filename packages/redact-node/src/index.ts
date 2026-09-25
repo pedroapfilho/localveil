@@ -1,12 +1,15 @@
 import { createDetector } from "@repo/pii-detect";
+import type { ModelId } from "@repo/pii-detect";
 import type { Detect } from "@repo/redact-core";
 
 type NodeRedactorOptions = {
+  model?: ModelId;
   onModelProgress?: (fraction: number) => void;
 };
 
 const createNodeDetector = (options: NodeRedactorOptions = {}): Promise<Detect> =>
   createDetector({
+    model: options.model,
     onProgress: (fraction) => {
       options.onModelProgress?.(fraction);
     },

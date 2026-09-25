@@ -377,3 +377,38 @@ describe("destroying the pool", () => {
     }
   });
 });
+
+describe("switching the model", () => {
+  it("builds its model host for the model it was given", () => {
+    build();
+
+    expect(pooled.models).toEqual(["gliner-multi-pii"]);
+  });
+
+  it("replaces the model host and starts in-flight files over on the new model", () => {
+    const pool = build();
+
+    pool.submit(job("a"));
+    pool.submit(job("b"));
+
+    const before = [...pooled.connected];
+
+    pool.setModel("gliner-pii-base");
+
+    expect(pooled.destroyedHosts).toBe(1);
+    expect(pooled.models).toEqual(["gliner-multi-pii", "gliner-pii-base"]);
+    expect([taskAt(0).cancelled, taskAt(1).cancelled]).toEqual([true, true]);
+    expect(pooled.disconnected).toEqual(before);
+    expect(pooled.tasks).toHaveLength(4);
+    expect(reported.errors).toEqual([]);
+  });
+
+  it("keeps the host it has when asked for the model it already runs", () => {
+    const pool = build();
+
+    pool.setModel("gliner-multi-pii");
+
+    expect(pooled.destroyedHosts).toBe(0);
+    expect(pooled.models).toEqual(["gliner-multi-pii"]);
+  });
+});
