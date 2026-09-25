@@ -36,7 +36,7 @@ type ModelLibrary = {
 };
 
 const warnStorageFailed = (action: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console
+  // oxlint-disable-next-line eslint/no-console -- a storage failure is recoverable, so it is surfaced in the console instead of thrown
   console.warn(`Could not ${action} the chosen model`, cause);
 };
 
@@ -77,7 +77,7 @@ const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
       try {
         patch(id, { status: await store.inspectModel(modelById(id)) });
       } catch (error) {
-        // oxlint-disable-next-line eslint/no-console
+        // oxlint-disable-next-line eslint/no-console -- a storage failure is recoverable, so it is surfaced in the console instead of thrown
         console.warn(`Could not tell whether ${id} is downloaded`, error);
       }
     };

@@ -39,7 +39,6 @@ const CORPUS_DIR = path.join(import.meta.dirname, "..", "corpus");
 
 const isLabel = (value: string): value is PiiLabel => LABELS.has(value);
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- corpus JSON boundary: the field arrives untyped and this guard is its parser
 const isLanguage = (value: unknown): value is DocumentLanguage =>
   typeof value === "string" && LANGUAGES.has(value);
 

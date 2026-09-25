@@ -16,9 +16,11 @@ const LONG = `${TEXT} `.repeat(120);
 
 const out = document.querySelector("#out");
 
+const hasWebGpu = ({ gpu }: { gpu?: GPU }) => gpu !== undefined;
+
 const say = (line: string) => {
   if (out !== null) {
-    out.textContent = `${out.textContent ?? ""}${line}\n`;
+    out.textContent = `${out.textContent}${line}\n`;
   }
 };
 
@@ -67,7 +69,7 @@ const run = async () => {
     say("forced the wasm path by hiding navigator.gpu");
   }
 
-  say(`webgpu adapter: ${String(navigator.gpu !== undefined)}`);
+  say(`webgpu adapter: ${String(hasWebGpu(navigator))}`);
 
   await seed();
 

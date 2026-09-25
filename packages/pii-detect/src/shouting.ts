@@ -46,7 +46,7 @@ const positionShouted = (
       line += 1;
     }
 
-    const segment = segments[line];
+    const segment = segments.at(line);
 
     if (segment === undefined || word.start < segment.start) {
       continue;

@@ -25,7 +25,7 @@ const CACHE_KEY = "transformers-cache";
 const isHttpUrl = (name: string) => name.startsWith("https://") || name.startsWith("http://");
 
 const warnStorageFailed = (name: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console
+  // oxlint-disable-next-line eslint/no-console -- a cache write failure is recoverable, so it is surfaced in the console instead of thrown
   console.warn(`Could not keep ${name} in the browser cache`, cause);
 };
 

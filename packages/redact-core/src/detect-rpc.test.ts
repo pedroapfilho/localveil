@@ -112,7 +112,7 @@ describe("detect RPC", () => {
 
     const detect = createDetectClient(client);
 
-    /* oxlint-disable unicorn/require-post-message-target-origin */
+    /* oxlint-disable unicorn/require-post-message-target-origin -- MessagePort.postMessage takes no target origin */
     server.postMessage({ hello: true });
     client.postMessage({ hello: true });
     /* oxlint-enable unicorn/require-post-message-target-origin */

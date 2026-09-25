@@ -63,8 +63,6 @@ const blocksOf = (runs: ReadonlyArray<Array<WordInput>>, unit: number) => {
 
   for (const run of runs) {
     const extent = extentOf(run);
-    /* oxlint-disable-next-line react-doctor/js-index-maps -- the match is a box overlap, not a key,
-       so there is nothing to index by; a page holds tens of blocks, not thousands. */
     const open = blocks.find((block) => continues(block, extent, unit));
 
     if (open === undefined) {

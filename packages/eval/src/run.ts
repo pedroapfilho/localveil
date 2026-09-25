@@ -149,12 +149,10 @@ const run = async () => {
 
   const results: Array<DocumentResult> = [];
 
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
   for (const document of chosen) {
     note(`  ${document.id}`);
     results.push(scoreDocument(document, await detect(document.text)));
   }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
   const report = [
     table(

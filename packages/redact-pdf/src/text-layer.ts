@@ -12,7 +12,6 @@ const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 const countGraphemes = (value: string) => [...GRAPHEMES.segment(value)].length;
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- pdf.js types its text-layer items as unknown; this guard is their parser
 const isLayerItem = (value: unknown): value is LayerItem =>
   typeof value === "object" &&
   value !== null &&

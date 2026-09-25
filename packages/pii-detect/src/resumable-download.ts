@@ -122,7 +122,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
       }
 
       try {
-        // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
         await bank(start);
       } catch (error) {
         stopped = true;

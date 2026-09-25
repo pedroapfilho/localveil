@@ -6,7 +6,7 @@ import { serveDetect } from "@repo/redact-core";
 import type { ModelRequest, ModelResponse } from "./worker-protocol";
 
 const post = (message: ModelResponse) => {
-  // oxlint-disable-next-line unicorn/require-post-message-target-origin
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a worker's postMessage takes no target origin
   globalThis.postMessage(message);
 };
 

@@ -12,7 +12,7 @@ const fetchModelBytes = (url: string, options: FetchModelOptions): Promise<Uint8
 
 const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promise<RunModel> => {
   const session = await ort.InferenceSession.create(bytes);
-  const output = session.outputNames[0];
+  const output = session.outputNames.at(0);
 
   if (output === undefined) {
     throw new TypeError("The model session reports no outputs");

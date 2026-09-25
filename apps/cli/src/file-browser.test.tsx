@@ -44,7 +44,7 @@ const openBrowser = async (
   return { ...view, onConfirm };
 };
 
-const frameHas = async (lastFrame: () => string | undefined, text: string) => {
+const expectFrame = async (lastFrame: () => string | undefined, text: string) => {
   await vi.waitFor(() => {
     expect(lastFrame()).toContain(text);
   });
@@ -83,11 +83,11 @@ describe("FileBrowser", () => {
     stdin.write(DOWN);
     stdin.write(DOWN);
 
-    await frameHas(lastFrame, "> [-] capture.raw");
+    await expectFrame(lastFrame, "> [-] capture.raw");
 
     stdin.write(" ");
 
-    await frameHas(lastFrame, "Nothing picked yet.");
+    await expectFrame(lastFrame, "Nothing picked yet.");
     expect(lastFrame()).toContain("[-] capture.raw");
   });
 
@@ -100,16 +100,16 @@ describe("FileBrowser", () => {
     stdin.write(DOWN);
     stdin.write(DOWN);
 
-    await frameHas(lastFrame, "> [ ] notes.txt");
+    await expectFrame(lastFrame, "> [ ] notes.txt");
 
     stdin.write(" ");
 
-    await frameHas(lastFrame, "> [x] notes.txt");
+    await expectFrame(lastFrame, "> [x] notes.txt");
     expect(lastFrame()).toContain("1 picked");
 
     stdin.write(" ");
 
-    await frameHas(lastFrame, "> [ ] notes.txt");
+    await expectFrame(lastFrame, "> [ ] notes.txt");
     expect(lastFrame()).toContain("Nothing picked yet.");
   });
 
@@ -122,11 +122,11 @@ describe("FileBrowser", () => {
     stdin.write(DOWN);
     stdin.write(DOWN);
 
-    await frameHas(lastFrame, "> [ ] notes.txt");
+    await expectFrame(lastFrame, "> [ ] notes.txt");
 
     stdin.write(" ");
 
-    await frameHas(lastFrame, "1 picked");
+    await expectFrame(lastFrame, "1 picked");
 
     stdin.write("\r");
 
@@ -144,11 +144,11 @@ describe("FileBrowser", () => {
     stdin.write(DOWN);
     stdin.write(DOWN);
 
-    await frameHas(lastFrame, "> [ ] notes.txt");
+    await expectFrame(lastFrame, "> [ ] notes.txt");
 
     stdin.write("\r");
 
-    await frameHas(lastFrame, "Nothing picked yet.");
+    await expectFrame(lastFrame, "Nothing picked yet.");
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
@@ -161,10 +161,10 @@ describe("FileBrowser", () => {
 
     stdin.write(DOWN);
 
-    await frameHas(lastFrame, "> [>] photos/");
+    await expectFrame(lastFrame, "> [>] photos/");
 
     stdin.write("\r");
 
-    await frameHas(lastFrame, "holiday.md");
+    await expectFrame(lastFrame, "holiday.md");
   });
 });

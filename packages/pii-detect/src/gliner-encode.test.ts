@@ -25,7 +25,7 @@ const encodeWord = (word: string) => {
     return [9];
   }
 
-  // oxlint-disable-next-line typescript/no-misused-spread
+  // oxlint-disable-next-line typescript/no-misused-spread -- the fixture tokenizer splits by code point on purpose
   return [...word].map((piece) => piece.codePointAt(0) ?? 0);
 };
 

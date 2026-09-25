@@ -1,4 +1,3 @@
-/* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
@@ -108,6 +107,7 @@ const JobList = ({
       </div>
 
       <ScrollArea className={scrolls ? "-m-1 h-(--job-list-height)" : "-m-1"} style={scrollStyle}>
+        {/* oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops list semantics from an unstyled list */}
         <ul aria-live="polite" className="flex flex-col gap-2 p-1" role="list">
           <AnimatePresence initial={false}>
             {jobs.map((job, index) => (

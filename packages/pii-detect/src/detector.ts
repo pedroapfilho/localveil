@@ -123,7 +123,7 @@ const loadRunner = async (
       throw firstError;
     }
 
-    // oxlint-disable-next-line eslint/no-console
+    // oxlint-disable-next-line eslint/no-console -- the wasm fallback is recoverable, so it is surfaced in the console instead of thrown
     console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
     report(0, "model.slowDevice");
 
@@ -207,7 +207,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     try {
       await purgeStaleModels({ models: MODELS, store: chunks });
     } catch (error) {
-      // oxlint-disable-next-line eslint/no-console
+      // oxlint-disable-next-line eslint/no-console -- a stale-weights purge failure is recoverable, so it is surfaced in the console instead of thrown
       console.warn("Could not clear superseded model weights", error);
     }
   }
@@ -293,7 +293,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const batches = batchInputs(jobs, batching, BATCH_TOKENS);
     const found: Array<Span> = [];
 
-    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
     for (const batch of batches) {
       const inputs = batch.map((at) => jobs[at]);
       const logits = await run(inputs);
@@ -302,7 +301,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
         found.push(...spansOf(input, logits, item));
       });
     }
-    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
     return tightenToVerified(
       [...mergeChunkSpans([{ offset: 0, spans: found }]), ...patternSpans(text)],
