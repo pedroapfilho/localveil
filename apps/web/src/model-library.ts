@@ -19,13 +19,18 @@ type ModelEntry = {
   stoppable?: boolean;
 };
 
+type PickerDownload = {
+  controller: AbortController;
+  progress: number;
+};
+
 type ModelLibrary = {
   cancel: (id: ModelId) => void;
   download: (id: ModelId) => Promise<void>;
   entries: Partial<Record<ModelId, ModelEntry>>;
   refresh: (id?: ModelId) => Promise<void>;
   remove: (id: ModelId) => Promise<void>;
-  reportProgress: (id: ModelId, fraction: number | undefined) => void;
+  reportWorkerProgress: (id: ModelId, fraction: number | undefined) => void;
   select: (id: ModelId) => void;
   selected: ModelId;
 };
@@ -57,11 +62,11 @@ const writeStoredModel = (id: ModelId) => {
 
 const BROWSER_STORE: ModelStore = { downloadModel, inspectModel, removeModel };
 
-/* One record per catalogued model. Progress comes from two places that can overlap, a download the
-   user started from the picker and the model worker fetching weights for a dropped file; both write
-   the same field, and the resumable cache's per-URL lock makes sure only one of them fetches. */
 const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
   create<ModelLibrary>((set, get) => {
+    const downloads = new Map<ModelId, PickerDownload>();
+    const workerProgress = new Map<ModelId, number>();
+
     const patch = (id: ModelId, change: Partial<ModelEntry>) => {
       set((state) => ({
         entries: { ...state.entries, [id]: { ...state.entries[id], ...change } },
@@ -77,32 +82,45 @@ const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
       }
     };
 
-    // Only a download started from the picker can be stopped from it; one the model worker started
-    // for a dropped file is what that file is waiting on.
-    const stoppers = new Map<ModelId, AbortController>();
+    // Either owner can finish first. The row stays active until both have released their progress.
+    const publishProgress = (id: ModelId) => {
+      const picker = downloads.get(id);
+      const worker = workerProgress.get(id);
+
+      patch(id, {
+        progress: picker === undefined ? worker : Math.max(picker.progress, worker ?? 0),
+        stoppable: picker !== undefined,
+      });
+    };
 
     return {
       cancel: (id) => {
-        stoppers.get(id)?.abort();
+        downloads.get(id)?.controller.abort();
       },
       download: async (id) => {
-        const stopper = new AbortController();
+        if (downloads.has(id)) {
+          throw new Error(`${id} is already downloading`);
+        }
 
-        stoppers.set(id, stopper);
-        patch(id, { progress: 0, stoppable: true });
+        const controller = new AbortController();
+        const operation: PickerDownload = { controller, progress: 0 };
+
+        downloads.set(id, operation);
+        publishProgress(id);
 
         try {
           await store.downloadModel(
             modelById(id),
             (fraction) => {
-              patch(id, { progress: fraction });
+              operation.progress = fraction;
+              publishProgress(id);
             },
-            stopper.signal,
+            controller.signal,
           );
         } finally {
-          stoppers.delete(id);
-          patch(id, { progress: undefined, stoppable: false });
           await inspect(id);
+          downloads.delete(id);
+          publishProgress(id);
         }
       },
       entries: {},
@@ -119,8 +137,14 @@ const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
           await inspect(id);
         }
       },
-      reportProgress: (id, fraction) => {
-        patch(id, { progress: fraction });
+      reportWorkerProgress: (id, fraction) => {
+        if (fraction === undefined) {
+          workerProgress.delete(id);
+        } else {
+          workerProgress.set(id, fraction);
+        }
+
+        publishProgress(id);
       },
       select: (id) => {
         if (get().selected === id) {

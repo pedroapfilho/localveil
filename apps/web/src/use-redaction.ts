@@ -119,9 +119,9 @@ const useRedaction = () => {
 
       onModelLost: (reason) => {
         const lost = modelRef.current;
-        const { refresh, reportProgress, selected } = useModelLibrary.getState();
+        const { refresh, reportWorkerProgress, selected } = useModelLibrary.getState();
 
-        reportProgress(selected, undefined);
+        reportWorkerProgress(selected, undefined);
         void refresh(selected);
 
         modelRef.current = { kind: "lost", reason };
@@ -146,15 +146,15 @@ const useRedaction = () => {
         }
 
         const pending = modelRef.current;
-        const { refresh, reportProgress, selected } = useModelLibrary.getState();
+        const { refresh, reportWorkerProgress, selected } = useModelLibrary.getState();
 
         if (stage === "model.downloading") {
-          reportProgress(selected, fraction);
+          reportWorkerProgress(selected, fraction);
         }
 
         if (stage === "model.ready") {
           modelRef.current = { kind: "ready" };
-          reportProgress(selected, undefined);
+          reportWorkerProgress(selected, undefined);
           void refresh(selected);
 
           if (pending.kind === "loading") {
@@ -211,7 +211,7 @@ const useRedaction = () => {
         }
 
         modelRef.current = { kind: "idle" };
-        previous.reportProgress(previous.selected, undefined);
+        previous.reportWorkerProgress(previous.selected, undefined);
         poolRef.current?.setModel(state.selected);
       }),
     [],

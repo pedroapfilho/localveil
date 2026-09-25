@@ -1,9 +1,11 @@
+import { withCacheLock } from "./cache-lock";
 import type { ModelSpec } from "./catalog";
 import { revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import type { ModelStatus } from "./model-status";
 import { CACHE_KEY, createResumableCache } from "./resumable-cache";
+import { settleAll } from "./settle-all";
 
 const filesOf = (model: ModelSpec) => [...tokenizerUrls(model), weightsUrl(model)];
 
@@ -75,43 +77,45 @@ const downloadModel = async (
     store,
   });
 
-  // The tokenizer goes first: it is a few megabytes, and a model without it cannot load offline.
-  for (const url of filesOf(model)) {
-    // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
-    const response = await cache.match(url);
-
-    if (response === undefined) {
-      throw new Error(`${url} could not be downloaded`);
-    }
-  }
+  await withCacheLock(
+    revisionUrl(model),
+    "shared",
+    async () => {
+      // A model without its tokenizer cannot load offline.
+      await settleAll(tokenizerUrls(model).map((url) => cache.download(url)));
+      await cache.download(weights);
+    },
+    signal,
+  );
 
   onProgress(1);
 };
 
-const removeModel = async (
+const removeModel = (
   model: ModelSpec,
   store: ChunkStore = createIndexedDbChunkStore(),
-): Promise<void> => {
-  const prefix = revisionUrl(model);
-  const sweeps: Array<Promise<unknown>> = [];
+): Promise<void> =>
+  withCacheLock(revisionUrl(model), "exclusive", async () => {
+    const prefix = revisionUrl(model);
+    const cache = "caches" in globalThis ? await caches.open(CACHE_KEY) : undefined;
+    const [requests, urls] = await Promise.all([cache?.keys() ?? [], store.listUrls()]);
+    const sweeps: Array<Promise<unknown>> = [];
 
-  if ("caches" in globalThis) {
-    const cache = await caches.open(CACHE_KEY);
-
-    for (const request of await cache.keys()) {
-      if (request.url.startsWith(prefix)) {
-        sweeps.push(cache.delete(request));
+    if (cache !== undefined) {
+      for (const request of requests) {
+        if (request.url.startsWith(prefix)) {
+          sweeps.push(cache.delete(request));
+        }
       }
     }
-  }
 
-  for (const url of await store.listUrls()) {
-    if (url.startsWith(prefix)) {
-      sweeps.push(store.clear(url));
+    for (const url of urls) {
+      if (url.startsWith(prefix)) {
+        sweeps.push(store.clear(url));
+      }
     }
-  }
 
-  await Promise.all(sweeps);
-};
+    await settleAll(sweeps);
+  });
 
 export { downloadModel, inspectModel, removeModel };

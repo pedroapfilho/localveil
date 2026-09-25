@@ -18,7 +18,7 @@ vi.mock("#ort", () => ({
 }));
 
 vi.mock("./resumable-cache", () => ({
-  createResumableCache: vi.fn(() => ({ match: vi.fn(), put: vi.fn() })),
+  createResumableCache: vi.fn(() => ({ download: vi.fn(), match: vi.fn() })),
 }));
 
 const HOST = revisionUrl(modelById(DEFAULT_MODEL_ID)).slice(0, -1);

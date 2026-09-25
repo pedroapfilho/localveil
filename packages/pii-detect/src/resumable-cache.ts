@@ -1,10 +1,11 @@
+import { withCacheLock } from "./cache-lock";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import { downloadResumable } from "./resumable-download";
 
 type ResumableCache = {
+  download: (name: string) => Promise<void>;
   match: (name: string) => Promise<Response | undefined>;
-  put: (name: string, response: Response) => Promise<void>;
 };
 
 type CacheProgress = { loaded: number; name: string; total: number };
@@ -28,18 +29,6 @@ const warnStorageFailed = (name: string, cause: unknown) => {
   console.warn(`Could not keep ${name} in the browser cache`, cause);
 };
 
-// A stopped download also gives up its place in the queue for the lock, not only the fetch.
-const underLock = (name: string, signal: AbortSignal | undefined, run: () => Promise<Response>) => {
-  const { locks } = globalThis.navigator;
-  const key = `localveil-model:${name}`;
-
-  if (locks === undefined) {
-    return run();
-  }
-
-  return signal === undefined ? locks.request(key, run) : locks.request(key, { signal }, run);
-};
-
 const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCache => {
   const {
     cacheKey = CACHE_KEY,
@@ -50,20 +39,24 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
     store = createIndexedDbChunkStore(),
   } = options;
 
-  return {
-    match: async (name) => {
-      if (!isHttpUrl(name)) {
-        return undefined;
-      }
+  const load = async (name: string, persistence: "required" | "best-effort") => {
+    signal?.throwIfAborted();
 
-      const cache = await caches.open(cacheKey);
-      const hit = await cache.match(name);
+    if (!isHttpUrl(name)) {
+      return undefined;
+    }
 
-      if (hit !== undefined) {
-        return hit;
-      }
+    const cache = await caches.open(cacheKey);
+    const hit = await cache.match(name);
 
-      return underLock(name, signal, async () => {
+    if (hit !== undefined) {
+      return hit;
+    }
+
+    return withCacheLock(
+      name,
+      "exclusive",
+      async () => {
         const arrived = await cache.match(name);
 
         if (arrived !== undefined) {
@@ -85,25 +78,31 @@ const createResumableCache = (options: ResumableCacheOptions = {}): ResumableCac
         try {
           await cache.put(name, new Response(blob, { headers }));
         } catch (error) {
+          if (persistence === "required") {
+            throw error;
+          }
+
           warnStorageFailed(name, error);
+
+          return new Response(blob, { headers });
         }
 
+        // Keep resumable bytes until the durable copy has landed.
+        await store.clear(name);
+
         return new Response(blob, { headers });
-      });
-    },
-    put: async (name, response) => {
-      if (!isHttpUrl(name)) {
-        return;
-      }
+      },
+      signal,
+    );
+  };
 
-      const cache = await caches.open(cacheKey);
-
-      try {
-        await cache.put(name, response);
-      } catch (error) {
-        warnStorageFailed(name, error);
+  return {
+    download: async (name) => {
+      if ((await load(name, "required")) === undefined) {
+        throw new TypeError(`The model file is not an HTTP URL: ${name}`);
       }
     },
+    match: (name) => load(name, "best-effort"),
   };
 };
 

@@ -11,8 +11,16 @@ import {
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
+import { withCacheLock } from "./cache-lock";
 import type { ModelId, ModelSpec } from "./catalog";
-import { DEFAULT_MODEL_ID, modelById, MODELS, tokenizerUrls, weightsUrl } from "./catalog";
+import {
+  DEFAULT_MODEL_ID,
+  modelById,
+  MODELS,
+  revisionUrl,
+  tokenizerUrls,
+  weightsUrl,
+} from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import { chunkWords } from "./chunk-words";
@@ -24,6 +32,7 @@ import type { ModelDevice } from "./model-runtime";
 import { purgeStaleModels } from "./purge-stale-models";
 import type { ResumableCache } from "./resumable-cache";
 import { createResumableCache } from "./resumable-cache";
+import { settleAll } from "./settle-all";
 import { collectShouting, positionShouted } from "./shouting";
 import { splitWords } from "./split-words";
 
@@ -78,9 +87,11 @@ const ignoreProgress = () => undefined;
    kept in the same cache. DebertaV2Tokenizer, the class two of the models name, differs from the
    base class only in returning token type ids, which GLiNER never takes. */
 const loadTokenizer = async (spec: ModelSpec, cache: ResumableCache | undefined) => {
-  const [tokenizerJson, tokenizerConfig] = await Promise.all(
-    tokenizerUrls(spec).map(async (url) =>
-      parseJson(await fetchModelBytes(url, { cache, onProgress: ignoreProgress }), url),
+  const [tokenizerJson, tokenizerConfig] = await settleAll(
+    tokenizerUrls(spec).map((url) =>
+      fetchModelBytes(url, { cache, onProgress: ignoreProgress }).then((bytes) =>
+        parseJson(bytes, url),
+      ),
     ),
   );
 
@@ -97,6 +108,34 @@ const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   }
 
   return { cls: frame[0], sep: frame[1] };
+};
+
+const loadRunner = async (
+  bytes: Uint8Array,
+  device: ModelDevice,
+  repo: string,
+  report: ModelProgress,
+) => {
+  try {
+    return await createModelRunner(bytes, device);
+  } catch (firstError) {
+    if (device === "wasm") {
+      throw firstError;
+    }
+
+    // oxlint-disable-next-line eslint/no-console
+    console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
+    report(0, "model.slowDevice");
+
+    try {
+      return await createModelRunner(bytes, "wasm");
+    } catch (wasmError) {
+      throw new Error(
+        `Could not load ${repo} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
+        { cause: wasmError },
+      );
+    }
+  }
 };
 
 const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
@@ -118,7 +157,21 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   const weights = weightsUrl(spec);
   const chunks = createIndexedDbChunkStore();
   const cache = resumableCache ? weightsCache(report, chunks, weights) : undefined;
-  const tokenizer = await loadTokenizer(spec, cache);
+  const loadFiles = async () => {
+    const tokenizer = await loadTokenizer(spec, cache);
+    // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- validate the small tokenizer before downloading the weights
+    const bytes = await fetchModelBytes(weights, {
+      cache,
+      onProgress: (fraction) => {
+        report(fraction, "model.downloading");
+      },
+    });
+
+    return { bytes, tokenizer };
+  };
+  const { bytes, tokenizer } = await (cache === undefined
+    ? loadFiles()
+    : withCacheLock(revisionUrl(spec), "shared", loadFiles));
   const frame = frameOf(tokenizer);
 
   const encodeCache = new Map<string, Array<number>>();
@@ -141,16 +194,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     return ids;
   };
 
-  const onDownload = (fraction: number) => {
-    report(fraction, "model.downloading");
-  };
-
-  const load = async (device: ModelDevice) => {
-    const bytes = await fetchModelBytes(weights, { cache, onProgress: onDownload });
-
-    return createModelRunner(bytes, device);
-  };
-
   const device = await pickDevice();
   const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
@@ -158,30 +201,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     report(0, "model.slowDevice");
   }
 
-  const loadWithFallback = async () => {
-    try {
-      return await load(device);
-    } catch (firstError) {
-      if (device === "wasm") {
-        throw firstError;
-      }
-
-      // oxlint-disable-next-line eslint/no-console
-      console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
-      report(0, "model.slowDevice");
-
-      try {
-        return await load("wasm");
-      } catch (wasmError) {
-        throw new Error(
-          `Could not load ${spec.repo} on webgpu (${describeError(firstError)}) or wasm (${describeError(wasmError)})`,
-          { cause: wasmError },
-        );
-      }
-    }
-  };
-
-  const run = await loadWithFallback();
+  const run = await loadRunner(bytes, device, spec.repo, report);
 
   if (cache !== undefined) {
     try {

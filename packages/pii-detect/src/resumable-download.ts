@@ -155,8 +155,6 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
     );
   }
 
-  await store.clear(url);
-
   return blob;
 };
 

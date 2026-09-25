@@ -149,9 +149,65 @@ describe("what is downloaded", () => {
   it("does not offer to stop a download the model worker is running", () => {
     const library = createModelLibrary(fakeStore().store);
 
-    library.getState().reportProgress("gliner-pii-base", 0.2);
+    library.getState().reportWorkerProgress("gliner-pii-base", 0.2);
 
-    expect(library.getState().entries["gliner-pii-base"]).toEqual({ progress: 0.2 });
+    expect(library.getState().entries["gliner-pii-base"]).toEqual({
+      progress: 0.2,
+      stoppable: false,
+    });
+  });
+
+  it("keeps worker progress when an overlapping picker download stops", async () => {
+    const { downloads, store } = fakeStore();
+    const library = createModelLibrary(store);
+    const finished = library.getState().download("gliner-pii-base");
+
+    await vi.waitFor(() => {
+      expect(downloads).toHaveLength(1);
+    });
+    library.getState().reportWorkerProgress("gliner-pii-base", 0.4);
+    library.getState().cancel("gliner-pii-base");
+
+    await expect(finished).rejects.toThrow(/stopped/v);
+    expect(library.getState().entries["gliner-pii-base"]).toMatchObject({
+      progress: 0.4,
+      stoppable: false,
+    });
+  });
+
+  it("keeps a picker download when the worker releases its progress", async () => {
+    const { downloads, store } = fakeStore();
+    const library = createModelLibrary(store);
+    const finished = library.getState().download("gliner-pii-base");
+
+    await vi.waitFor(() => {
+      expect(downloads).toHaveLength(1);
+    });
+    latest(downloads).onProgress(0.3);
+    library.getState().reportWorkerProgress("gliner-pii-base", 0.6);
+    library.getState().reportWorkerProgress("gliner-pii-base", undefined);
+
+    expect(library.getState().entries["gliner-pii-base"]).toMatchObject({
+      progress: 0.3,
+      stoppable: true,
+    });
+
+    latest(downloads).settle.finish();
+    await finished;
+  });
+
+  it("refuses a duplicate picker request without replacing its cancellation handle", async () => {
+    const { downloads, store } = fakeStore();
+    const library = createModelLibrary(store);
+    const first = library.getState().download("gliner-pii-base");
+    const second = library.getState().download("gliner-pii-base");
+
+    await expect(second).rejects.toThrow(/already downloading/v);
+    await vi.waitFor(() => {
+      expect(downloads).toHaveLength(1);
+    });
+    library.getState().cancel("gliner-pii-base");
+    await expect(first).rejects.toThrow(/stopped/v);
   });
 
   it("removes a model and reports it gone", async () => {

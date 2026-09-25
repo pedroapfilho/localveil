@@ -1,3 +1,5 @@
+import type * as ModelCatalog from "@repo/pii-detect/models";
+import { downloadModel } from "@repo/pii-detect/models";
 /* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
 import type * as RedactCore from "@repo/redact-core";
 import { act, fireEvent, screen } from "@testing-library/react";
@@ -11,6 +13,12 @@ import { useRedaction } from "./use-redaction";
 import type { RedactionPoolOptions } from "./worker-pool";
 
 const archives = vi.hoisted(() => [] as Array<Array<{ blob: Blob; name: string }>>);
+
+vi.mock("@repo/pii-detect/models", async (importOriginal) => ({
+  ...(await importOriginal<typeof ModelCatalog>()),
+  downloadModel: vi.fn(),
+  inspectModel: vi.fn(() => Promise.resolve({ state: "absent" })),
+}));
 
 vi.mock("@repo/redact-core", async (importOriginal) => {
   const original = await importOriginal<typeof RedactCore>();
@@ -440,6 +448,40 @@ describe("clearing the list", () => {
 });
 
 describe("the chosen model", () => {
+  it("preserves a picker download and its Stop button when selection changes", async () => {
+    const finishDownload = vi.fn<() => void>();
+    const pending = new Promise<void>((resolve) => {
+      finishDownload.mockImplementation(resolve);
+    });
+
+    vi.mocked(downloadModel).mockImplementation((_model, onProgress) => {
+      onProgress(0.3);
+
+      return pending;
+    });
+    renderWithI18n(<Harness />);
+
+    let finished: Promise<void>;
+
+    await act(async () => {
+      finished = useModelLibrary.getState().download("gliner-multi-pii");
+      await Promise.resolve();
+    });
+    act(() => {
+      useModelLibrary.getState().select("gliner-pii-edge");
+    });
+
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]).toMatchObject({
+      progress: 0.3,
+      stoppable: true,
+    });
+
+    await act(async () => {
+      finishDownload();
+      await finished;
+    });
+  });
+
   it("builds the pool for the model the picker has chosen", () => {
     submitTwo();
 

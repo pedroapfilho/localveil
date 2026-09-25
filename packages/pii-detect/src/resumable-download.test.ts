@@ -301,14 +301,14 @@ describe("downloadResumable", () => {
     expect(manifests.get(URL_UNDER_TEST)).toEqual({ chunkSize: 4, etag: "v1", total: 10 });
   });
 
-  it("drops the stored chunks once the file is complete", async () => {
+  it("keeps completed chunks until the caller has saved the assembled file", async () => {
     const { chunks, manifests, store } = memoryStore();
     const { fetchRange } = rangeServer(bodyOf(10));
 
     await run(fetchRange, store);
 
-    expect(chunks.get(URL_UNDER_TEST)).toBeUndefined();
-    expect(manifests.get(URL_UNDER_TEST)).toBeUndefined();
+    expect(chunks.get(URL_UNDER_TEST)?.size).toBeGreaterThan(0);
+    expect(manifests.get(URL_UNDER_TEST)).toBeDefined();
   });
 
   it("reports progress that never drops back, and ends on the full size", async () => {

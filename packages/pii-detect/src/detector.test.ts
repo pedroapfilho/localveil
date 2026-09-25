@@ -5,9 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
 import { DEFAULT_MODEL_ID, modelById, tokenizerUrls } from "./catalog";
+import { memoryStore } from "./chunk-store-fixture";
 import { createDetector } from "./detector";
 import type { GlinerInput } from "./gliner-encode";
 import type { EntityPrompt } from "./gliner-labels";
+import { removeModel } from "./model-store-browser";
 
 vi.mock("@huggingface/transformers", () => ({
   PreTrainedTokenizer: vi.fn(),
@@ -215,7 +217,11 @@ describe("createDetector", () => {
     const urls = weightsFetched();
 
     expect(urls.at(0)).toContain("model_q4.onnx");
-    expect(urls.at(1)).toBe(urls.at(0));
+    expect(urls).toHaveLength(1);
+    expect(vi.mocked(createModelRunner).mock.calls.map(([, device]) => device)).toEqual([
+      "webgpu",
+      "wasm",
+    ]);
     expect(stages).toContain("model.slowDevice");
     expect(stages.at(-1)).toBe("model.ready");
   });
@@ -245,6 +251,41 @@ describe("createDetector", () => {
 });
 
 describe("choosing a model", () => {
+  it("holds removal back until the worker has finished fetching its model files", async () => {
+    setup(() => []);
+    const started = Promise.withResolvers<undefined>();
+    const weights = Promise.withResolvers<Uint8Array>();
+
+    vi.mocked(fetchModelBytes).mockImplementation((url) => {
+      if (url.endsWith(".json")) {
+        return Promise.resolve(JSON_FILE);
+      }
+
+      started.resolve(undefined);
+
+      return weights.promise;
+    });
+
+    const loading = createDetector({ resumableCache: true });
+
+    await started.promise;
+    let removed = false;
+    const remove = async () => {
+      await removeModel(modelById(DEFAULT_MODEL_ID), memoryStore());
+      removed = true;
+    };
+    const removing = remove();
+
+    await removeModel(modelById("gliner-pii-edge"), memoryStore());
+    const removedDuringLoad = removed;
+
+    weights.resolve(new Uint8Array());
+    await Promise.all([loading, removing]);
+
+    expect(removedDuringLoad).toBe(false);
+    expect(removed).toBe(true);
+  });
+
   it("loads the default model's tokenizer and weights when none is named", async () => {
     setup(() => []);
 

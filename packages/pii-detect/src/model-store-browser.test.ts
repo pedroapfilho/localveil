@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { modelById, tokenizerUrls, weightsUrl } from "./catalog";
+import { withCacheLock } from "./cache-lock";
+import { modelById, revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
 import { memoryStore } from "./chunk-store-fixture";
 import { downloadModel, inspectModel, removeModel } from "./model-store-browser";
 
@@ -66,6 +67,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("inspectModel in the browser", () => {
@@ -114,6 +116,41 @@ describe("inspectModel in the browser", () => {
 });
 
 describe("downloadModel in the browser", () => {
+  it("can cancel while queued behind a model removal without starting a fetch", async () => {
+    memoryCaches();
+    const asked = serveRanges();
+    const controller = new AbortController();
+    const started = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const holding = withCacheLock(revisionUrl(MODEL), "exclusive", () => {
+      started.resolve(undefined);
+
+      return resume.promise;
+    });
+
+    await started.promise;
+    const downloading = downloadModel(MODEL, () => undefined, controller.signal, memoryStore());
+
+    controller.abort();
+    await expect(downloading).rejects.toThrow(/abort/iv);
+    resume.resolve(undefined);
+    await holding;
+    expect(asked).toEqual([]);
+  });
+
+  it("rejects a failed durable write instead of reporting the model downloaded", async () => {
+    memoryCaches();
+    serveRanges();
+    const cache = await caches.open("transformers-cache");
+
+    vi.spyOn(caches, "open").mockResolvedValue(cache);
+    vi.spyOn(cache, "put").mockRejectedValue(new DOMException("full", "QuotaExceededError"));
+
+    await expect(downloadModel(MODEL, () => undefined, undefined, memoryStore())).rejects.toThrow(
+      "full",
+    );
+  });
+
   it("fetches the tokenizer before the weights and reports only the weights' progress", async () => {
     const entries = memoryCaches();
     const asked = serveRanges();
@@ -166,6 +203,76 @@ describe("downloadModel in the browser", () => {
 });
 
 describe("removeModel in the browser", () => {
+  it("waits for an active download before deleting every file", async () => {
+    const entries = memoryCaches();
+    serveRanges();
+    const fetchRange = fetch;
+    const started = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const store = memoryStore();
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((input instanceof Request ? input.url : input.toString()) === WEIGHTS) {
+        started.resolve(undefined);
+        await resume.promise;
+      }
+
+      return fetchRange(input, init);
+    });
+
+    const downloading = downloadModel(MODEL, () => undefined, undefined, store);
+
+    await started.promise;
+    const removing = removeModel(MODEL, store);
+
+    // The independent model can still finish while removal waits for this model's reader.
+    await downloadModel(OTHER, () => undefined, undefined, store);
+    const keptWhileDownloading = entries.has(TOKENIZER);
+    resume.resolve(undefined);
+    await Promise.all([downloading, removing]);
+
+    expect(keptWhileDownloading).toBe(true);
+    await expect(inspectModel(MODEL, store)).resolves.toEqual({ state: "absent" });
+    expect(entries.has(WEIGHTS)).toBe(false);
+    expect(entries.has(TOKENIZER)).toBe(false);
+    expect(entries.has(TOKENIZER_CONFIG)).toBe(false);
+    await expect(inspectModel(OTHER, store)).resolves.toMatchObject({ state: "ready" });
+  });
+
+  it("waits for the sibling tokenizer write even if the other tokenizer failed", async () => {
+    const entries = memoryCaches();
+    serveRanges();
+    const fetchRange = fetch;
+    const started = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const store = memoryStore();
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((input instanceof Request ? input.url : input.toString()) === TOKENIZER) {
+        throw new Error("offline");
+      }
+      if ((input instanceof Request ? input.url : input.toString()) === TOKENIZER_CONFIG) {
+        started.resolve(undefined);
+        await resume.promise;
+      }
+
+      return fetchRange(input, init);
+    });
+
+    const downloading = expect(
+      downloadModel(MODEL, () => undefined, undefined, store),
+    ).rejects.toThrow("offline");
+
+    await started.promise;
+    const removing = removeModel(MODEL, store);
+
+    resume.resolve(undefined);
+    await Promise.all([downloading, removing]);
+
+    expect(entries.size).toBe(0);
+    await expect(store.listUrls()).resolves.toEqual([]);
+  });
+
   it("clears one model's cached files and banked chunks and leaves the other model alone", async () => {
     const entries = memoryCaches([TOKENIZER, WEIGHTS, weightsUrl(OTHER)]);
     const store = memoryStore();

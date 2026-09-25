@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -22,15 +22,29 @@ const warnNotKept = (file: string, cause: unknown) => {
 };
 
 const keepOnDisk = async (file: string, bytes: Uint8Array) => {
+  await mkdir(path.dirname(file), { recursive: true });
+
+  const part = `${file}.part-${globalThis.crypto.randomUUID()}`;
+
   try {
-    await mkdir(path.dirname(file), { recursive: true });
-
-    const part = `${file}.part-${globalThis.crypto.randomUUID()}`;
-
     await writeFile(part, bytes);
     await rename(part, file);
+  } finally {
+    await rm(part, { force: true });
+  }
+};
+
+const sizeOnDisk = async (url: string) => {
+  try {
+    const { size } = await stat(cachePathFor(url));
+
+    return size;
   } catch (error) {
-    warnNotKept(file, error);
+    if (isMissingFile(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
 };
 
@@ -62,9 +76,32 @@ const fetchKept = async (
 
   const bytes = await readBytes(await fetch(url, { signal }), onProgress);
 
-  await keepOnDisk(file, bytes);
+  try {
+    await keepOnDisk(file, bytes);
+  } catch (error) {
+    warnNotKept(file, error);
+  }
 
   return bytes;
 };
 
-export { cachePathFor, fetchKept, isMissingFile, MODEL_CACHE_DIR };
+const downloadToDisk = async (
+  url: string,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<void> => {
+  signal?.throwIfAborted();
+
+  // Inspecting the file avoids reading nearly a gigabyte just to confirm it is already kept.
+  if ((await sizeOnDisk(url)) !== undefined) {
+    onProgress(1);
+
+    return;
+  }
+
+  const bytes = await readBytes(await fetch(url, { signal }), onProgress);
+
+  await keepOnDisk(cachePathFor(url), bytes);
+};
+
+export { cachePathFor, downloadToDisk, fetchKept, MODEL_CACHE_DIR, sizeOnDisk };
