@@ -1,6 +1,6 @@
 /* oxlint-disable anti-slop/no-module-mocking -- the tokenizer and ONNX runtime are wasm engines; the module seam is the only practical hermetic substitute */
 import { PreTrainedTokenizer } from "@huggingface/transformers";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
 
@@ -48,9 +48,13 @@ const createHarness = () => {
   };
 
   const wordsOf = (input: GlinerInput): Array<string> =>
-    input.wordsMask.flatMap((mask, at) =>
-      mask > 0 ? [wordsById.get(input.inputIds[at]) ?? ""] : [],
-    );
+    input.wordsMask.flatMap((mask, at) => {
+      const id = input.inputIds[at];
+
+      assert.isDefined(id, `no input id under word mask ${String(at)}`);
+
+      return mask > 0 ? [wordsById.get(id) ?? ""] : [];
+    });
 
   return { tokenizer: { encode }, wordsOf };
 };
@@ -185,7 +189,7 @@ describe("createDetector", () => {
     const spans = await detect("word pair");
 
     expect(spans.length).toBe(1);
-    expect(spans[0].label).toBe("account_number");
+    expect(spans[0]?.label).toBe("account_number");
   });
 
   it("never wakes the model for text with no words", async () => {

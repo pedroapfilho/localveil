@@ -5,7 +5,15 @@ const OCR_LUMINANCE_THRESHOLD = 120;
 
 const binarizePixels = (pixels: Uint8ClampedArray, threshold: number = OCR_LUMINANCE_THRESHOLD) => {
   for (let index = 0; index < pixels.length; index += 4) {
-    const luminance = 0.299 * pixels[index] + 0.587 * pixels[index + 1] + 0.114 * pixels[index + 2];
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+
+    if (red === undefined || green === undefined || blue === undefined) {
+      throw new RangeError(`RGBA pixel data ends mid-pixel at byte ${String(index)}`);
+    }
+
+    const luminance = 0.299 * red + 0.587 * green + 0.114 * blue;
     const value = luminance < threshold ? 0 : 255;
 
     pixels[index] = value;

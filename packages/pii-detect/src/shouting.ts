@@ -42,11 +42,12 @@ const positionShouted = (
   let line = 0;
 
   for (const word of words) {
-    while (line < segments.length && word.start >= segments[line].end) {
-      line += 1;
-    }
+    let segment = segments.at(line);
 
-    const segment = segments.at(line);
+    while (segment !== undefined && word.start >= segment.end) {
+      line += 1;
+      segment = segments.at(line);
+    }
 
     if (segment === undefined || word.start < segment.start) {
       continue;

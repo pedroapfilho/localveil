@@ -85,11 +85,12 @@ const blocksOf = (runs: ReadonlyArray<Array<WordInput>>, unit: number) => {
    filled in by a signing service hands back its captions first and the values the signer typed
    last. Reading the page by geometry puts each value back beside the caption it belongs to. */
 const inReadingOrder = (words: ReadonlyArray<WordInput>): Array<WordInput> => {
-  if (words.length === 0) {
+  const unit = unitOf(words);
+
+  if (unit === undefined) {
     return [];
   }
 
-  const unit = unitOf(words);
   const byLine = words.toSorted((left, right) =>
     onOneLine(left, right, unit) ? left.bbox.x0 - right.bbox.x0 : left.bbox.y1 - right.bbox.y1,
   );

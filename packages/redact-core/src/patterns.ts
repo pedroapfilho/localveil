@@ -107,7 +107,7 @@ const isSpanishId = (value: string) => {
     return false;
   }
 
-  const { check, digits, lead } = match.groups;
+  const { check, digits, lead = "" } = match.groups;
   const prefix = lead === "" ? "" : String("XYZ".indexOf(lead));
 
   return DNI_LETTERS[Number(`${prefix}${digits}`) % 23] === check;

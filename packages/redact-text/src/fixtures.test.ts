@@ -31,11 +31,11 @@ const LABELS: Record<string, Span["label"]> = {
 const detectKnown: Detect = (text) => {
   const spans: Array<Span> = [];
 
-  for (const needle of PII) {
+  for (const [needle, label] of Object.entries(LABELS)) {
     let at = text.indexOf(needle);
 
     while (at !== -1) {
-      spans.push({ end: at + needle.length, label: LABELS[needle], score: 0.99, start: at });
+      spans.push({ end: at + needle.length, label, score: 0.99, start: at });
       at = text.indexOf(needle, at + needle.length);
     }
   }

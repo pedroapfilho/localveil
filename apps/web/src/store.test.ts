@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { assert, beforeEach, describe, expect, it } from "vitest";
 
 import type { Job, JobSource, JobState } from "./store";
 import {
@@ -26,12 +26,17 @@ describe("useJobStore review state", () => {
   it("starts a job queued, with no analysis to speak of", () => {
     const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
 
+    assert.isDefined(job);
+
     expect(job.status).toBe("queued");
     expect(progressOf(job)).toBe(0);
   });
 
   it("holds an analysis and the covered ids while a job waits for review", () => {
     const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+
+    assert.isDefined(job);
+
     const analysis = { detections: [], handle: undefined, warnings: [] };
 
     useJobStore
@@ -46,6 +51,8 @@ describe("useJobStore review state", () => {
 
   it("changes the covered ids only while the job is under review", () => {
     const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+
+    assert.isDefined(job);
 
     useJobStore.getState().setCovered(job.id, ["a"]);
     expect(found(job.id)?.status).toBe("queued");
@@ -65,6 +72,8 @@ describe("useJobStore review state", () => {
 
   it("forgets the analysis and the decisions when a job moves on", () => {
     const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+
+    assert.isDefined(job);
 
     useJobStore.getState().setState(job.id, {
       analysis: { detections: [], handle: undefined, warnings: [] },
@@ -117,6 +126,9 @@ describe("useJobStore", () => {
   it("moves only the job it was given", () => {
     const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
 
+    assert.isDefined(first);
+    assert.isDefined(second);
+
     useJobStore.getState().setState(first.id, { progress: 0.5, status: "running" });
 
     expect(found(first.id)?.status).toBe("running");
@@ -133,6 +145,9 @@ describe("useJobStore", () => {
 
   it("removes a single job", () => {
     const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
+
+    assert.isDefined(first);
+    assert.isDefined(second);
 
     useJobStore.getState().removeJob(first.id);
 
@@ -151,6 +166,10 @@ describe("useJobStore", () => {
     const [first, second, third] = useJobStore
       .getState()
       .addFiles([textFile("a.txt"), textFile("b.txt"), textFile("c.txt")]);
+
+    assert.isDefined(first);
+    assert.isDefined(second);
+    assert.isDefined(third);
 
     useJobStore.getState().removeJobs([first.id, third.id]);
 

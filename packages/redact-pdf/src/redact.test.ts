@@ -3,7 +3,7 @@ import type * as Ocr from "@repo/ocr";
 import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 const events: Array<string> = [];
 
@@ -60,6 +60,8 @@ vi.mock("#pdfjs", () => ({
             events.push(`text:${String(number)}`);
 
             const page = state.pages[number - 1];
+
+            assert.isDefined(page, `no fake page ${String(number)}`);
 
             return Promise.resolve({
               items: page.layer.split(" ").map((str, at) => {
@@ -136,6 +138,8 @@ vi.mock("@repo/ocr", async (importOriginal) => ({
     state.recognisedIn.push(options.known);
 
     const page = state.pages[state.recognisedIn.length - 1];
+
+    assert.isDefined(page, `no fake page for recognition ${String(state.recognisedIn.length)}`);
 
     return Promise.resolve({
       confidence: state.confidence,
@@ -569,6 +573,8 @@ describe("pdfRedactor", () => {
   it("keeps only the word geometry in the handle it hands to apply", async () => {
     const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
     const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
+
+    assert.isDefined(first);
 
     expect(Object.keys(first)).toEqual(["words"]);
   });

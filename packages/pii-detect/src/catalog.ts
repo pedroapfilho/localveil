@@ -22,8 +22,6 @@ type ModelSpec = {
 
 const HUB = "https://huggingface.co";
 
-const TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json"] as const;
-
 /* Span-level graphs score every span up to maxWidth words; token-level graphs score each word as
    a start, an end or inside and leave the spans to the decoder. Revisions are commit SHAs, so a
    resumed download never splices two revisions. A file is listed only once it has run on native
@@ -101,8 +99,10 @@ const revisionUrl = (model: ModelSpec) => `${HUB}/${model.repo}/resolve/${model.
 
 const weightsUrl = (model: ModelSpec) => `${revisionUrl(model)}onnx/${model.file}`;
 
-const tokenizerUrls = (model: ModelSpec) =>
-  TOKENIZER_FILES.map((file) => `${revisionUrl(model)}${file}`);
+const tokenizerUrls = (model: ModelSpec): [tokenizer: string, config: string] => [
+  `${revisionUrl(model)}tokenizer.json`,
+  `${revisionUrl(model)}tokenizer_config.json`,
+];
 
 export { DEFAULT_MODEL_ID, isModelId, modelById, MODELS, revisionUrl, tokenizerUrls, weightsUrl };
 export type { ModelDecoding, ModelId, ModelLanguage, ModelSpec };

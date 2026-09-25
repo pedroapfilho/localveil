@@ -4,7 +4,7 @@ import { downloadModel } from "@repo/pii-detect/models";
 import type * as RedactCore from "@repo/redact-core";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { toast } from "sonner";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useModelLibrary } from "./model-library";
 import { progressOf, stageOf, useJobStore } from "./store";
@@ -140,8 +140,24 @@ const Harness = () => {
 
 const jobsNow = () => useJobStore.getState().jobs;
 
+const jobAt = (at: number) => {
+  const job = jobsNow()[at];
+
+  assert.isDefined(job, `no job at ${String(at)}`);
+
+  return job;
+};
+
+const nthCall = <Call,>(calls: ReadonlyArray<Call>, at: number) => {
+  const call = calls[at];
+
+  assert.isDefined(call, `no call ${String(at)}`);
+
+  return call;
+};
+
 const modelNotice = () => {
-  const [given] = vi.mocked(toast.promise).mock.calls[0];
+  const [given] = nthCall(vi.mocked(toast.promise).mock.calls, 0);
 
   if (!(given instanceof Promise)) {
     throw new Error("The hook never handed sonner a promise");
@@ -205,7 +221,7 @@ describe("useRedaction", () => {
     fireEvent.click(screen.getByRole("button", { name: "submit-folder" }));
 
     act(() => {
-      pool().onDone(jobsNow()[0].id, {
+      pool().onDone(jobAt(0).id, {
         blob: new Blob(["redacted"]),
         redactionCount: 1,
         warnings: [],
@@ -222,7 +238,7 @@ describe("useRedaction", () => {
   it("says the model is loading before the worker says anything", () => {
     submitTwo();
 
-    expect(stageOf(jobsNow()[0])).toBe("stage.loadingModel");
+    expect(stageOf(jobAt(0))).toBe("stage.loadingModel");
   });
 
   it("tears the pool down when the page goes", () => {
@@ -239,10 +255,10 @@ describe("what the pool reports", () => {
     submitTwo();
 
     act(() => {
-      pool().onProgress(jobsNow()[0].id, 0.5, "stage.detecting");
+      pool().onProgress(jobAt(0).id, 0.5, "stage.detecting");
     });
 
-    expect(jobsNow()[0]).toMatchObject({
+    expect(jobAt(0)).toMatchObject({
       progress: 0.5,
       stage: "stage.detecting",
       status: "running",
@@ -255,24 +271,24 @@ describe("what the pool reports", () => {
     const blob = new Blob(["x"]);
 
     act(() => {
-      pool().onDone(jobsNow()[0].id, { blob, redactionCount: 3, warnings: ["warning.noText"] });
+      pool().onDone(jobAt(0).id, { blob, redactionCount: 3, warnings: ["warning.noText"] });
     });
 
-    expect(jobsNow()[0]).toMatchObject({
+    expect(jobAt(0)).toMatchObject({
       result: { blob, redactionCount: 3, warnings: ["warning.noText"] },
       status: "done",
     });
-    expect(progressOf(jobsNow()[0])).toBe(1);
+    expect(progressOf(jobAt(0))).toBe(1);
   });
 
   it("fails a row and says so", () => {
     submitTwo();
 
     act(() => {
-      pool().onError(jobsNow()[0].id, "out of memory", false);
+      pool().onError(jobAt(0).id, "out of memory", false);
     });
 
-    expect(jobsNow()[0]).toMatchObject({ error: "out of memory", status: "error" });
+    expect(jobAt(0)).toMatchObject({ error: "out of memory", status: "error" });
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("one.txt"));
   });
 
@@ -280,16 +296,16 @@ describe("what the pool reports", () => {
     submitTwo();
 
     act(() => {
-      pool().onError(jobsNow()[0].id, "nope", true);
+      pool().onError(jobAt(0).id, "nope", true);
     });
 
-    const [unsupported] = vi.mocked(toast.error).mock.calls[0];
+    const [unsupported] = nthCall(vi.mocked(toast.error).mock.calls, 0);
 
     act(() => {
-      pool().onError(jobsNow()[1].id, "nope", false);
+      pool().onError(jobAt(1).id, "nope", false);
     });
 
-    const [failed] = vi.mocked(toast.error).mock.calls[1];
+    const [failed] = nthCall(vi.mocked(toast.error).mock.calls, 1);
 
     expect(unsupported).not.toEqual(failed);
   });
@@ -340,7 +356,7 @@ describe("the model download", () => {
 
     expect(vi.mocked(toast.promise)).toHaveBeenCalledTimes(1);
 
-    const [, copy] = vi.mocked(toast.promise).mock.calls[0];
+    const [, copy] = nthCall(vi.mocked(toast.promise).mock.calls, 0);
 
     expect(copy?.loading).toBe("Downloading the detection model");
     expect(copy?.success).toBe("Detection model ready");
@@ -405,7 +421,7 @@ describe("removing a file", () => {
   it("tells the pool to stop as well as the page", () => {
     submitTwo();
 
-    const id = jobsNow()[0].id;
+    const id = jobAt(0).id;
 
     fireEvent.click(screen.getByRole("button", { name: "remove" }));
 

@@ -125,13 +125,13 @@ const coveredSpans = (reading: Reading, decisions: Decisions) => {
   );
 };
 
-const countRedactions = (readings: Array<Reading>, spansFor: (at: number) => Array<Span>) => {
+const countRedactions = (readings: Array<Reading>, spansFor: (reading: Reading) => Array<Span>) => {
   const maximums = new Map<string, number>();
 
-  readings.forEach((reading, at) => {
+  for (const reading of readings) {
     const occurrences = new Map<string, number>();
 
-    for (const range of mergeOverlappingRanges(spansFor(at))) {
+    for (const range of mergeOverlappingRanges(spansFor(reading))) {
       const key = keyOf(reading.text.slice(range.start, range.end));
 
       occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
@@ -140,7 +140,7 @@ const countRedactions = (readings: Array<Reading>, spansFor: (at: number) => Arr
     for (const [key, count] of occurrences) {
       maximums.set(key, Math.max(maximums.get(key) ?? 0, count));
     }
-  });
+  }
 
   return [...maximums.values()].reduce((total, count) => total + count, 0);
 };
@@ -196,8 +196,8 @@ const imageRedactor: Redactor = {
 
     onProgress(0.85, "stage.redacting");
 
-    const spansFor = (at: number) => coveredSpans(readings[at], decisions);
-    const rects = readings.flatMap((reading, at) => spansToRects(spansFor(at), reading.words));
+    const spansFor = (reading: Reading) => coveredSpans(reading, decisions);
+    const rects = readings.flatMap((reading) => spansToRects(spansFor(reading), reading.words));
 
     const canvas = await withBitmap(file, (bitmap) => {
       const target = new OffscreenCanvas(bitmap.width, bitmap.height);

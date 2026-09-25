@@ -23,16 +23,14 @@ type StartingPoint = {
 
 type ParsedFlags = { jobs?: number; model?: ModelId; paths: Array<string> };
 
-const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
-  const arg = args[at];
-
+const valueOf = (arg: string, rest: Iterator<string, undefined>, name: string) => {
   if (arg === `--${name}`) {
-    return { extra: 1, value: args.at(at + 1) };
+    return { value: rest.next().value };
   }
 
   const prefix = `--${name}=`;
 
-  return arg.startsWith(prefix) ? { extra: 0, value: arg.slice(prefix.length) } : undefined;
+  return arg.startsWith(prefix) ? { value: arg.slice(prefix.length) } : undefined;
 };
 
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
@@ -40,8 +38,10 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   let jobs: number | undefined;
   let model: ModelId | undefined;
 
-  for (let at = 0; at < args.length; at += 1) {
-    const parallel = valueOf(args, at, "jobs");
+  const rest = args.values();
+
+  for (const arg of rest) {
+    const parallel = valueOf(arg, rest, "jobs");
 
     if (parallel !== undefined) {
       const count = Number(parallel.value);
@@ -53,11 +53,10 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
       }
 
       jobs = count;
-      at += parallel.extra;
       continue;
     }
 
-    const chosen = valueOf(args, at, "model");
+    const chosen = valueOf(arg, rest, "model");
 
     if (chosen !== undefined) {
       if (chosen.value === undefined || !isModelId(chosen.value)) {
@@ -67,11 +66,10 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
       }
 
       model = chosen.value;
-      at += chosen.extra;
       continue;
     }
 
-    paths.push(args[at]);
+    paths.push(arg);
   }
 
   return { jobs, model, paths };

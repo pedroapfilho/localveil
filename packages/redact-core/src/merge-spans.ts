@@ -21,9 +21,10 @@ const absorbNested = <T extends Range>(
   for (const item of items.toSorted(widestFirst)) {
     const group = groupOf(item);
     const at = containers.get(group);
+    const container = at === undefined ? undefined : kept[at];
 
-    if (at !== undefined && encloses(kept[at], item)) {
-      kept[at] = rescore(kept[at], Math.max(scoreOf(kept[at]), scoreOf(item)));
+    if (at !== undefined && container !== undefined && encloses(container, item)) {
+      kept[at] = rescore(container, Math.max(scoreOf(container), scoreOf(item)));
       continue;
     }
 
