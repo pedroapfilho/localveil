@@ -1,10 +1,10 @@
 import type { WordInput } from "@repo/redact-core";
 
-type Matrix = ReadonlyArray<number>;
+type Matrix = readonly [number, number, number, number, number, number];
 
-type LayerItem = { height: number; str: string; transform: Matrix; width: number };
+type LayerItem = { height: number; str: string; transform: ReadonlyArray<unknown>; width: number };
 
-type Layer = { items: ReadonlyArray<unknown>; viewport: { transform?: Matrix } };
+type Layer = { items: ReadonlyArray<unknown>; viewport: { transform?: ReadonlyArray<number> } };
 
 const BLEED = 1;
 
@@ -24,7 +24,20 @@ const isLayerItem = (value: unknown): value is LayerItem =>
   "transform" in value &&
   Array.isArray(value.transform);
 
-const compose = (outer: Matrix, inner: Matrix) => [
+const toMatrix = (values: ReadonlyArray<unknown>): Matrix | undefined => {
+  const [a, b, c, d, e, f] = values;
+
+  return typeof a === "number" &&
+    typeof b === "number" &&
+    typeof c === "number" &&
+    typeof d === "number" &&
+    typeof e === "number" &&
+    typeof f === "number"
+    ? [a, b, c, d, e, f]
+    : undefined;
+};
+
+const compose = (outer: Matrix, inner: Matrix): Matrix => [
   outer[0] * inner[0] + outer[2] * inner[1],
   outer[1] * inner[0] + outer[3] * inner[1],
   outer[0] * inner[2] + outer[2] * inner[3],
@@ -71,17 +84,23 @@ const wordsIn = (item: LayerItem, placed: Matrix, pageScale: number): Array<Word
 };
 
 const textLayerWords = ({ items, viewport }: Layer): Array<WordInput> => {
-  const { transform } = viewport;
+  const page = viewport.transform === undefined ? undefined : toMatrix(viewport.transform);
 
-  if (transform === undefined || transform.length < 6) {
+  if (page === undefined) {
     return [];
   }
 
-  const pageScale = Math.hypot(transform[0], transform[1]);
+  const pageScale = Math.hypot(page[0], page[1]);
 
-  return items.flatMap((item) =>
-    isLayerItem(item) ? wordsIn(item, compose(transform, item.transform), pageScale) : [],
-  );
+  return items.flatMap((item) => {
+    if (!isLayerItem(item)) {
+      return [];
+    }
+
+    const own = toMatrix(item.transform);
+
+    return own === undefined ? [] : wordsIn(item, compose(page, own), pageScale);
+  });
 };
 
 export { textLayerWords };

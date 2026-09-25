@@ -13,7 +13,7 @@ const sortedKeys = (catalogue: Readonly<Record<string, string>>) =>
 
 const placeholders = (message: string) =>
   [...message.matchAll(PLACEHOLDER)]
-    .map(([, name]) => name)
+    .map(([placeholder]) => placeholder)
     .toSorted()
     .join(",");
 
@@ -48,7 +48,11 @@ describe("catalogues", () => {
       const catalogue = catalogueOf(locale);
 
       return Object.entries(en)
-        .filter(([key, message]) => placeholders(catalogue[key]) !== placeholders(message))
+        .filter(([key, message]) => {
+          const translated = catalogue[key];
+
+          return translated === undefined || placeholders(translated) !== placeholders(message);
+        })
         .map(([key]) => `${locale}.${key}`);
     });
 

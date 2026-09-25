@@ -3,7 +3,7 @@ import type { Analysis, Detect, RedactionResult, Redactor } from "@repo/redact-c
 import { UnsupportedFileError } from "@repo/redact-core";
 import type * as RedactImage from "@repo/redact-image";
 import type * as RedactPdf from "@repo/redact-pdf";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 
@@ -105,7 +105,11 @@ describe("redactPath", () => {
   it("hands the redactor a file named and typed after the path", async () => {
     await run("sample.pdf");
 
-    const [{ file }] = redactPdf.mock.calls[0];
+    const call = redactPdf.mock.calls[0];
+
+    assert.isDefined(call);
+
+    const [{ file }] = call;
 
     expect(file.name).toBe("sample.pdf");
     expect(file.type).toBe("application/pdf");

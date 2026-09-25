@@ -147,7 +147,7 @@ describe("mergeSpans", () => {
       { end: 8, label: "private_person", score: 1, start: 0 },
     ]);
 
-    expect(merged[0].score).toBe(1);
+    expect(merged[0]?.score).toBe(1);
   });
 
   it("leaves spans of different labels apart", () => {

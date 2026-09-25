@@ -14,7 +14,7 @@ const isLocale = (value: string): value is Locale => LOCALES.some((locale) => lo
 
 const resolveLocale = (preferred: ReadonlyArray<string>): Locale => {
   for (const tag of preferred) {
-    const primary = tag.split("-")[0].toLowerCase();
+    const [primary = ""] = tag.toLowerCase().split("-");
 
     if (isLocale(primary)) {
       return primary;

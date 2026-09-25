@@ -1,6 +1,6 @@
 import type { Analysis, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 
 import type { Job, JobResult, JobSource, JobStatus } from "../store";
 import { renderWithI18n } from "../test-utils";
@@ -170,7 +170,10 @@ describe("JobList", () => {
   it("removes the file it was asked to remove", () => {
     const { onRemove } = setup([job(), job({ id: "job-2" })]);
 
-    fireEvent.click(screen.getAllByLabelText("Remove notes.txt")[1]);
+    const [, second] = screen.getAllByLabelText("Remove notes.txt");
+
+    assert.isDefined(second);
+    fireEvent.click(second);
 
     expect(onRemove).toHaveBeenCalledWith("job-2");
   });
@@ -180,7 +183,10 @@ describe("selecting files", () => {
   it("swaps the heading for a toolbar once a row is picked", () => {
     setup([job(), job({ id: "job-2" })]);
 
-    fireEvent.click(screen.getAllByLabelText("Select notes.txt")[0]);
+    const [first] = screen.getAllByLabelText("Select notes.txt");
+
+    assert.isDefined(first);
+    fireEvent.click(first);
 
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Files" })).toBeNull();

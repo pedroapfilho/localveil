@@ -103,11 +103,13 @@ type Tokenizer = PreTrainedTokenizer;
 const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   const frame = tokenizer.encode("", { add_special_tokens: true });
 
-  if (frame.length !== 2) {
+  const [cls, sep] = frame;
+
+  if (frame.length !== 2 || cls === undefined || sep === undefined) {
     throw new TypeError("The tokenizer did not frame an empty text with CLS and SEP");
   }
 
-  return { cls: frame[0], sep: frame[1] };
+  return { cls, sep };
 };
 
 const loadRunner = async (
@@ -244,16 +246,25 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     );
 
     return found.map((candidate) => {
-      const first = keptWords[candidate.start];
-      let last = keptWords[candidate.end];
+      const words = keptWords.slice(candidate.start, candidate.end + 1);
+      const [first] = words;
+      const entity = spec.prompts[candidate.entity];
 
-      for (let at = candidate.end; at > candidate.start && last.line !== first.line; at -= 1) {
-        last = keptWords[at - 1];
+      if (first === undefined || words.length !== candidate.end - candidate.start + 1) {
+        throw new RangeError(
+          `decoded span ${String(candidate.start)}-${String(candidate.end)} is outside the ${String(keptWords.length)} kept words`,
+        );
       }
+
+      if (entity === undefined) {
+        throw new RangeError(`decoded entity ${String(candidate.entity)} has no prompt`);
+      }
+
+      const last = words.findLast((word) => word.line === first.line) ?? first;
 
       return {
         end: last.end,
-        label: spec.prompts[candidate.entity].label,
+        label: entity.label,
         score: candidate.score,
         start: first.start,
       };
@@ -294,7 +305,15 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const found: Array<Span> = [];
 
     for (const batch of batches) {
-      const inputs = batch.map((at) => jobs[at]);
+      const inputs = batch.map((at) => {
+        const job = jobs[at];
+
+        if (job === undefined) {
+          throw new RangeError(`batch names job ${String(at)} of ${String(jobs.length)}`);
+        }
+
+        return job;
+      });
       const logits = await run(inputs);
 
       inputs.forEach((input, item) => {

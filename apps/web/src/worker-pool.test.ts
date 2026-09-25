@@ -144,7 +144,7 @@ describe("createRedactionPool", () => {
     pool.submit(job("a"));
     taskAt(0).crash(refused);
 
-    expect(reported.errors[0].unsupported).toBe(true);
+    expect(reported.errors[0]?.unsupported).toBe(true);
   });
 
   it("reports a full queue rather than throwing at the caller, and hangs up", () => {

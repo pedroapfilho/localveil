@@ -26,7 +26,7 @@ describe("tokensFromSpans", () => {
   });
 
   it("reads a span broken over a line as one phrase", () => {
-    expect(tokensFromSpans("Joao   Goncalves came in.", [span(0, 16)])[0].text).toBe(
+    expect(tokensFromSpans("Joao   Goncalves came in.", [span(0, 16)])[0]?.text).toBe(
       "Joao Goncalves",
     );
   });
@@ -48,8 +48,8 @@ describe("tokensFromSpans", () => {
   it("keeps the highest score a token was seen with, in either order", () => {
     const low: Span = { end: 44, label: "private_person", score: 0.7, start: 30 };
 
-    expect(tokensFromSpans(TEXT, [span(0, 14), low])[0].score).toBe(0.9);
-    expect(tokensFromSpans(TEXT, [low, span(0, 14)])[0].score).toBe(0.9);
+    expect(tokensFromSpans(TEXT, [span(0, 14), low])[0]?.score).toBe(0.9);
+    expect(tokensFromSpans(TEXT, [low, span(0, 14)])[0]?.score).toBe(0.9);
   });
 
   it("returns nothing when nothing was tagged", () => {

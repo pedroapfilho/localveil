@@ -55,13 +55,14 @@ const formatModelTable = (rows: ReadonlyArray<Listed>) => {
     describeStatus(status),
   ]);
   const table = [["MODEL", "NAME", "SIZE", "LANGUAGES", "STATUS"], ...cells];
-  const widths = table[0].map((_cell, column) =>
-    Math.max(...table.map((row) => row[column].length)),
+  const widths = table.reduce<Array<number>>(
+    (widest, row) => row.map((cell, column) => Math.max(widest[column] ?? 0, cell.length)),
+    [],
   );
 
   return table.map((row) =>
     row
-      .map((cell, at) => cell.padEnd(widths[at]))
+      .map((cell, at) => cell.padEnd(widths[at] ?? 0))
       .join("  ")
       .trimEnd(),
   );

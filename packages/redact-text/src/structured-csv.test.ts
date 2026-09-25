@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import { csvFieldSpans } from "./structured-csv";
 
@@ -16,6 +16,8 @@ describe("csvFieldSpans", () => {
   it("leaves the header itself readable", () => {
     const text = "nome,sku\nAna Lima,X-1";
     const [span] = csvFieldSpans(text);
+
+    assert.isDefined(span);
 
     expect(span.start).toBeGreaterThan(text.indexOf("\n"));
   });

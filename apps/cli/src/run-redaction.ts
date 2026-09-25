@@ -157,7 +157,13 @@ const runRedaction = async ({
   const cancelled = signal.aborted;
 
   const outcomes = settled.map((outcome, index): FileOutcome => {
-    const name = basename(files[index]);
+    const file = files[index];
+
+    if (file === undefined) {
+      throw new RangeError(`Redaction outcome ${String(index)} has no file`);
+    }
+
+    const name = basename(file);
 
     return outcome.status === "rejected"
       ? { kind: "failed", name, reason: describeError(outcome.reason) }

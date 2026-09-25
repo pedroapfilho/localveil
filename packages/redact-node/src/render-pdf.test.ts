@@ -47,7 +47,7 @@ describe("rendering a PDF through the node canvas", () => {
     await run(IDENTITY_CARD);
 
     expect(recognised.length).toBeGreaterThan(0);
-    expect(recognised[0].slice(0, 4)).toEqual(PNG_MAGIC);
-    expect(recognised[0].length).toBeGreaterThan(1000);
+    expect(recognised[0]?.slice(0, 4)).toEqual(PNG_MAGIC);
+    expect(recognised[0]?.length).toBeGreaterThan(1000);
   });
 });
