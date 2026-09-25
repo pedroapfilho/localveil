@@ -37,7 +37,7 @@ class FakeWorker {
   }
 
   emit(type: string, event: unknown) {
-    // oxlint-disable-next-line unicorn/no-useless-spread
+    // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
     for (const handler of [...(this.handlers.get(type) ?? [])]) {
       handler(event);
     }

@@ -1,4 +1,3 @@
-/* oxlint-disable jsx-a11y/no-redundant-roles */
 import { useTranslations } from "@repo/i18n";
 import { modelById } from "@repo/pii-detect/models";
 import { ArrowUpRightIcon } from "lucide-react";
@@ -27,6 +26,7 @@ const SiteFooter = () => {
           {t("footer.offline")}
         </p>
 
+        {/* oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops list semantics from an unstyled list */}
         <ul className="flex flex-wrap gap-x-6 gap-y-2" role="list">
           {links.map((link) => (
             <li className="text-base font-normal sm:text-sm" key={link.key}>

@@ -11,7 +11,7 @@ import workerpool from "workerpool";
 
 import type { ModelHost } from "./model-host";
 import { createModelHost } from "./model-host";
-// oxlint-disable-next-line import/default
+// oxlint-disable-next-line import/default -- Vite's ?worker&url query resolves to a default-exported URL the resolver cannot see
 import redactWorkerUrl from "./redact-worker.ts?worker&url";
 import type { AnalyseTask, ApplyTask, ProgressEvent } from "./worker-protocol";
 
@@ -54,18 +54,15 @@ type LiveJob = {
   watchdog?: ReturnType<typeof setTimeout>;
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; this guard is their parser
 const isAnalysis = (value: unknown): value is Analysis =>
   typeof value === "object" &&
   value !== null &&
   "detections" in value &&
   Array.isArray(value.detections);
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; this guard is their parser
 const isResult = (value: unknown): value is RedactionResult =>
   typeof value === "object" && value !== null && "blob" in value && value.blob instanceof Blob;
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the worker boundary untyped; this guard is their parser
 const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   typeof payload === "object" &&
   payload !== null &&
@@ -78,7 +75,6 @@ type WorkerTask = {
   then: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool's exec result is untyped; this guard is its parser
 const isWorkerTask = (task: unknown): task is WorkerTask =>
   typeof task === "object" &&
   task !== null &&
@@ -108,7 +104,7 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
   try {
     await pool.terminate(true);
   } catch (error) {
-    // oxlint-disable-next-line eslint/no-console
+    // oxlint-disable-next-line eslint/no-console -- a failed shutdown is recoverable, so it is surfaced in the console instead of thrown
     console.warn("A redaction worker would not shut down", error);
   }
 };
@@ -121,7 +117,6 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
 
   const jobs = new Map<string, LiveJob>();
 
-  // oxlint-disable-next-line eslint/prefer-const
   let host: ModelHost;
 
   const arm = (job: LiveJob) => {
@@ -158,10 +153,9 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     createModelHost({
       model: chosen,
       onLost: (reason, fatal) => {
-        // oxlint-disable-next-line unicorn/no-useless-spread
         const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
 
-        // oxlint-disable-next-line unicorn/no-useless-spread
+        // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
         for (const job of [...jobs.values()]) {
           if (job.watchdog !== undefined || fatal) {
             give(job, reason);
@@ -306,7 +300,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       release(jobs.get(id))?.task.cancel();
     },
     destroy: () => {
-      // oxlint-disable-next-line unicorn/no-useless-spread
+      // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
       for (const job of [...jobs.values()]) {
         release(job);
       }
@@ -322,7 +316,6 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
         return;
       }
 
-      // oxlint-disable-next-line unicorn/no-useless-spread
       const live = [...jobs.values()];
 
       for (const job of live) {

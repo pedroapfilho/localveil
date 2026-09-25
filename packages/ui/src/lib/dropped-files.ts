@@ -6,7 +6,7 @@ type Selection = {
 };
 
 declare global {
-  // oxlint-disable-next-line typescript/consistent-type-definitions
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- augmenting the global Window needs interface declaration merging
   interface Window {
     showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
   }
@@ -68,11 +68,9 @@ const childrenOf = async function* (entry: FileSystemDirectoryEntry) {
       reader.readEntries(resolve, reject);
     });
 
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
   for (let page = await readPage(); page.length > 0; page = await readPage()) {
     yield* page;
   }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop */
 };
 
 type Tree<Node> = {
@@ -96,7 +94,6 @@ const collect = async <Node>(
     if (tree.isDirectory(node)) {
       const here = [...parent, tree.nameOf(node)];
 
-      /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
       for await (const child of tree.childrenOf(node)) {
         await walk(child, here);
 
@@ -104,7 +101,6 @@ const collect = async <Node>(
           return;
         }
       }
-      /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
 
       return;
     }
@@ -119,7 +115,6 @@ const collect = async <Node>(
     }
   };
 
-  /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
   for (const root of roots) {
     await walk(root, []);
 
@@ -127,7 +122,6 @@ const collect = async <Node>(
       return;
     }
   }
-  /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-defer-await */
 };
 
 const capped = (found: Array<SelectedFile>): Selection => ({

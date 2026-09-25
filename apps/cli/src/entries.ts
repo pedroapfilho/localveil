@@ -27,7 +27,7 @@ const valueOf = (args: ReadonlyArray<string>, at: number, name: string) => {
   const arg = args[at];
 
   if (arg === `--${name}`) {
-    return { extra: 1, value: args[at + 1] };
+    return { extra: 1, value: args.at(at + 1) };
   }
 
   const prefix = `--${name}=`;
@@ -160,7 +160,7 @@ const resolveArguments = async (
     }
   }
 
-  const first = selection[0];
+  const first = selection.at(0);
   const directory = first === undefined ? (directories[0] ?? workingDirectory) : dirname(first);
 
   return {

@@ -52,7 +52,6 @@ const FIXTURES = [
 ] as const;
 
 const bytesOf = (name: string) =>
-  // oxlint-disable-next-line node/no-sync
   readFileSync(new URL(`../../../fixtures/${name}`, import.meta.url));
 
 const fixture = ({ name, type }: { name: string; type: string }) =>

@@ -115,7 +115,6 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
 
     for (const name of ["English", "Español", "Português"]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
       expect(await screen.findByRole("option", { name })).toBeInTheDocument();
     }
   });

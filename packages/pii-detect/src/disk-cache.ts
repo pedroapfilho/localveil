@@ -17,7 +17,7 @@ const isMissingFile = (cause: unknown) =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
 
 const warnNotKept = (file: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console
+  // oxlint-disable-next-line eslint/no-console -- a cache write failure is recoverable, so it is surfaced in the console instead of thrown
   console.warn(`Could not keep the model at ${file}`, cause);
 };
 
