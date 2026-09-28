@@ -28,7 +28,7 @@
     "@repo/ocr": "workspace:*",
     "@repo/redact-core": "workspace:*",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.2.108"
+    "pdfjs-dist": "^6.3.289"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",

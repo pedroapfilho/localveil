@@ -24,56 +24,16 @@ allowBuilds:
   tesseract.js: false
 
 minimumReleaseAgeExclude:
-  - cn@0.2.4
-  - "@oxlint-tsgolint/darwin-arm64@7.0.2001"
-  - "@oxlint-tsgolint/darwin-x64@7.0.2001"
-  - "@oxlint-tsgolint/linux-arm64@7.0.2001"
-  - "@oxlint-tsgolint/linux-x64@7.0.2001"
-  - "@oxlint-tsgolint/win32-arm64@7.0.2001"
-  - "@oxlint-tsgolint/win32-x64@7.0.2001"
-  - "@oxlint/binding-android-arm-eabi@1.80.0"
-  - "@oxlint/binding-android-arm64@1.80.0"
-  - "@oxlint/binding-darwin-arm64@1.80.0"
-  - "@oxlint/binding-darwin-x64@1.80.0"
-  - "@oxlint/binding-freebsd-x64@1.80.0"
-  - "@oxlint/binding-linux-arm-gnueabihf@1.80.0"
-  - "@oxlint/binding-linux-arm-musleabihf@1.80.0"
-  - "@oxlint/binding-linux-arm64-gnu@1.80.0"
-  - "@oxlint/binding-linux-arm64-musl@1.80.0"
-  - "@oxlint/binding-linux-ppc64-gnu@1.80.0"
-  - "@oxlint/binding-linux-riscv64-gnu@1.80.0"
-  - "@oxlint/binding-linux-riscv64-musl@1.80.0"
-  - "@oxlint/binding-linux-s390x-gnu@1.80.0"
-  - "@oxlint/binding-linux-x64-gnu@1.80.0"
-  - "@oxlint/binding-linux-x64-musl@1.80.0"
-  - "@oxlint/binding-openharmony-arm64@1.80.0"
-  - "@oxlint/binding-win32-arm64-msvc@1.80.0"
-  - "@oxlint/binding-win32-ia32-msvc@1.80.0"
-  - "@oxlint/binding-win32-x64-msvc@1.80.0"
-  - oxlint-tsgolint@7.0.2001
-  - oxlint@1.80.0
   - "@dashfoo/*"
   - "@easeia/*"
   - "@usebutr/*"
   - "@walletwright/*"
   - astro-awesomeness
   - oxlint-config-awesomeness
-  - "@napi-rs/canvas-android-arm64@1.0.3"
-  - "@napi-rs/canvas-darwin-arm64@1.0.3"
-  - "@napi-rs/canvas-darwin-x64@1.0.3"
-  - "@napi-rs/canvas-linux-arm-gnueabihf@1.0.3"
-  - "@napi-rs/canvas-linux-arm64-gnu@1.0.3"
-  - "@napi-rs/canvas-linux-arm64-musl@1.0.3"
-  - "@napi-rs/canvas-linux-riscv64-gnu@1.0.3"
-  - "@napi-rs/canvas-linux-x64-gnu@1.0.3"
-  - "@napi-rs/canvas-linux-x64-musl@1.0.3"
-  - "@napi-rs/canvas-win32-arm64-msvc@1.0.3"
-  - "@napi-rs/canvas-win32-x64-msvc@1.0.3"
-  - "@napi-rs/canvas@1.0.3"
-  - "@shadcn/lint@0.1.0"
 
 peerDependencyRules:
   allowedVersions:
+    "@typescript-eslint/parser>typescript": "7"
     "@typescript-eslint/project-service>typescript": "7"
     "@typescript-eslint/tsconfig-utils>typescript": "7"
     "@typescript-eslint/typescript-estree>typescript": "7"
