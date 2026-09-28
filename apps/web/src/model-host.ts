@@ -24,7 +24,6 @@ type HostState =
 const post = (worker: Worker, message: ConnectRequest | DisconnectRequest) => {
   const transfer = message.type === "connect" ? [message.port] : [];
 
-  // oxlint-disable-next-line unicorn/require-post-message-target-origin
   worker.postMessage(message, transfer);
 };
 
@@ -54,10 +53,6 @@ const createModelHost = ({ model, onLost, onProgress }: ModelHostOptions): Model
     worker.addEventListener(
       "message",
       (event: MessageEvent<ModelResponse>) => {
-        if (event.data.type !== "model-progress") {
-          return;
-        }
-
         onProgress(event.data.fraction, event.data.stage);
       },
       { signal },

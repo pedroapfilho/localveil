@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { withCacheLock } from "./cache-lock";
 import { modelById, revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
@@ -46,6 +46,9 @@ const serveRanges = () => {
         .replace("bytes=", "")
         .split("-")
         .map(Number);
+
+      assert.isDefined(start);
+      assert.isDefined(end);
 
       asked.push(url);
 
@@ -259,15 +262,18 @@ describe("removeModel in the browser", () => {
       return fetchRange(input, init);
     });
 
-    const downloading = expect(
-      downloadModel(MODEL, () => undefined, undefined, store),
-    ).rejects.toThrow("offline");
+    const removeMidDownload = async () => {
+      await started.promise;
+      const removing = removeModel(MODEL, store);
 
-    await started.promise;
-    const removing = removeModel(MODEL, store);
+      resume.resolve(undefined);
+      await removing;
+    };
 
-    resume.resolve(undefined);
-    await Promise.all([downloading, removing]);
+    await Promise.all([
+      expect(downloadModel(MODEL, () => undefined, undefined, store)).rejects.toThrow("offline"),
+      removeMidDownload(),
+    ]);
 
     expect(entries.size).toBe(0);
     await expect(store.listUrls()).resolves.toEqual([]);

@@ -18,9 +18,14 @@ const chunkWords = (words: Array<SourceWord>, size: number, overlap: number): Ar
 
   for (let at = 0; at < words.length; at += stride) {
     const slice = words.slice(at, at + size);
-    const last = slice.at(-1) ?? slice[0];
+    const [first] = slice;
+    const last = slice.at(-1);
 
-    chunks.push({ end: last.end, start: slice[0].start, words: slice });
+    if (first === undefined || last === undefined) {
+      throw new RangeError(`chunk at word ${String(at)} is empty`);
+    }
+
+    chunks.push({ end: last.end, start: first.start, words: slice });
 
     if (at + size >= words.length) {
       break;

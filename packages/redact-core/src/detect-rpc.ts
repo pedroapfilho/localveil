@@ -14,11 +14,9 @@ type DetectResponse =
   | { message: string; requestId: string; type: "detect-error" }
   | { requestId: string; spans: Array<Span>; type: "spans" };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the wire boundary: MessagePort delivers untyped data and this guard is its parser
 const isDetectRequest = (value: unknown): value is DetectRequest =>
   typeof value === "object" && value !== null && "type" in value && value.type === "detect";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the wire boundary: MessagePort delivers untyped data and this guard is its parser
 const isDetectResponse = (value: unknown): value is DetectResponse =>
   typeof value === "object" &&
   value !== null &&
@@ -33,7 +31,7 @@ const serialiseDetect = (detect: Detect): Detect => {
        here would need an externally settled promise per call, which is what this replaced. */
     const spans = tail.then(() => detect(text));
 
-    // oxlint-disable-next-line promise/prefer-await-to-then
+    // oxlint-disable-next-line promise/prefer-await-to-then -- a rejection only has to leave the queue, not reach this caller
     tail = spans.catch(() => {});
 
     return spans;

@@ -11,9 +11,7 @@ const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedacto
 
 const FIXTURES = join(process.cwd(), "../../fixtures");
 
-const bytesOf = (name: string) =>
-  // oxlint-disable-next-line node/no-sync
-  readFileSync(join(FIXTURES, name));
+const bytesOf = (name: string) => readFileSync(join(FIXTURES, name));
 
 const fixture = (name: string, type: string) => new File([bytesOf(name)], name, { type });
 

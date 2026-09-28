@@ -103,11 +103,13 @@ type Tokenizer = PreTrainedTokenizer;
 const frameOf = (tokenizer: Tokenizer): TokenFrame => {
   const frame = tokenizer.encode("", { add_special_tokens: true });
 
-  if (frame.length !== 2) {
+  const [cls, sep] = frame;
+
+  if (frame.length !== 2 || cls === undefined || sep === undefined) {
     throw new TypeError("The tokenizer did not frame an empty text with CLS and SEP");
   }
 
-  return { cls: frame[0], sep: frame[1] };
+  return { cls, sep };
 };
 
 const loadRunner = async (
@@ -123,7 +125,7 @@ const loadRunner = async (
       throw firstError;
     }
 
-    // oxlint-disable-next-line eslint/no-console
+    // oxlint-disable-next-line eslint/no-console -- the wasm fallback is recoverable, so it is surfaced in the console instead of thrown
     console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
     report(0, "model.slowDevice");
 
@@ -207,7 +209,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     try {
       await purgeStaleModels({ models: MODELS, store: chunks });
     } catch (error) {
-      // oxlint-disable-next-line eslint/no-console
+      // oxlint-disable-next-line eslint/no-console -- a stale-weights purge failure is recoverable, so it is surfaced in the console instead of thrown
       console.warn("Could not clear superseded model weights", error);
     }
   }
@@ -244,16 +246,25 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     );
 
     return found.map((candidate) => {
-      const first = keptWords[candidate.start];
-      let last = keptWords[candidate.end];
+      const words = keptWords.slice(candidate.start, candidate.end + 1);
+      const [first] = words;
+      const entity = spec.prompts[candidate.entity];
 
-      for (let at = candidate.end; at > candidate.start && last.line !== first.line; at -= 1) {
-        last = keptWords[at - 1];
+      if (first === undefined || words.length !== candidate.end - candidate.start + 1) {
+        throw new RangeError(
+          `decoded span ${String(candidate.start)}-${String(candidate.end)} is outside the ${String(keptWords.length)} kept words`,
+        );
       }
+
+      if (entity === undefined) {
+        throw new RangeError(`decoded entity ${String(candidate.entity)} has no prompt`);
+      }
+
+      const last = words.findLast((word) => word.line === first.line) ?? first;
 
       return {
         end: last.end,
-        label: spec.prompts[candidate.entity].label,
+        label: entity.label,
         score: candidate.score,
         start: first.start,
       };
@@ -293,16 +304,22 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     const batches = batchInputs(jobs, batching, BATCH_TOKENS);
     const found: Array<Span> = [];
 
-    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
     for (const batch of batches) {
-      const inputs = batch.map((at) => jobs[at]);
+      const inputs = batch.map((at) => {
+        const job = jobs[at];
+
+        if (job === undefined) {
+          throw new RangeError(`batch names job ${String(at)} of ${String(jobs.length)}`);
+        }
+
+        return job;
+      });
       const logits = await run(inputs);
 
       inputs.forEach((input, item) => {
         found.push(...spansOf(input, logits, item));
       });
     }
-    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
     return tightenToVerified(
       [...mergeChunkSpans([{ offset: 0, spans: found }]), ...patternSpans(text)],

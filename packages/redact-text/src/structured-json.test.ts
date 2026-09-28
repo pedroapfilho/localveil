@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import { jsonFieldSpans } from "./structured-json";
 
@@ -14,15 +14,20 @@ describe("jsonFieldSpans", () => {
     const text = '{"nome": "Ana Lima"}';
     const [span] = jsonFieldSpans(text);
 
+    assert.isDefined(span);
+
     expect(text.slice(span.start, span.end)).toBe("Ana Lima");
     expect(text.slice(0, span.start)).toContain("nome");
   });
 
   it("covers the value rather than its quotes", () => {
     const text = '{"email": "a@b.co"}';
+    const [span] = jsonFieldSpans(text);
+
+    assert.isDefined(span);
 
     expect(covered(text)).toEqual(["private_email:a@b.co"]);
-    expect(text[jsonFieldSpans(text)[0].start - 1]).toBe('"');
+    expect(text[span.start - 1]).toBe('"');
   });
 
   it("reads the identifier and credential keys", () => {

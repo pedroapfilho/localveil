@@ -151,7 +151,7 @@ const FileBrowser = ({
       return;
     }
 
-    const focused = rows[row];
+    const focused = rows.at(row);
 
     if (input === " ") {
       if (focused === undefined || focused.isDirectory || !focused.supported) {
@@ -174,7 +174,7 @@ const FileBrowser = ({
     }
 
     if (key.rightArrow || input === "l") {
-      if (focused !== undefined && focused.isDirectory) {
+      if (focused?.isDirectory === true) {
         openDirectory(focused.path);
       }
 
@@ -185,7 +185,7 @@ const FileBrowser = ({
       return;
     }
 
-    if (focused !== undefined && focused.isDirectory) {
+    if (focused?.isDirectory === true) {
       openDirectory(focused.path);
       return;
     }

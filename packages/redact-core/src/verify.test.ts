@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 
 import type { Detect, Span } from "./types";
 import { survivingSpans } from "./verify";
@@ -56,15 +56,17 @@ describe("survivingSpans", () => {
     const long = "a".repeat(200);
     const survivors = await survivingSpans(long, finding(long));
 
-    expect(survivors[0].text).toHaveLength(80);
+    expect(survivors[0]?.text).toHaveLength(80);
   });
 
   it("counts a grapheme rather than a code unit when it truncates", async () => {
     const long = "👩‍👩‍👧‍👦".repeat(100);
-    const survivors = await survivingSpans(long, finding(long));
+    const [survivor] = await survivingSpans(long, finding(long));
+
+    assert.isDefined(survivor);
 
     expect([
-      ...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(survivors[0].text),
+      ...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(survivor.text),
     ]).toHaveLength(80);
   });
 });

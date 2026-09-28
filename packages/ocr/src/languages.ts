@@ -120,7 +120,8 @@ const detectLanguage = (text: string, fallback: OcrLanguage = "en"): DetectedLan
   const tokens = normalise(text).match(WORD) ?? [];
   const scores = tally([...tokens]);
   const ranked = [...scores.entries()].toSorted(([, left], [, right]) => right - left);
-  const [top, second] = ranked;
+  const top = ranked.at(0);
+  const second = ranked.at(1);
   const hits = [...scores.values()].reduce((sum, score) => sum + score, 0);
 
   if (top === undefined || top[1] === 0) {

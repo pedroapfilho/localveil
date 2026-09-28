@@ -10,9 +10,9 @@ const resolveOrExit = async (args: ReadonlyArray<string>) => {
   try {
     return await resolveArguments(args, workingDirectory);
   } catch (error) {
-    // oxlint-disable-next-line eslint/no-console
+    // oxlint-disable-next-line eslint/no-console -- the CLI reports a bad argument on stderr
     console.error(error instanceof Error ? error.message : String(error));
-    // oxlint-disable-next-line unicorn/no-process-exit
+    // oxlint-disable-next-line unicorn/no-process-exit -- the CLI stops on a bad argument before ink renders
     return process.exit(1);
   }
 };

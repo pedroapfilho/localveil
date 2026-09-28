@@ -65,7 +65,7 @@ const swap = async (candidate: string) => {
   note(`then: pnpm --filter @repo/eval swap --model ${model} --restore`);
 };
 
-const [candidate] = positionals;
+const candidate = positionals.at(0);
 
 if (values.restore === true) {
   await restore();

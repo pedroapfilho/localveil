@@ -20,7 +20,8 @@ vi.mock("node:os", async (importOriginal) => {
 });
 
 const MODEL = modelById("gliner-pii-base");
-const EVERYTHING = [...tokenizerUrls(MODEL), weightsUrl(MODEL)];
+const [TOKENIZER, TOKENIZER_CONFIG] = tokenizerUrls(MODEL);
+const EVERYTHING = [TOKENIZER, TOKENIZER_CONFIG, weightsUrl(MODEL)];
 const BODY = new Uint8Array(12);
 
 const keep = (urls: Array<string>) =>
@@ -83,7 +84,6 @@ describe("the CLI's model store", () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual(EVERYTHING);
     await expect(inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
     for (const url of EVERYTHING) {
-      // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
       const stored = await readFile(cachePathFor(url));
 
       expect(new Uint8Array(stored)).toEqual(BODY);
@@ -94,14 +94,14 @@ describe("the CLI's model store", () => {
   });
 
   it("fetches only what is missing and reports already kept weights complete", async () => {
-    await keep([EVERYTHING[0], weightsUrl(MODEL)]);
+    await keep([TOKENIZER, weightsUrl(MODEL)]);
     const reported: Array<number> = [];
 
     await downloadModel(MODEL, (fraction) => {
       reported.push(fraction);
     });
 
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([EVERYTHING[1]]);
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([TOKENIZER_CONFIG]);
     expect(reported).toEqual([1]);
   });
 
@@ -109,7 +109,7 @@ describe("the CLI's model store", () => {
     await keep(tokenizerUrls(MODEL));
     refuseSaving();
 
-    await expect(downloadModel(MODEL, () => undefined)).rejects.toThrow();
+    await expect(downloadModel(MODEL, () => undefined)).rejects.toThrow("EEXIST");
   });
 
   it("still lets inference use fetched bytes if they cannot be saved", async () => {
