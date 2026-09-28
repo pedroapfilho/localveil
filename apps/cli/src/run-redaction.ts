@@ -69,7 +69,6 @@ type RunOptions = {
   signal: AbortSignal;
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; this guard is their parser
 const isProgress = (payload: unknown): payload is { fraction: number; stage: FileStageKey } =>
   typeof payload === "object" &&
   payload !== null &&

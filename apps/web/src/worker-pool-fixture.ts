@@ -19,7 +19,7 @@ class FakeTask implements WorkerTask {
     readonly options: ExecOptions,
   ) {}
 
-  // oxlint-disable-next-line unicorn/no-thenable
+  // oxlint-disable-next-line unicorn/no-thenable -- the fixture mirrors workerpool's thenable task
   then(onDone: (result: Analysis | RedactionResult) => void, onFail: (error: unknown) => void) {
     this.onDone = onDone;
     this.onFail = onFail;
@@ -187,7 +187,7 @@ const modelHost = () => {
 };
 
 const taskAt = (index: number) => {
-  const task = pooled.tasks[index];
+  const task = pooled.tasks.at(index);
 
   if (task === undefined) {
     throw new Error(`No task was queued at index ${String(index)}`);

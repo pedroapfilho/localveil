@@ -38,7 +38,6 @@ type PdfHandle = { pages: Array<{ words: Array<PositionedWord> }> };
 let parserInstalled: Promise<void> | undefined;
 
 const installParser = async () => {
-  // oxlint-disable-next-line react-doctor/async-defer-await
   await import("#pdfjs-worker");
 
   if (!("pdfjsWorker" in globalThis)) {
@@ -76,7 +75,6 @@ const paint = (canvas: OffscreenCanvas, rects: Array<Rect>) => {
 const openPdf = async (file: File) => {
   parserInstalled ??= installParser();
 
-  // oxlint-disable-next-line react-doctor/async-parallel
   const [pdfjs, pdfLib, source] = await Promise.all([
     import("#pdfjs"),
     import("pdf-lib"),
@@ -130,7 +128,7 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
 
   /* SAFETY: pdf.js renders onto an offscreen 2d context at runtime, but its RenderParameters
      type only admits a DOM CanvasRenderingContext2D, so the context is forced through unknown. */
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-chained-type-assertions
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-chained-type-assertions -- see the SAFETY note above
   const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
 
   await page.render({
@@ -147,7 +145,6 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
 const hasWords = (page: unknown) =>
   typeof page === "object" && page !== null && "words" in page && Array.isArray(page.words);
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
 const isHandle = (value: unknown): value is PdfHandle =>
   typeof value === "object" &&
   value !== null &&
@@ -167,14 +164,13 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
     let language: OcrLanguage | undefined;
     let anyText = false;
 
-    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
     for (let number = 1; number <= pdf.numPages; number += 1) {
       const progress = ((number - 1) / pdf.numPages) * 0.9;
 
       onProgress(progress, "stage.extracting");
 
-      // oxlint-disable-next-line eslint/no-loop-func
-      const built = await withPage(pdf, number, async (proxy, viewport) => {
+      // oxlint-disable-next-line eslint/no-loop-func -- the callback runs to completion inside this iteration's await
+      const { hasText, ...built } = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
         const layerText = content.items
           .map((item) => ("str" in item ? item.str : ""))
@@ -217,8 +213,6 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
           };
         }
 
-        anyText ||= reading.words.length > 0;
-
         onProgress(progress, "stage.detecting");
 
         const { text, words } = buildWordIndex(assessReading(reading).legible);
@@ -237,12 +231,12 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
           }
         }
 
-        return { spans, text, words };
+        return { hasText: reading.words.length > 0, spans, text, words };
       });
 
+      anyText ||= hasText;
       pages.push(built);
     }
-    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
     if (!anyText) {
       warnings.add("warning.noText");
@@ -305,14 +299,13 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       } catch (error) {
         copying = false;
 
-        // oxlint-disable-next-line eslint/no-console
+        // oxlint-disable-next-line eslint/no-console -- the painted fallback is recoverable, so it is surfaced in the console instead of thrown
         console.warn("Could not copy an untouched page, so it is painted instead", error);
 
         return false;
       }
     };
 
-    /* oxlint-disable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
     for (let number = 1; number <= pages.length; number += 1) {
       const progress = ((number - 1) / pages.length) * 0.9;
       const page = pages[number - 1];
@@ -364,7 +357,6 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
         }
       });
     }
-    /* oxlint-enable eslint/no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/server-sequential-independent-await */
 
     const survivors = await survivingSpans(survived.join(" "), detect);
 

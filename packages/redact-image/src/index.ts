@@ -145,7 +145,6 @@ const countRedactions = (readings: Array<Reading>, spansFor: (at: number) => Arr
   return [...maximums.values()].reduce((total, count) => total + count, 0);
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
 const isHandle = (value: unknown): value is ImageHandle =>
   typeof value === "object" &&
   value !== null &&

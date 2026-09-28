@@ -10,7 +10,7 @@ const pickDevice = async (): Promise<ModelDevice> => {
     return "wasm";
   }
 
-  const { gpu } = navigator;
+  const { gpu }: { gpu?: unknown } = navigator;
 
   if (typeof gpu !== "object" || gpu === null || !("requestAdapter" in gpu)) {
     return "wasm";
@@ -49,7 +49,7 @@ const fetchModelBytes = async (url: string, options: FetchModelOptions): Promise
 
 const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promise<RunModel> => {
   const session = await ort.InferenceSession.create(bytes, { executionProviders: [device] });
-  const output = session.outputNames[0];
+  const output = session.outputNames.at(0);
 
   if (output === undefined) {
     throw new TypeError("The model session reports no outputs");

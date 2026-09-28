@@ -128,7 +128,9 @@ const remove = async (id: ModelId, io: ModelsIo) => {
 };
 
 const runModelsCommand = (args: ReadonlyArray<string>, io: ModelsIo): Promise<number> => {
-  const [action, value, ...rest] = args;
+  const action = args.at(0);
+  const value = args.at(1);
+  const rest = args.slice(2);
 
   if (rest.length > 0) {
     io.err.write(USAGE);

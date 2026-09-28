@@ -4,7 +4,7 @@ import { isLocale } from "./locale";
 const STORAGE_KEY = "localveil.locale";
 
 const warnStorageFailed = (action: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console
+  // oxlint-disable-next-line eslint/no-console -- a storage failure is recoverable, so it is surfaced in the console instead of thrown
   console.warn(`Could not ${action} the saved language`, cause);
 };
 

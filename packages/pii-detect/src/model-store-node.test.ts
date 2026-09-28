@@ -83,7 +83,6 @@ describe("the CLI's model store", () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual(EVERYTHING);
     await expect(inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
     for (const url of EVERYTHING) {
-      // oxlint-disable-next-line eslint/no-await-in-loop, react-doctor/async-await-in-loop
       const stored = await readFile(cachePathFor(url));
 
       expect(new Uint8Array(stored)).toEqual(BODY);
@@ -109,7 +108,7 @@ describe("the CLI's model store", () => {
     await keep(tokenizerUrls(MODEL));
     refuseSaving();
 
-    await expect(downloadModel(MODEL, () => undefined)).rejects.toThrow();
+    await expect(downloadModel(MODEL, () => undefined)).rejects.toThrow("EEXIST");
   });
 
   it("still lets inference use fetched bytes if they cannot be saved", async () => {

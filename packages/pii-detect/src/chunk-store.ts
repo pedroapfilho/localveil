@@ -64,7 +64,6 @@ const openDatabase = () =>
     });
   });
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- IndexedDB request results are untyped; this guard is their parser
 const isManifest = (value: unknown): value is Manifest =>
   typeof value === "object" &&
   value !== null &&
@@ -75,7 +74,6 @@ const isManifest = (value: unknown): value is Manifest =>
   "total" in value &&
   typeof value.total === "number";
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- IndexedDB request results are untyped; this guard is their parser
 const isChunkRecord = (value: unknown): value is ChunkRecord =>
   typeof value === "object" &&
   value !== null &&

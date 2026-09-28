@@ -259,15 +259,18 @@ describe("removeModel in the browser", () => {
       return fetchRange(input, init);
     });
 
-    const downloading = expect(
-      downloadModel(MODEL, () => undefined, undefined, store),
-    ).rejects.toThrow("offline");
+    const removeMidDownload = async () => {
+      await started.promise;
+      const removing = removeModel(MODEL, store);
 
-    await started.promise;
-    const removing = removeModel(MODEL, store);
+      resume.resolve(undefined);
+      await removing;
+    };
 
-    resume.resolve(undefined);
-    await Promise.all([downloading, removing]);
+    await Promise.all([
+      expect(downloadModel(MODEL, () => undefined, undefined, store)).rejects.toThrow("offline"),
+      removeMidDownload(),
+    ]);
 
     expect(entries.size).toBe(0);
     await expect(store.listUrls()).resolves.toEqual([]);
