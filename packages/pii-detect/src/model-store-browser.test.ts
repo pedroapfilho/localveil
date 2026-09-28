@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { withCacheLock } from "./cache-lock";
 import { modelById, revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
@@ -46,6 +46,9 @@ const serveRanges = () => {
         .replace("bytes=", "")
         .split("-")
         .map(Number);
+
+      assert.isDefined(start);
+      assert.isDefined(end);
 
       asked.push(url);
 

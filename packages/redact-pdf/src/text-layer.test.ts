@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import { textLayerWords } from "./text-layer";
 
@@ -20,6 +20,8 @@ describe("textLayerWords", () => {
   it("places a single word where the run sits", () => {
     const [word] = layer(item({ baseline: 100, str: "Ana", width: 30, x: 10 }));
 
+    assert.isDefined(word);
+
     expect(word.text).toBe("Ana");
     expect(word.bbox.x0).toBeCloseTo(20 - 20, 1);
     expect(word.bbox.y1).toBeCloseTo(200, 1);
@@ -34,11 +36,17 @@ describe("textLayerWords", () => {
   it("puts the second word to the right of the first", () => {
     const [first, second] = layer(item({ baseline: 100, str: "Ana Lima", width: 80, x: 0 }));
 
+    assert.isDefined(first);
+    assert.isDefined(second);
+
     expect(second.bbox.x0).toBeGreaterThan(first.bbox.x0);
   });
 
   it("grows each box to absorb proportional-font drift", () => {
     const [tight] = layer(item({ baseline: 100, str: "Ana", width: 30, x: 0 }));
+
+    assert.isDefined(tight);
+
     const per = (30 * 2) / 3;
 
     expect(tight.bbox.x0).toBeCloseTo(-per, 1);
@@ -48,12 +56,17 @@ describe("textLayerWords", () => {
   it("gives a box real height from the transform", () => {
     const [word] = layer(item({ baseline: 100, size: 12, str: "Ana", width: 30, x: 0 }));
 
+    assert.isDefined(word);
+
     expect(word.bbox.y1 - word.bbox.y0).toBeCloseTo(24, 1);
   });
 
   it("flips the y axis, so a lower baseline is further down the page", () => {
     const [high] = layer(item({ baseline: 150, str: "Ana", width: 30, x: 0 }));
     const [low] = layer(item({ baseline: 50, str: "Ana", width: 30, x: 0 }));
+
+    assert.isDefined(high);
+    assert.isDefined(low);
 
     expect(low.bbox.y1).toBeGreaterThan(high.bbox.y1);
   });

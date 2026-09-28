@@ -306,9 +306,9 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       }
     };
 
-    for (let number = 1; number <= pages.length; number += 1) {
-      const progress = ((number - 1) / pages.length) * 0.9;
-      const page = pages[number - 1];
+    for (const [index, page] of pages.entries()) {
+      const number = index + 1;
+      const progress = (index / pages.length) * 0.9;
 
       onProgress(progress, "stage.redacting");
 
