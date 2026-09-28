@@ -14,11 +14,13 @@ const translate = (
   key: string,
   values: TranslationValues = {},
 ) => {
-  if (!Object.hasOwn(messages, key)) {
+  const message = Object.hasOwn(messages, key) ? messages[key] : undefined;
+
+  if (message === undefined) {
     throw new Error(`No translation for "${key}"`);
   }
 
-  return messages[key].replaceAll(PLACEHOLDER, (_placeholder, name: string) => {
+  return message.replaceAll(PLACEHOLDER, (_placeholder, name: string) => {
     if (!Object.hasOwn(values, name)) {
       throw new Error(`Translation "${key}" needs a value for "${name}"`);
     }

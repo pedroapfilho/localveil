@@ -4,6 +4,16 @@ type SpanCandidate = { end: number; entity: number; score: number; start: number
 
 const sigmoid = (value: number) => 1 / (1 + Math.exp(-value));
 
+const scoreAt = (data: ArrayLike<number>, at: number) => {
+  const value = data[at];
+
+  if (value === undefined) {
+    throw new RangeError(`The model returned no logit at ${String(at)} of ${String(data.length)}`);
+  }
+
+  return sigmoid(value);
+};
+
 const isNumberArray = (value: unknown): value is ArrayLike<number> => {
   if (typeof value !== "object" || value === null || !("length" in value)) {
     return false;
@@ -18,7 +28,11 @@ const isNumberArray = (value: unknown): value is ArrayLike<number> => {
   return length === 0 || ("0" in value && typeof value[0] === "number");
 };
 
-const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> }): Logits => {
+const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> } | undefined): Logits => {
+  if (tensor === undefined) {
+    throw new TypeError("The model returned no logits");
+  }
+
   if (!isNumberArray(tensor.data)) {
     throw new TypeError("The model returned logits that are not numbers");
   }
@@ -76,7 +90,7 @@ const decodeSpans = ({
       const base = offset + (start * widths + width) * entities;
 
       for (let entity = 0; entity < entities; entity += 1) {
-        const score = sigmoid(logits.data[base + entity]);
+        const score = scoreAt(logits.data, base + entity);
 
         if (score >= threshold) {
           candidates.push({ end, entity, score, start });
@@ -135,7 +149,7 @@ const decodeTokenSpans = ({
 
   const words = Math.min(positions, wordCount);
   const scoreOf = (word: number, entity: number, role: number) =>
-    sigmoid(logits.data[((item * positions + word) * entities + entity) * ROLES + role]);
+    scoreAt(logits.data, ((item * positions + word) * entities + entity) * ROLES + role);
 
   const candidates: Array<SpanCandidate> = [];
 

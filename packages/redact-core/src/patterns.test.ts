@@ -171,7 +171,7 @@ describe("patternSpans", () => {
   });
 
   it("scores a pattern match as certain, because arithmetic is not a guess", () => {
-    expect(patternSpans("CPF 108.467.036-45")[0].score).toBe(1);
+    expect(patternSpans("CPF 108.467.036-45")[0]?.score).toBe(1);
   });
 
   it("reports spans in the order they appear", () => {

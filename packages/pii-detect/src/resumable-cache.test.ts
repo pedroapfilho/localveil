@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { memoryStore } from "./chunk-store-fixture";
 import type { CacheProgress } from "./resumable-cache";
@@ -46,6 +46,9 @@ const rangeServer = () => {
   const fetchRange = vi.fn<typeof fetch>((_input, init) => {
     const header = new Headers(init?.headers).get("Range") ?? "";
     const [start, end] = header.replace("bytes=", "").split("-").map(Number);
+
+    assert.isDefined(start);
+    assert.isDefined(end);
 
     return Promise.resolve(
       new Response(BODY.slice(start, end + 1), {

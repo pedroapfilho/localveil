@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import {
   APPLY_SCORE,
@@ -22,12 +22,16 @@ describe("describeSpans", () => {
   it("previews the covered text", () => {
     const [detection] = describeSpans([span(10, 18)], TEXT);
 
+    assert.isDefined(detection);
+
     expect(detection.preview).toBe("Ana Lima");
     expect(detection.confidence).toBe(0.9);
   });
 
   it("keeps the span offsets so apply can rebuild them", () => {
     const [detection] = describeSpans([span(10, 18)], TEXT);
+
+    assert.isDefined(detection);
 
     expect(detection.start).toBe(10);
     expect(detection.end).toBe(18);
@@ -37,6 +41,9 @@ describe("describeSpans", () => {
     const [withPage] = describeSpans([span(10, 18)], TEXT, 3);
     const [without] = describeSpans([span(10, 18)], TEXT);
 
+    assert.isDefined(withPage);
+    assert.isDefined(without);
+
     expect(withPage.page).toBe(3);
     expect(without.page).toBeUndefined();
   });
@@ -45,12 +52,17 @@ describe("describeSpans", () => {
     const [first] = describeSpans([span(0, 4)], TEXT, 0);
     const [second] = describeSpans([span(0, 4)], TEXT, 1);
 
+    assert.isDefined(first);
+    assert.isDefined(second);
+
     expect(first.id).not.toBe(second.id);
   });
 
   it("truncates a long preview to eighty graphemes", () => {
     const long = "a".repeat(200);
     const [detection] = describeSpans([span(0, 200)], long);
+
+    assert.isDefined(detection);
 
     expect(detection.preview).toHaveLength(80);
   });
@@ -72,7 +84,7 @@ describe("dedupeDetections", () => {
       ...describeSpans([span(10, 18, 1)], TEXT),
     ];
 
-    expect(dedupeDetections(found)[0].confidence).toBe(1);
+    expect(dedupeDetections(found)[0]?.confidence).toBe(1);
   });
 
   it("folds a nested span into the one that encloses it", () => {
@@ -80,13 +92,13 @@ describe("dedupeDetections", () => {
     const deduped = dedupeDetections(found);
 
     expect(deduped).toHaveLength(1);
-    expect([deduped[0].start, deduped[0].end]).toEqual([10, 22]);
+    expect([deduped[0]?.start, deduped[0]?.end]).toEqual([10, 22]);
   });
 
   it("carries the better score of the pair onto the survivor", () => {
     const found = describeSpans([span(10, 22, 0.7), span(14, 22, 1)], TEXT);
 
-    expect(dedupeDetections(found)[0].confidence).toBe(1);
+    expect(dedupeDetections(found)[0]?.confidence).toBe(1);
   });
 
   it("leaves a partial overlap as two detections", () => {
@@ -154,16 +166,23 @@ describe("keptSpans", () => {
   });
 
   it("returns only the span whose id was covered", () => {
-    const kept = keptSpans(detections, { covered: [detections[1].id] });
+    const [, second] = detections;
+
+    assert.isDefined(second);
+
+    const kept = keptSpans(detections, { covered: [second.id] });
 
     expect(kept).toEqual([{ end: 18, label: "private_person", score: 0.9, start: 10 }]);
   });
 
   it("covers a low-confidence span when it was explicitly ticked", () => {
     const found = describeSpans([span(0, 6, 0.2)], TEXT);
+    const [low] = found;
+
+    assert.isDefined(low);
 
     expect(keptSpans(found, defaultDecisions(found))).toEqual([]);
-    expect(keptSpans(found, { covered: [found[0].id] })).toHaveLength(1);
+    expect(keptSpans(found, { covered: [low.id] })).toHaveLength(1);
   });
 
   it("only returns the detections belonging to the page asked for", () => {
