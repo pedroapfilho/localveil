@@ -2,7 +2,7 @@ overrides:
   # Native runtimes share a Linux SONAME, so Transformers must load the detector's runtime.
   "@huggingface/transformers>onnxruntime-node": "catalog:"
   # Security: force patched transitive releases to clear pnpm audit advisories.
-  # Each pin is the lowest patched version within the already-resolved major.
+  # Each pin is the lowest release that carries the fix.
   adm-zip: "^0.6.1"
   brace-expansion: "^5.0.9"
   sharp: "^0.35.4"
