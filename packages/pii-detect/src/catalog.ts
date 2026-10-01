@@ -7,7 +7,6 @@ type ModelDecoding = "span" | "token";
 
 type ModelSpec = {
   bytes: number;
-  card: string;
   decoding: ModelDecoding;
   file: string;
   id: string;
@@ -29,7 +28,6 @@ const HUB = "https://huggingface.co";
 const MODELS = [
   {
     bytes: 893_933_650,
-    card: "https://huggingface.co/urchade/gliner_multi_pii-v1",
     decoding: "span",
     file: "model_q4.onnx",
     id: "gliner-multi-pii",
@@ -43,7 +41,6 @@ const MODELS = [
   },
   {
     bytes: 196_757_174,
-    card: "https://huggingface.co/knowledgator/gliner-pii-base-v1.0",
     decoding: "span",
     file: "model_quint8.onnx",
     id: "gliner-pii-base",
@@ -57,7 +54,6 @@ const MODELS = [
   },
   {
     bytes: 45_820_894,
-    card: "https://huggingface.co/knowledgator/gliner-pii-edge-v1.0",
     decoding: "token",
     file: "model_quint8.onnx",
     id: "gliner-pii-edge",

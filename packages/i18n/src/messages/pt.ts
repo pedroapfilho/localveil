@@ -25,7 +25,6 @@ const pt: Messages = {
   "files.selected": "{count} selecionados",
   "footer.github": "Código no GitHub",
   "footer.heading": "Sobre o localveil",
-  "footer.model": "Modelo de detecção",
   "footer.offline": "Funciona sem internet depois que o modelo é baixado.",
   "footer.summary":
     "O localveil encontra nomes, e-mails, telefones, endereços, datas e números de conta nos seus arquivos e cobre tudo isso. A detecção roda nesta aba, na sua própria máquina, então nada do que você solta aqui é enviado.",
