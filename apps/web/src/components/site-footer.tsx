@@ -1,17 +1,12 @@
 import { useTranslations } from "@repo/i18n";
-import { modelById } from "@repo/pii-detect/models";
 import { ArrowUpRightIcon } from "lucide-react";
 
-import { useModelLibrary } from "../model-library";
+const LINKS = [
+  { href: "https://github.com/pedroapfilho/localveil", key: "footer.github" },
+] as const;
 
 const SiteFooter = () => {
   const { t } = useTranslations();
-  const selected = useModelLibrary((state) => state.selected);
-
-  const links = [
-    { href: "https://github.com/pedroapfilho/localveil", key: "footer.github" },
-    { href: modelById(selected).card, key: "footer.model" },
-  ] as const;
 
   return (
     <footer className="border-foreground/10 border-t">
@@ -28,7 +23,7 @@ const SiteFooter = () => {
 
         {/* oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops list semantics from an unstyled list */}
         <ul className="flex flex-wrap gap-x-6 gap-y-2" role="list">
-          {links.map((link) => (
+          {LINKS.map((link) => (
             <li className="text-base font-normal sm:text-sm" key={link.key}>
               <a
                 className="text-foreground focus-visible:outline-ring inline-flex items-center gap-1 underline decoration-current/30 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2"
