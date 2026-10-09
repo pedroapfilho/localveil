@@ -9,9 +9,9 @@ export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
 export type { ChunkSpans, Range } from "./merge-spans";
 export { redactFile } from "./redact-file";
 export { patternSpans } from "./patterns";
+export { isProgressEvent } from "./progress-event";
+export type { ProgressEvent } from "./progress-event";
 export { inReadingOrder } from "./reading-order";
-export { createRedactorRegistry } from "./registry";
-export type { RedactorRegistry } from "./registry";
 export type {
   Analysis,
   ApplyRequest,

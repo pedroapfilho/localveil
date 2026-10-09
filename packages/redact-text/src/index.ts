@@ -12,15 +12,11 @@ import { maskRanges } from "./mask";
 import { csvFieldSpans } from "./structured-csv";
 import { jsonFieldSpans } from "./structured-json";
 
-const TEXT_EXTENSIONS = new Set([".csv", ".json", ".log", ".md", ".txt"]);
-
 const extensionOf = (name: string) => {
   const dot = name.lastIndexOf(".");
 
   return dot > 0 ? name.slice(dot).toLowerCase() : "";
 };
-
-const hasTextExtension = (name: string) => TEXT_EXTENSIONS.has(extensionOf(name));
 
 const verifiable = (name: string, text: string) => {
   if (extensionOf(name) !== ".csv") {
@@ -56,7 +52,6 @@ const analysedText = (handle: unknown): AnalysedUnit => {
 };
 
 const textRedactor: Redactor = {
-  accepts: (file) => file.type.startsWith("text/") || hasTextExtension(file.name),
   analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
 

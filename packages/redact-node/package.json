@@ -18,13 +18,13 @@
     "@napi-rs/canvas": "^1.0.9",
     "@repo/pii-detect": "workspace:*",
     "@repo/redact-core": "workspace:*",
-    "@repo/redact-image": "workspace:*",
-    "@repo/redact-pdf": "workspace:*",
-    "@repo/redact-text": "workspace:*"
+    "@repo/redact-formats": "workspace:*"
   },
   "devDependencies": {
     "@repo/config-vitest": "workspace:*",
     "@repo/ocr": "workspace:*",
+    "@repo/redact-image": "workspace:*",
+    "@repo/redact-pdf": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^26.6.2",
     "pdf-lib": "^1.17.1",

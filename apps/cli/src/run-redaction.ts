@@ -8,6 +8,7 @@ import type { ModelId } from "@repo/pii-detect/models";
 import {
   buildZip,
   describeError,
+  isProgressEvent,
   serveDetect,
   toArrayBuffer,
   uniqueFilename,
@@ -68,14 +69,6 @@ type RunOptions = {
   outputDirectory: string;
   signal: AbortSignal;
 };
-
-const isProgress = (payload: unknown): payload is { fraction: number; stage: FileStageKey } =>
-  typeof payload === "object" &&
-  payload !== null &&
-  "fraction" in payload &&
-  typeof payload.fraction === "number" &&
-  "stage" in payload &&
-  typeof payload.stage === "string";
 
 const availableName = async (directory: string): Promise<string> => {
   const taken = new Set(await readdir(directory));
@@ -138,9 +131,9 @@ const runRedaction = async ({
 
   const redactOne = (file: string, index: number) =>
     pool.exec<(path: string) => NodeRedactionOutput>("redact", [file], {
-      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; isProgress parses them
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; isProgressEvent parses them
       on: (payload: unknown) => {
-        if (isProgress(payload)) {
+        if (isProgressEvent(payload)) {
           onFileProgress({ fraction: payload.fraction, index, stage: payload.stage });
         }
       },

@@ -1,16 +1,10 @@
-/* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-node wraps wasm engines and worker threads; the module seam is the only practical hermetic substitute */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { isSupported, parentEntry, readDirectory, resolveArguments } from "./entries";
-
-vi.mock("@repo/redact-node", () => ({
-  createNodeRedactor: vi.fn(),
-  SUPPORTED_EXTENSIONS: [".txt", ".md"],
-}));
 
 const makeDirectory = async () => {
   const directory = await mkdtemp(join(tmpdir(), "localveil-entries-"));

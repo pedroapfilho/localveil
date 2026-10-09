@@ -151,6 +151,8 @@ Language detection is not a model. It scores stopword frequency across the three
 | `.pdf`                                                     | Rendered, then recognised page by page | An image-per-page PDF with a searchable text layer rebuilt from the words that survived |
 | `.png` `.jpg` `.webp` `.gif` `.bmp` `.tif` `.avif` `.heic` | Recognised with OCR                    | The same image with black rectangles painted on                                         |
 
+HEIC and TIFF open only where something decodes them. Among browsers that is Safari; Chromium and Firefox fail such a file, and the CLI does not list either, because its canvas has no decoder for them.
+
 A redacted PDF is rasterised rather than annotated. Drawing boxes over live text leaves the words in the file for anyone to copy out, which is not redaction. Rasterising costs the original text layer, so one is rebuilt from the recognised words that were not covered, and the output stays searchable.
 
 ## Privacy
@@ -170,8 +172,9 @@ flowchart LR
   cli["<b>cli</b><br/>Ink terminal app"] --> threads["<b>worker pool</b><br/>one file per thread"]
   threads --> node["<b>@repo/redact-node</b><br/>canvas shims for Node"]
 
-  pool --> redactors
-  node --> redactors
+  pool --> formats["<b>@repo/redact-formats</b><br/>format → redactor"]
+  node --> formats
+  formats --> redactors
 
   subgraph redactors["one redactor per format"]
     text["<b>@repo/redact-text</b>"]
@@ -190,23 +193,24 @@ flowchart LR
   ocr --> core
 ```
 
-`@repo/redact-core` owns the shared vocabulary: what a span is, the checksum patterns, how spans become rectangles, and how the ZIP is built. Every redactor implements the same `Redactor` shape, so the worker resolves one from the file and knows nothing else about it. Adding a format means adding a package, not editing the worker. The CLI reuses the same redactors through `@repo/redact-node`, which supplies the canvas globals a browser would have provided.
+`@repo/redact-core` owns the shared vocabulary: what a span is, the checksum patterns, how spans become rectangles, and how the ZIP is built. Every redactor implements the same `Redactor` shape. `@repo/redact-formats` declares the extensions and MIME types each one takes; the dropzone, the CLI's file browser and both workers read that one table, so the worker resolves a redactor from the file and knows nothing else about it. Adding a format means adding a package and a row to that table, not editing the worker. The CLI reuses the same redactors through `@repo/redact-node`, which supplies the canvas globals a browser would have provided.
 
 Files run side by side, four at most. Each worker holds pdf.js, a Tesseract worker per language and page-sized canvases, so a pool of one worker per core, which is what `workerpool` does left alone, runs a laptop out of memory. The browser sizes its pool from `hardwareConcurrency` and `deviceMemory`, holding two cores back for the model and the page itself; the CLI takes half the core count, since `onnxruntime-node` already spreads a single inference across all of them. The weights are not part of that arithmetic: one session is loaded once and served to every worker over a port, which is what makes running files in parallel affordable at all.
 
 ## Packages
 
-| Package              | Purpose                                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `@repo/redact-core`  | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.                               |
-| `@repo/pii-detect`   | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache.                            |
-| `@repo/ocr`          | Tesseract wrapper returning word boxes, plus stopword language detection across en / pt / es.                                   |
-| `@repo/redact-text`  | Redactor for text formats. Masks with `█` and keeps line breaks intact.                                                         |
-| `@repo/redact-pdf`   | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                                                      |
-| `@repo/redact-image` | Redactor for images. Recognises, paints, and re-encodes.                                                                        |
-| `@repo/redact-node`  | Runs the redactors under Node: skia-backed canvas globals and file reading for the CLI.                                         |
-| `@repo/i18n`         | Typed message catalogues for English, Portuguese and Spanish.                                                                   |
-| `@repo/ui`           | Shared components: dropzone, attachment, progress, select, checkbox, collapsible, scroll area, skeleton, button, card, toaster. |
+| Package                | Purpose                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `@repo/redact-core`    | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.                               |
+| `@repo/pii-detect`     | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache.                            |
+| `@repo/ocr`            | Tesseract wrapper returning word boxes, plus stopword language detection across en / pt / es.                                   |
+| `@repo/redact-text`    | Redactor for text formats. Masks with `█` and keeps line breaks intact.                                                         |
+| `@repo/redact-pdf`     | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                                                      |
+| `@repo/redact-image`   | Redactor for images. Recognises, paints, and re-encodes.                                                                        |
+| `@repo/redact-formats` | The formats each redactor takes, the lists the dropzone and the CLI offer, and the redactor a file resolves to.                 |
+| `@repo/redact-node`    | Runs the redactors under Node: skia-backed canvas globals and file reading for the CLI.                                         |
+| `@repo/i18n`           | Typed message catalogues for English, Portuguese and Spanish.                                                                   |
+| `@repo/ui`             | Shared components: dropzone, attachment, progress, select, checkbox, collapsible, scroll area, skeleton, button, card, toaster. |
 
 The apps are `web`, the browser app, and `cli`, the Ink terminal app. `@repo/typescript-config` and `@repo/config-vitest` hold the shared tooling config.
 

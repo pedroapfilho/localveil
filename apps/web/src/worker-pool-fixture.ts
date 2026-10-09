@@ -1,10 +1,9 @@
 /* oxlint-disable anti-slop/no-unknown-parameters -- this fixture mirrors workerpool's untyped task wire, so its params are unknown by contract */
-import type { Analysis, RedactionResult } from "@repo/redact-core";
+import type { Analysis, ProgressEvent, RedactionResult } from "@repo/redact-core";
 import { vi } from "vitest";
 
 import type { ModelHostOptions } from "./model-host";
 import type { WorkerTask } from "./worker-pool";
-import type { ProgressEvent } from "./worker-protocol";
 
 type ExecOptions = { on: (payload: unknown) => void; transfer: Array<unknown> };
 

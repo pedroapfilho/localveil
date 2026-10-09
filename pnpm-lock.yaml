@@ -68,6 +68,9 @@ importers:
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../../packages/redact-core
+      '@repo/redact-formats':
+        specifier: workspace:*
+        version: link:../../packages/redact-formats
       '@repo/redact-node':
         specifier: workspace:*
         version: link:../../packages/redact-node
@@ -117,15 +120,9 @@ importers:
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../../packages/redact-core
-      '@repo/redact-image':
+      '@repo/redact-formats':
         specifier: workspace:*
-        version: link:../../packages/redact-image
-      '@repo/redact-pdf':
-        specifier: workspace:*
-        version: link:../../packages/redact-pdf
-      '@repo/redact-text':
-        specifier: workspace:*
-        version: link:../../packages/redact-text
+        version: link:../../packages/redact-formats
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -352,6 +349,34 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(@types/node@26.6.2)(@vitest/coverage-v8@5.0.1)(jsdom@30.1.1)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/redact-formats:
+    dependencies:
+      '@repo/redact-core':
+        specifier: workspace:*
+        version: link:../redact-core
+      '@repo/redact-image':
+        specifier: workspace:*
+        version: link:../redact-image
+      '@repo/redact-pdf':
+        specifier: workspace:*
+        version: link:../redact-pdf
+      '@repo/redact-text':
+        specifier: workspace:*
+        version: link:../redact-text
+    devDependencies:
+      '@repo/config-vitest':
+        specifier: workspace:*
+        version: link:../config-vitest
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../config-typescript
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.6.2)(@vitest/coverage-v8@5.0.1)(jsdom@30.1.1)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/redact-image:
     dependencies:
       '@repo/ocr':
@@ -385,15 +410,9 @@ importers:
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../redact-core
-      '@repo/redact-image':
+      '@repo/redact-formats':
         specifier: workspace:*
-        version: link:../redact-image
-      '@repo/redact-pdf':
-        specifier: workspace:*
-        version: link:../redact-pdf
-      '@repo/redact-text':
-        specifier: workspace:*
-        version: link:../redact-text
+        version: link:../redact-formats
     devDependencies:
       '@repo/config-vitest':
         specifier: workspace:*
@@ -401,6 +420,12 @@ importers:
       '@repo/ocr':
         specifier: workspace:*
         version: link:../ocr
+      '@repo/redact-image':
+        specifier: workspace:*
+        version: link:../redact-image
+      '@repo/redact-pdf':
+        specifier: workspace:*
+        version: link:../redact-pdf
       '@repo/typescript-config':
         specifier: workspace:*
         version: link:../config-typescript

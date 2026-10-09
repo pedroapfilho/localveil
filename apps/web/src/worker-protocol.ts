@@ -1,19 +1,11 @@
 import type { ModelId } from "@repo/pii-detect/models";
-import type {
-  Analysis,
-  Decisions,
-  FileStageKey,
-  ModelStageKey,
-  RedactionResult,
-} from "@repo/redact-core";
+import type { Analysis, Decisions, ModelStageKey, RedactionResult } from "@repo/redact-core";
 
 type AnalyseTask = (file: File, port: MessagePort) => Analysis;
 
 type ApplyWork = { analysis: Analysis; decisions: Decisions };
 
 type ApplyTask = (file: File, work: ApplyWork, port: MessagePort) => RedactionResult;
-
-type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
 
 type ConnectRequest = { channel: string; model: ModelId; port: MessagePort; type: "connect" };
 
@@ -31,5 +23,4 @@ export type {
   DisconnectRequest,
   ModelRequest,
   ModelResponse,
-  ProgressEvent,
 };

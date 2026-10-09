@@ -26,7 +26,6 @@ vi.mock("@repo/redact-pdf", async (importOriginal) => {
   return {
     ...actual,
     pdfRedactor: {
-      accepts: actual.pdfRedactor.accepts,
       analyse: stubAnalysis,
       apply: redactPdf,
     },
@@ -39,7 +38,6 @@ vi.mock("@repo/redact-image", async (importOriginal) => {
   return {
     ...actual,
     imageRedactor: {
-      accepts: actual.imageRedactor.accepts,
       analyse: stubAnalysis,
       apply: redactImage,
     },
