@@ -1,22 +1,15 @@
+export { analyseUnits, isAnalysedUnit, keptSpans, redactionCount } from "./analysis";
+export type { AnalysedUnit } from "./analysis";
 export { isCovered } from "./covered";
 export { describeError } from "./describe-error";
-export {
-  APPLY_SCORE,
-  dedupeDetections,
-  defaultDecisions,
-  describeSpans,
-  keptSpans,
-} from "./detections";
-export { definedTerms, dropDefinedTerms } from "./defined-terms";
+export { APPLY_SCORE, defaultDecisions } from "./detections";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc";
 export type { DetectRequest, DetectResponse, EventPort } from "./detect-rpc";
-export { absorbNested, mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
+export { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
 export type { ChunkSpans, Range } from "./merge-spans";
 export { redactFile } from "./redact-file";
 export { patternSpans } from "./patterns";
 export { inReadingOrder } from "./reading-order";
-export { spansForTokens, tokensFromSpans } from "./repeats";
-export type { PiiToken } from "./repeats";
 export { createRedactorRegistry } from "./registry";
 export type { RedactorRegistry } from "./registry";
 export type {

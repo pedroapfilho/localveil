@@ -4,14 +4,7 @@ import { parseArgs } from "node:util";
 
 import { createDetector, DEFAULT_MODEL_ID, isModelId, MODELS } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
-import {
-  APPLY_SCORE,
-  definedTerms,
-  dropDefinedTerms,
-  patternSpans,
-  spansForTokens,
-  tokensFromSpans,
-} from "@repo/redact-core";
+import { analyseUnits, APPLY_SCORE, patternSpans } from "@repo/redact-core";
 import { structuralSpans } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus";
@@ -74,21 +67,32 @@ const rowsByLanguage = (results: Array<DocumentResult>) => {
     .map(([language, counts]) => ({ counts: totalCounts(counts), name: language }));
 };
 
-/* What a redactor hands the review list: the detector, the structural layer, the repeats the
-   first two justify, and the defined terms dropped back out. redact-text composes these in the
-   same order. */
-const analysedSpans = (text: string, detected: Array<Span>) => {
-  const repeated = spansForTokens(text, tokensFromSpans(text, detected));
+/* The analysis redact-text runs, fed the detector and the structural layer, so this scores the
+   review list itself rather than a copy of its composition. */
+const analysedSpans = async (text: string, detected: Array<Span>): Promise<Array<Span>> => {
+  const { detections } = await analyseUnits({
+    detect: () => Promise.resolve(detected),
+    kind: "file",
+    units: [{ text }],
+  });
 
-  return dropDefinedTerms([...detected, ...repeated], text, definedTerms(text, detected));
+  return detections.map(({ confidence, end, label, start }) => ({
+    end,
+    label,
+    score: confidence,
+    start,
+  }));
 };
 
-const scoreDocument = (document: EvalDocument, predicted: Array<Span>): DocumentResult => {
+const scoreDocument = async (
+  document: EvalDocument,
+  predicted: Array<Span>,
+): Promise<DocumentResult> => {
   const structural = structuralSpans(filenameOf(document.id), document.text);
   const detected = [...predicted, ...structural];
 
   return {
-    analysed: countMatches(document.spans, analysedSpans(document.text, detected)),
+    analysed: countMatches(document.spans, await analysedSpans(document.text, detected)),
     everything: countMatches(document.spans, detected),
     exact: countMatches(document.spans, predicted, true),
     id: document.id,
@@ -151,7 +155,7 @@ const run = async () => {
 
   for (const document of chosen) {
     note(`  ${document.id}`);
-    results.push(scoreDocument(document, await detect(document.text)));
+    results.push(await scoreDocument(document, await detect(document.text)));
   }
 
   const report = [

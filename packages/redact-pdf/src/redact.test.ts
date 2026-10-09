@@ -307,7 +307,7 @@ describe("pdfRedactor", () => {
     const detect = detecting(["Ana Lima"]);
     const { warnings } = await run(detect);
 
-    expect(detect).toHaveBeenCalledWith("");
+    expect(detect).not.toHaveBeenCalled();
     expect(warnings).toContain("warning.lowConfidence");
   });
 
@@ -559,8 +559,8 @@ describe("pdfRedactor", () => {
   it("still releases the document when the job is cancelled mid-pass", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
 
-    const stopped = pdfRedactor.analyse(file(), detecting([]), (_fraction, stage) => {
-      if (stage === "stage.detecting") {
+    const stopped = pdfRedactor.analyse(file(), detecting([]), (fraction, stage) => {
+      if (stage === "stage.extracting" && fraction > 0) {
         throw new Error("cancelled");
       }
     });
@@ -570,13 +570,13 @@ describe("pdfRedactor", () => {
     expect(events.some((entry) => entry.startsWith("cleanup:"))).toBe(true);
   });
 
-  it("keeps only the word geometry in the handle it hands to apply", async () => {
+  it("keeps only the analysed page and its word geometry in the handle it hands to apply", async () => {
     const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
     const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
 
     assert.isDefined(first);
 
-    expect(Object.keys(first)).toEqual(["words"]);
+    expect(Object.keys(first).toSorted()).toEqual(["marks", "text", "words"]);
   });
 
   it("refuses a handle whose pages carry no words", async () => {
