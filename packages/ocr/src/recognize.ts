@@ -60,12 +60,26 @@ const wordsOf = (blocks: Array<Block>) => {
   return collected;
 };
 
-const recognizeWords = async (image: ImageLike, language: OcrLanguage): Promise<Recognition> => {
-  const worker = await workerFor(language);
+/* tesseract.js unpacks a canvas only in its browser build; raw image bytes it reads the same way
+   under Node, so the page goes over as a PNG. */
+const pngOf = async (page: OffscreenCanvas) => {
+  const encoded = await page.convertToBlob({ type: "image/png" });
+
+  /* SAFETY: both builds' loaders copy any byte array with new Uint8Array, but ImageLike names only
+     Node's Buffer, so the bytes are forced through unknown. */
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-chained-type-assertions -- see the SAFETY note above
+  return new Uint8Array(await encoded.arrayBuffer()) as unknown as ImageLike;
+};
+
+const recognizeWords = async (
+  page: OffscreenCanvas,
+  language: OcrLanguage,
+): Promise<Recognition> => {
+  const [worker, image] = await Promise.all([workerFor(language), pngOf(page)]);
   const { data } = await worker.recognize(image, {}, { blocks: true, text: true });
 
   return { confidence: data.confidence, words: wordsOf(data.blocks ?? []) };
 };
 
 export { recognizeWords };
-export type { Recognition, RecognisedWord };
+export type { Recognition };

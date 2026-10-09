@@ -185,7 +185,7 @@ flowchart LR
   pool -. port .-> detect["<b>@repo/pii-detect</b><br/>one GLiNER session · model cache"]
   threads -. port .-> detect
 
-  pdf --> ocr["<b>@repo/ocr</b><br/>Tesseract · language detection"]
+  pdf --> ocr["<b>@repo/ocr</b><br/>Tesseract · language · legibility"]
   image --> ocr
 
   redactors --> core["<b>@repo/redact-core</b><br/>types · patterns · spans · rects · zip"]
@@ -203,7 +203,7 @@ Files run side by side, four at most. Each worker holds pdf.js, a Tesseract work
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `@repo/redact-core`    | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.                               |
 | `@repo/pii-detect`     | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache.                            |
-| `@repo/ocr`            | Tesseract wrapper returning word boxes, plus stopword language detection across en / pt / es.                                   |
+| `@repo/ocr`            | One reader for scanned pages and images: Tesseract word boxes, en / pt / es detection, legibility and a black-and-white retry.  |
 | `@repo/redact-text`    | Redactor for text formats. Masks with `█` and keeps line breaks intact.                                                         |
 | `@repo/redact-pdf`     | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                                                      |
 | `@repo/redact-image`   | Redactor for images. Recognises, paints, and re-encodes.                                                                        |
@@ -262,6 +262,8 @@ When you already know the answer, say so: the picker beside the dropzone and `--
 <summary><b>Unreadable pages</b>: left alone, with a warning</summary>
 
 A page whose fonts do not resolve renders as a wall of boxes. Recognisers read that as gibberish, and a detection model will confidently tag a long run of it as somebody's name, which paints a black rectangle over every line.
+
+A scanned page or an image that reads mostly as noise is thresholded to black and white and read again, and the reading with more legible words is kept. An image keeps the other reading too, so a value only it could make out is still covered.
 
 Under a confidence floor localveil looks for nothing. The page comes back untouched and carries a warning, so you can see it was unreadable and go and check it yourself.
 

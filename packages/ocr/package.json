@@ -19,6 +19,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.9",
     "@repo/config-vitest": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "typescript": "^7.0.2",

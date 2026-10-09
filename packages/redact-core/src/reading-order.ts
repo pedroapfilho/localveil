@@ -1,4 +1,4 @@
-import type { WordInput } from "./word-index";
+import type { WordInput } from "./types";
 
 type Extent = { x0: number; x1: number; y0: number; y1: number };
 
@@ -27,7 +27,8 @@ const onOneLine = (left: WordInput, right: WordInput, unit: number) =>
 
 /* A run is one line of one column. Splitting on a wide horizontal gap is what keeps a signed name
    away from the company block printed level with it: sorting by line alone would read the two as
-   "UNLOCKERS SOFTWARE Pedro Filho HOUSE LTDA". */
+   "UNLOCKERS SOFTWARE Pedro Filho HOUSE LTDA". The same split keeps a painted box out of the gutter
+   between two columns. */
 const runsOf = (words: ReadonlyArray<WordInput>, unit: number) => {
   const runs: Array<Array<WordInput>> = [];
 
@@ -98,4 +99,4 @@ const inReadingOrder = (words: ReadonlyArray<WordInput>): Array<WordInput> => {
   return blocksOf(runsOf(byLine, unit), unit).flatMap((block) => block.words);
 };
 
-export { inReadingOrder };
+export { extentOf, inReadingOrder, runsOf, unitOf };

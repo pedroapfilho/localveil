@@ -75,6 +75,8 @@ type Redactor = {
 
 type Bbox = { x0: number; x1: number; y0: number; y1: number };
 
+type WordInput = { bbox: Bbox; text: string };
+
 type PositionedWord = { bbox: Bbox; charEnd: number; charStart: number; text: string };
 
 type Rect = { height: number; width: number; x: number; y: number };
@@ -97,4 +99,5 @@ export type {
   Redactor,
   Span,
   WarningKey,
+  WordInput,
 };

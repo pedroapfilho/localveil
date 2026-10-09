@@ -286,6 +286,9 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
     devDependencies:
+      '@napi-rs/canvas':
+        specifier: ^1.0.9
+        version: 1.0.9
       '@repo/config-vitest':
         specifier: workspace:*
         version: link:../config-vitest
@@ -351,6 +354,9 @@ importers:
 
   packages/redact-formats:
     dependencies:
+      '@repo/ocr':
+        specifier: workspace:*
+        version: link:../ocr
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../redact-core

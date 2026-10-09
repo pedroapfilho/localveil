@@ -1,16 +1,12 @@
 import { readFileSync } from "node:fs";
 
 import { UnsupportedFileError } from "@repo/redact-core";
-import { imageRedactor } from "@repo/redact-image";
-import { pdfRedactor } from "@repo/redact-pdf";
-import { textRedactor } from "@repo/redact-text";
 import { describe, expect, it } from "vitest";
 
+import { redactorFor } from "./formats";
 import { resolveRedactor } from "./redactors";
 
 import { BROWSER_ACCEPT, NODE_FORMATS } from "./index";
-
-const HANDLERS = { image: imageRedactor, pdf: pdfRedactor, text: textRedactor };
 
 const SAMPLES = [
   { handler: "text", name: "sample.txt", type: "text/plain" },
@@ -33,23 +29,23 @@ const fixture = (name: string, type: string) =>
 
 describe("resolveRedactor", () => {
   it.each(SAMPLES)("sends $name to the $handler redactor", ({ handler, name, type }) => {
-    expect(resolveRedactor(fixture(name, type))).toBe(HANDLERS[handler]);
+    expect(redactorFor(fixture(name, type))).toBe(handler);
   });
 
   it.each(SAMPLES)("resolves $name from its name alone", ({ handler, name }) => {
-    expect(resolveRedactor(fixture(name, ""))).toBe(HANDLERS[handler]);
+    expect(redactorFor(fixture(name, ""))).toBe(handler);
   });
 
   it("goes by the type when the name has no extension", () => {
-    expect(resolveRedactor(named("notes", "text/x-python"))).toBe(textRedactor);
-    expect(resolveRedactor(named("export", "application/json"))).toBe(textRedactor);
-    expect(resolveRedactor(named("download", "application/pdf"))).toBe(pdfRedactor);
-    expect(resolveRedactor(named("photo", "image/heic"))).toBe(imageRedactor);
+    expect(redactorFor(named("notes", "text/x-python"))).toBe("text");
+    expect(redactorFor(named("export", "application/json"))).toBe("text");
+    expect(redactorFor(named("download", "application/pdf"))).toBe("pdf");
+    expect(redactorFor(named("photo", "image/heic"))).toBe("image");
   });
 
   it("ignores the case of an extension", () => {
-    expect(resolveRedactor(named("SCAN.PDF"))).toBe(pdfRedactor);
-    expect(resolveRedactor(named("REPORT.TXT"))).toBe(textRedactor);
+    expect(redactorFor(named("SCAN.PDF"))).toBe("pdf");
+    expect(redactorFor(named("REPORT.TXT"))).toBe("text");
   });
 
   it("refuses a format nothing handles", () => {

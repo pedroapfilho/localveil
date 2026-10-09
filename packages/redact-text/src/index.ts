@@ -1,14 +1,14 @@
-import type { AnalysedUnit, Detect, Redactor, WarningKey } from "@repo/redact-core";
+import type { AnalysedUnit, Detect, Redactor } from "@repo/redact-core";
 import {
   analyseUnits,
   isAnalysedUnit,
   keptSpans,
   mergeOverlappingRanges,
   redactionCount,
-  survivingSpans,
+  verifyOutput,
 } from "@repo/redact-core";
 
-import { maskRanges } from "./mask";
+import { ignoringMasks, maskRanges } from "./mask";
 import { csvFieldSpans } from "./structured-csv";
 import { jsonFieldSpans } from "./structured-json";
 
@@ -77,12 +77,11 @@ const textRedactor: Redactor = {
 
     const unit = analysedText(analysis.handle);
     const masked = maskRanges(unit.text, mergeOverlappingRanges(keptSpans(unit, decisions)));
-    const survivors = await survivingSpans(verifiable(file.name, masked), detect);
-    const warnings: Array<WarningKey> = [...analysis.warnings];
-
-    if (survivors.length > 0) {
-      warnings.push("warning.notFullyRedacted");
-    }
+    const warnings = await verifyOutput(
+      verifiable(file.name, masked),
+      ignoringMasks(detect),
+      analysis.warnings,
+    );
 
     onProgress(1, "stage.finished");
 

@@ -25,10 +25,7 @@ vi.mock("@repo/redact-pdf", async (importOriginal) => {
 
   return {
     ...actual,
-    pdfRedactor: {
-      analyse: stubAnalysis,
-      apply: redactPdf,
-    },
+    createPdfRedactor: () => ({ analyse: stubAnalysis, apply: redactPdf }),
   };
 });
 
@@ -37,10 +34,7 @@ vi.mock("@repo/redact-image", async (importOriginal) => {
 
   return {
     ...actual,
-    imageRedactor: {
-      analyse: stubAnalysis,
-      apply: redactImage,
-    },
+    createImageRedactor: () => ({ analyse: stubAnalysis, apply: redactImage }),
   };
 });
 

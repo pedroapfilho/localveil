@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@repo/ocr": "workspace:*",
     "@repo/redact-core": "workspace:*",
     "@repo/redact-image": "workspace:*",
     "@repo/redact-pdf": "workspace:*",

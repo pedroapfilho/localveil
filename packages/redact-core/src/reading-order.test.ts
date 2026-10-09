@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { inReadingOrder } from "./reading-order";
-import type { WordInput } from "./word-index";
+import type { WordInput } from "./types";
 
 const LINE = 20;
 

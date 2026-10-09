@@ -1,47 +1,46 @@
-import { assessReading, readImageText } from "@repo/ocr";
-import type { AnalysedUnit, PositionedWord, Rect, Redactor, WarningKey } from "@repo/redact-core";
+import type { ReadText, TextReading } from "@repo/ocr";
+import type { AnalysedUnit, PageSurface, Redactor, WarningKey } from "@repo/redact-core";
 import {
   analyseUnits,
-  buildWordIndex,
+  contextOf,
   isAnalysedUnit,
-  isCovered,
+  isPageSurface,
   keptSpans,
+  paint,
+  rectsFor,
   redactionCount,
-  spansToRects,
-  survivingSpans,
+  surfaceOf,
+  uncovered,
+  verifyOutput,
 } from "@repo/redact-core";
-
-import { betterReading, binarizeForOcr, shouldRetryOcr } from "./ocr-retry";
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-type Reading = AnalysedUnit & { words: Array<PositionedWord> };
+type Reading = AnalysedUnit & PageSurface;
 
-type ImageHandle = { best: number; readings: Array<Reading> };
+/* The first reading is the one the reader chose; the rest are the passes it passed over. */
+type ImageHandle = { readings: Array<Reading> };
 
-const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>) => {
-  const context = canvas.getContext("2d");
-
-  if (context === null) {
-    throw new Error("This browser gave no 2d canvas to draw the redactions on");
-  }
-
-  context.drawImage(bitmap, 0, 0);
-  context.fillStyle = "#000000";
-
-  for (const rect of rects) {
-    context.fillRect(rect.x, rect.y, rect.width, rect.height);
-  }
-};
-
-const withBitmap = async <T>(file: Blob, body: (bitmap: ImageBitmap) => Promise<T>): Promise<T> => {
+const canvasOf = async (file: Blob) => {
   const bitmap = await createImageBitmap(file);
 
   try {
-    return await body(bitmap);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+
+    contextOf(canvas).drawImage(bitmap, 0, 0);
+
+    return canvas;
   } finally {
     bitmap.close();
   }
+};
+
+const warningsFor = ({ legibility }: TextReading): Array<WarningKey> => {
+  if (legibility === "blank") {
+    return ["warning.noText"];
+  }
+
+  return legibility === "unreadable" ? ["warning.lowConfidence"] : [];
 };
 
 const isHandle = (value: unknown): value is ImageHandle =>
@@ -49,45 +48,32 @@ const isHandle = (value: unknown): value is ImageHandle =>
   value !== null &&
   "readings" in value &&
   Array.isArray(value.readings) &&
-  value.readings.every(isAnalysedUnit) &&
-  "best" in value &&
-  typeof value.best === "number";
+  value.readings.every((reading) => isAnalysedUnit(reading) && isPageSurface(reading));
 
-const imageRedactor: Redactor = {
+const createImageRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
+
+    const page = await canvasOf(file);
+
     onProgress(0.1, "stage.recognising");
 
-    const first = await readImageText(file);
-    const readings = [first];
-
-    if (shouldRetryOcr(first)) {
-      readings.push(await withBitmap(file, (bitmap) => readImageText(binarizeForOcr(bitmap))));
-    }
-
-    const chosen = readings.reduce((kept, candidate) => betterReading(kept, candidate));
-    const warnings: Array<WarningKey> = [];
-
-    if (chosen.words.length === 0) {
-      warnings.push("warning.noText");
-    } else if (assessReading(chosen).unreadable) {
-      warnings.push("warning.lowConfidence");
-    }
+    const reading = await read(page);
 
     onProgress(0.6, "stage.detecting");
 
     const { detections, units } = await analyseUnits({
       detect,
       kind: "readings",
-      units: readings.map((candidate) => buildWordIndex(assessReading(candidate).legible)),
+      units: [reading.words, ...reading.alternatives].map(surfaceOf),
     });
 
     onProgress(1, "stage.finished");
 
     return {
       detections,
-      handle: { best: readings.indexOf(chosen), readings: units } satisfies ImageHandle,
-      warnings,
+      handle: { readings: units } satisfies ImageHandle,
+      warnings: warningsFor(reading),
     };
   },
   apply: async ({ analysis, decisions, detect, file, onProgress }) => {
@@ -95,37 +81,29 @@ const imageRedactor: Redactor = {
       throw new TypeError("The image analysis carried no recognised readings to paint from");
     }
 
-    const { best, readings } = analysis.handle;
+    const { readings } = analysis.handle;
 
     onProgress(0.85, "stage.redacting");
 
-    const rects = readings.flatMap((reading) =>
-      spansToRects(keptSpans(reading, decisions), reading.words),
+    const rects = readings.flatMap((reading) => rectsFor(reading, keptSpans(reading, decisions)));
+    const canvas = await canvasOf(file);
+
+    paint(canvas, rects);
+
+    const [chosen] = readings;
+    const warnings = await verifyOutput(
+      chosen === undefined ? "" : uncovered(chosen, rects).text,
+      detect,
+      analysis.warnings,
     );
-
-    const canvas = await withBitmap(file, (bitmap) => {
-      const target = new OffscreenCanvas(bitmap.width, bitmap.height);
-
-      paint(target, bitmap, rects);
-
-      return Promise.resolve(target);
+    const blob = await canvas.convertToBlob({
+      type: ENCODABLE.has(file.type) ? file.type : "image/png",
     });
-
-    const showing = (readings[best]?.words ?? []).filter((word) => !isCovered(word.bbox, rects));
-    const survivors = await survivingSpans(showing.map((word) => word.text).join(" "), detect);
-    const warnings: Array<WarningKey> = [...analysis.warnings];
-
-    if (survivors.length > 0) {
-      warnings.push("warning.notFullyRedacted");
-    }
-
-    const type = ENCODABLE.has(file.type) ? file.type : "image/png";
-    const blob = await canvas.convertToBlob({ type });
 
     onProgress(1, "stage.finished");
 
     return { blob, redactionCount: redactionCount("readings", readings, decisions), warnings };
   },
-};
+});
 
-export { imageRedactor };
+export { createImageRedactor };
