@@ -1,5 +1,5 @@
+import { patternSpans } from "@repo/pii-detect";
 import type { PiiLabel } from "@repo/redact-core";
-import { patternSpans } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
 import { loadCorpus, parseMarked } from "./corpus";

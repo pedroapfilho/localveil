@@ -1,12 +1,6 @@
 import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, ModelProgress, Span } from "@repo/redact-core";
-import {
-  describeError,
-  mergeChunkSpans,
-  patternSpans,
-  serialiseDetect,
-  tightenToVerified,
-} from "@repo/redact-core";
+import { absorbNested, describeError, serialiseDetect } from "@repo/redact-core";
 
 import { openModel } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
@@ -15,14 +9,14 @@ import { batchInputs } from "./batch-inputs";
 import type { ModelId } from "./catalog";
 import { DEFAULT_MODEL_ID, modelById } from "./catalog";
 import { chunkWords } from "./chunk-words";
-import type { Logits } from "./gliner-decode";
-import { decodeSpans, decodeTokenSpans, suppressOverlaps } from "./gliner-decode";
-import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
-import { encodeGlinerInput } from "./gliner-encode";
+import type { GlinerInput } from "./gliner-codec";
+import { createGlinerCodec } from "./gliner-codec";
 import type { ModelDevice } from "./model-runtime";
 import type { ModelFiles } from "./model-status";
+import { patternSpans } from "./patterns";
 import { collectShouting, positionShouted } from "./shouting";
 import { splitWords } from "./split-words";
+import { tightenToVerified } from "./tighten";
 
 const MAX_WORDS = 280;
 const OVERLAP_WORDS = 24;
@@ -33,6 +27,16 @@ const GPU_BATCH = 4;
 const BATCH_TOKENS = 4096;
 
 const MIN_SCORE = 0.15;
+
+/* Overlapping chunks and the shouted pass read the same words more than once, so a span nested in
+   another of its label is folded into it, which keeps the stronger of the two scores. */
+const mergeChunkSpans = (spans: Array<Span>) =>
+  absorbNested(
+    spans,
+    (span) => span.label,
+    (span) => span.score,
+    (span, score) => ({ ...span, score }),
+  ).toSorted((left, right) => left.start - right.start || left.end - right.end);
 
 type DetectorOptions = {
   batchSize?: number;
@@ -50,20 +54,6 @@ type DetectorOptions = {
    the base class only in returning token type ids, which GLiNER never takes. */
 const loadTokenizer = (files: ModelFiles) =>
   new PreTrainedTokenizer(files.tokenizer, files.tokenizerConfig);
-
-type Tokenizer = PreTrainedTokenizer;
-
-const frameOf = (tokenizer: Tokenizer): TokenFrame => {
-  const frame = tokenizer.encode("", { add_special_tokens: true });
-
-  const [cls, sep] = frame;
-
-  if (frame.length !== 2 || cls === undefined || sep === undefined) {
-    throw new TypeError("The tokenizer did not frame an empty text with CLS and SEP");
-  }
-
-  return { cls, sep };
-};
 
 const loadRunner = async (
   bytes: Uint8Array,
@@ -111,28 +101,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   const files = await openModel(spec, (fraction) => {
     report(fraction, "model.downloading");
   });
-  const tokenizer = loadTokenizer(files);
-  const frame = frameOf(tokenizer);
-
-  const encodeCache = new Map<string, Array<number>>();
-
-  const encodeWord = (word: string) => {
-    const cached = encodeCache.get(word);
-
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    if (encodeCache.size > 50_000) {
-      encodeCache.clear();
-    }
-
-    const ids = tokenizer.encode(word, { add_special_tokens: false });
-
-    encodeCache.set(word, ids);
-
-    return ids;
-  };
+  const codec = createGlinerCodec(spec, loadTokenizer(files));
 
   const device = await pickDevice();
   const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
@@ -145,66 +114,11 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
   report(1, "model.ready");
 
-  const prompts = spec.prompts.map((entity) => entity.prompt);
-
-  const encodeChunk = (words: Array<SpanWord>) => {
-    const encoded = encodeGlinerInput({
-      encodeWord,
-      frame,
-      maxWidth: spec.decoding === "span" ? spec.maxWidth : 0,
-      prompts,
-      words,
-    });
-
-    return encoded.keptWords.length === 0 ? undefined : encoded;
-  };
-
-  const spansOf = (input: GlinerInput, logits: Logits, item: number): Array<Span> => {
-    const { keptWords } = input;
-    const asked = {
-      entityCount: prompts.length,
-      item,
-      logits,
-      threshold: minScore,
-      wordCount: keptWords.length,
-    };
-    const found = suppressOverlaps(
-      spec.decoding === "span"
-        ? decodeSpans(asked)
-        : decodeTokenSpans({ ...asked, maxWidth: spec.maxWidth }),
-    );
-
-    return found.map((candidate) => {
-      const words = keptWords.slice(candidate.start, candidate.end + 1);
-      const [first] = words;
-      const entity = spec.prompts[candidate.entity];
-
-      if (first === undefined || words.length !== candidate.end - candidate.start + 1) {
-        throw new RangeError(
-          `decoded span ${String(candidate.start)}-${String(candidate.end)} is outside the ${String(keptWords.length)} kept words`,
-        );
-      }
-
-      if (entity === undefined) {
-        throw new RangeError(`decoded entity ${String(candidate.entity)} has no prompt`);
-      }
-
-      const last = words.findLast((word) => word.line === first.line) ?? first;
-
-      return {
-        end: last.end,
-        label: entity.label,
-        score: candidate.score,
-        start: first.start,
-      };
-    });
-  };
-
   const jobsFor = (text: string): Array<GlinerInput> => {
     const jobs: Array<GlinerInput> = [];
 
     for (const chunk of chunkWords(splitWords(text), maxWords, overlapWords)) {
-      const encoded = encodeChunk(chunk.words);
+      const encoded = codec.encode(chunk.words);
 
       if (encoded !== undefined) {
         jobs.push(encoded);
@@ -216,7 +130,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
         continue;
       }
 
-      const shouted = encodeChunk(
+      const shouted = codec.encode(
         positionShouted(splitWords(shouting.text), shouting.segments, chunk.start),
       );
 
@@ -229,33 +143,15 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   return serialiseDetect(async (text) => {
-    const jobs = jobsFor(text);
-    const batches = batchInputs(jobs, batching, BATCH_TOKENS);
     const found: Array<Span> = [];
 
-    for (const batch of batches) {
-      const inputs = batch.map((at) => {
-        const job = jobs[at];
-
-        if (job === undefined) {
-          throw new RangeError(`batch names job ${String(at)} of ${String(jobs.length)}`);
-        }
-
-        return job;
-      });
-      const logits = await run(inputs);
-
-      inputs.forEach((input, item) => {
-        found.push(...spansOf(input, logits, item));
-      });
+    for (const batch of batchInputs(jobsFor(text), batching, BATCH_TOKENS)) {
+      found.push(...codec.decode(batch, await run(batch), minScore));
     }
 
-    return tightenToVerified(
-      [...mergeChunkSpans([{ offset: 0, spans: found }]), ...patternSpans(text)],
-      text,
-    );
+    return tightenToVerified(mergeChunkSpans(found), patternSpans(text), text);
   });
 };
 
-export { createDetector, MIN_SCORE };
+export { createDetector };
 export type { DetectorOptions };

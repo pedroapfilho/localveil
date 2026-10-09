@@ -1,7 +1,5 @@
 import type { Span } from "./types";
 
-type ChunkSpans = { offset: number; spans: Array<Span> };
-
 type Range = { end: number; start: number };
 
 const widestFirst = (left: Range, right: Range) => left.start - right.start || right.end - left.end;
@@ -35,23 +33,6 @@ const absorbNested = <T extends Range>(
   return kept;
 };
 
-const mergeChunkSpans = (parts: Array<ChunkSpans>): Array<Span> => {
-  const shifted = parts.flatMap((part) =>
-    part.spans.map((span) => ({
-      ...span,
-      end: span.end + part.offset,
-      start: span.start + part.offset,
-    })),
-  );
-
-  return absorbNested(
-    shifted,
-    (span) => span.label,
-    (span) => span.score,
-    (span, score) => ({ ...span, score }),
-  ).toSorted((a, b) => a.start - b.start || a.end - b.end);
-};
-
 const mergeOverlappingRanges = (spans: Array<Span>): Array<Range> => {
   const sorted = spans.toSorted((a, b) => a.start - b.start || a.end - b.end);
   const merged: Array<Range> = [];
@@ -70,5 +51,5 @@ const mergeOverlappingRanges = (spans: Array<Span>): Array<Range> => {
   return merged;
 };
 
-export { absorbNested, mergeChunkSpans, mergeOverlappingRanges };
-export type { ChunkSpans, Range };
+export { absorbNested, mergeOverlappingRanges };
+export type { Range };

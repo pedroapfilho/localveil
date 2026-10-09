@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { GlinerInput } from "./gliner-encode";
-import { toFeeds } from "./gliner-feeds";
+import type { GlinerInput } from "./gliner-codec";
+import { toFeeds, toLogits } from "./gliner-tensors";
 
 type Tensor = { data: Array<number>; dims: Array<number>; type: string };
 
@@ -103,5 +103,22 @@ describe("toFeeds", () => {
     expect(() => toFeeds([input(3, 2)], tensor, ["input_ids", "token_type_ids"])).toThrow(
       /token_type_ids/v,
     );
+  });
+});
+
+describe("toLogits", () => {
+  it("rejects a tensor whose values are not numbers", () => {
+    expect(() => toLogits({ data: BigInt64Array.from([1n]), dims: [1] })).toThrow(/not numbers/v);
+  });
+
+  it("rejects a run that returned no output", () => {
+    expect(() => toLogits(undefined)).toThrow(/no logits/v);
+  });
+
+  it("passes numeric data through with its shape", () => {
+    expect(toLogits({ data: Float32Array.from([1]), dims: [1, 1, 1, 1] })).toEqual({
+      data: Float32Array.from([1]),
+      dims: [1, 1, 1, 1],
+    });
   });
 });

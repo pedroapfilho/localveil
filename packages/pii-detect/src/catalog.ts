@@ -5,11 +5,12 @@ type ModelLanguage = "en" | "es" | "pt";
 
 type ModelDecoding = "span" | "token";
 
-type ModelSpec = {
+// The catalogue is checked against plain string ids because ModelId is read off the catalogue.
+type ModelSpec<Id extends string = ModelId> = {
   bytes: number;
   decoding: ModelDecoding;
   file: string;
-  id: string;
+  id: Id;
   languages: ReadonlyArray<ModelLanguage>;
   maxPrompts: number;
   maxWidth: number;
@@ -65,7 +66,7 @@ const MODELS = [
     repo: "knowledgator/gliner-pii-edge-v1.0",
     revision: "9b7f39b0a2da971a5beea78d35f1539d4009c891",
   },
-] as const satisfies ReadonlyArray<ModelSpec>;
+] as const satisfies ReadonlyArray<ModelSpec<string>>;
 
 type ModelId = (typeof MODELS)[number]["id"];
 
