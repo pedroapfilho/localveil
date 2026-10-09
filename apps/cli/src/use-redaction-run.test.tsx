@@ -36,7 +36,6 @@ const Run = () => {
       fileName="one.txt"
       fraction={progress.fraction}
       model={progress.model}
-      slowDevice={progress.slowDevice}
       stage={progress.stage}
       stopping={false}
       total={1}
@@ -50,14 +49,15 @@ afterEach(() => {
 });
 
 describe("a run loading its model", () => {
-  it("shows no download bar for a model already kept, and notes the slow device instead", async () => {
+  it("shows no download bar for a model already kept, and no GPU notice it cannot act on", async () => {
     loadThrough([{ kind: "loading" }, { kind: "slow-device" }]);
 
     const { lastFrame } = render(<Run />);
 
     await vi.waitFor(() => {
-      expect(lastFrame()).toContain("Running without GPU acceleration, this will be slow.");
+      expect(lastFrame()).toContain("File 1 of 1");
     });
+    expect(lastFrame()).not.toContain("Running without GPU acceleration");
     expect(lastFrame()).not.toContain("Downloading the detection model");
     expect(lastFrame()?.match(/%/gv)).toHaveLength(1);
   });

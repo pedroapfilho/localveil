@@ -10,7 +10,6 @@ const defaults = {
   fileName: "invoice.pdf",
   fraction: 0.42,
   model: { kind: "ready" } as ModelLoadState,
-  slowDevice: false,
   stage: "stage.detecting" as FileStageKey | null,
   stopping: false,
   total: 3,

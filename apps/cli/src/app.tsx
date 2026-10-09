@@ -83,7 +83,6 @@ const App = ({ initialDirectory, initialSelection, jobs, model, outputDirectory 
       fileName={basename(files[progress.fileIndex] ?? "")}
       fraction={progress.fraction}
       model={progress.model}
-      slowDevice={progress.slowDevice}
       stage={progress.stage}
       stopping={stopping}
       total={files.length}

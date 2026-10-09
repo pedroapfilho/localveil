@@ -10,7 +10,6 @@ type RunProgressState = {
   fileIndex: number;
   fraction: number;
   model: ModelLoadState;
-  slowDevice: boolean;
   stage: FileStageKey | null;
 };
 
@@ -25,7 +24,6 @@ const INITIAL: RunProgressState = {
   fileIndex: 0,
   fraction: 0,
   model: { kind: "loading" },
-  slowDevice: false,
   stage: null,
 };
 
@@ -57,12 +55,11 @@ const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionR
               onFileProgress: ({ fraction, index, stage }) => {
                 setProgress((current) => ({ ...current, fileIndex: index, fraction, stage }));
               },
+              // Node has no GPU path to switch to, so the slow-device notice has nothing to tell the CLI.
               onModelLoad: (event) => {
-                setProgress((current) =>
-                  event.kind === "slow-device"
-                    ? { ...current, slowDevice: true }
-                    : { ...current, model: event },
-                );
+                if (event.kind !== "slow-device") {
+                  setProgress((current) => ({ ...current, model: event }));
+                }
               },
               outputDirectory,
               signal: controller.signal,
