@@ -25,10 +25,14 @@ function NodeOffscreenCanvas(this: unknown, width: number, height: number) {
   return createNodeCanvas(width, height);
 }
 
+/* A skia Image knows its size as soon as it has its bytes but decodes the pixels later, and a
+   bitmap drawn before then comes out blank. createImageBitmap resolves only once it can be drawn. */
 const createNodeImageBitmap = async (source: Blob) => {
   const image = new Image();
 
   image.src = new Uint8Array(await source.arrayBuffer());
+
+  await image.decode();
 
   return Object.assign(image, { close: () => undefined });
 };

@@ -39,6 +39,20 @@ describe("installCanvas", () => {
     bitmap.close();
   });
 
+  it("hands back a bitmap whose pixels are there to draw the moment it resolves", async () => {
+    const png = await filled(30, 20).convertToBlob({ type: "image/png" });
+    const bitmap = await createImageBitmap(png);
+    const context = new OffscreenCanvas(30, 20).getContext("2d");
+
+    if (context === null) {
+      throw new Error("The installed canvas gave back nothing to draw on");
+    }
+
+    context.drawImage(bitmap, 0, 0);
+
+    expect([...context.getImageData(15, 10, 1, 1).data]).toEqual([255, 255, 255, 255]);
+  });
+
   it("hands pdf.js a scratch surface its own drawImage will take", () => {
     const factory = new (documentOptions(new Uint8Array()).CanvasFactory)();
     const scratch = factory.create(16, 16).canvas;
