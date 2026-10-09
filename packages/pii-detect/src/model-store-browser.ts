@@ -165,14 +165,18 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
     onProgress(1);
   };
 
-  const openModel: OpenModel = (model, onProgress) =>
-    withLock(revisionUrl(model), "shared", () =>
-      openInOrder(
-        model,
-        onProgress,
-        async (url, progress) => bytesOf(await keepFile(url, "best-effort", progress)),
-        () => clearWhere(isStale),
-      ),
+  const openModel: OpenModel = (model, onProgress, signal) =>
+    withLock(
+      revisionUrl(model),
+      "shared",
+      () =>
+        openInOrder(
+          model,
+          onProgress,
+          async (url, progress) => bytesOf(await keepFile(url, "best-effort", progress, signal)),
+          () => clearWhere(isStale),
+        ),
+      signal,
     );
 
   const removeModel = (model: ModelSpec): Promise<void> =>

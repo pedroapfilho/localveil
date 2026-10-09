@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelSpec } from "./catalog";
 import { modelById, tokenizerUrls, weightsUrl } from "./catalog";
-import { serveFiles, urlOf, WEIGHTS_BODY } from "./model-store-fixture";
+import { serveFiles, stopAt, urlOf, WEIGHTS_BODY } from "./model-store-fixture";
 import { createNodeModelStore } from "./model-store-node";
 
 const MODEL = modelById("gliner-pii-base");
@@ -151,6 +151,32 @@ describe("openModel on disk", () => {
 
     await expect(store.openModel(MODEL, ignore)).resolves.toEqual(first);
     expect(offline).not.toHaveBeenCalled();
+  });
+
+  it("reports no download for a model it already keeps", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+    const reported: Array<number> = [];
+
+    await store.downloadModel(MODEL, ignore);
+    await store.openModel(MODEL, (fraction) => {
+      reported.push(fraction);
+    });
+
+    expect(reported).toEqual([]);
+  });
+
+  it("stops downloading the weights when the load is stopped", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+    const controller = new AbortController();
+
+    stopAt(WEIGHTS, controller);
+
+    await expect(store.openModel(MODEL, ignore, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
   });
 
   it("reports the weights' progress and not the tokenizer's", async () => {
