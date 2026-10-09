@@ -8,31 +8,19 @@ import {
   tightenToVerified,
 } from "@repo/redact-core";
 
-import { createModelRunner, fetchModelBytes, pickDevice } from "#ort";
+import { openModel } from "#model-store";
+import { createModelRunner, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
-import { withCacheLock } from "./cache-lock";
-import type { ModelId, ModelSpec } from "./catalog";
-import {
-  DEFAULT_MODEL_ID,
-  modelById,
-  MODELS,
-  revisionUrl,
-  tokenizerUrls,
-  weightsUrl,
-} from "./catalog";
-import type { ChunkStore } from "./chunk-store";
-import { createIndexedDbChunkStore } from "./chunk-store";
+import type { ModelId } from "./catalog";
+import { DEFAULT_MODEL_ID, modelById } from "./catalog";
 import { chunkWords } from "./chunk-words";
 import type { Logits } from "./gliner-decode";
 import { decodeSpans, decodeTokenSpans, suppressOverlaps } from "./gliner-decode";
 import type { GlinerInput, SpanWord, TokenFrame } from "./gliner-encode";
 import { encodeGlinerInput } from "./gliner-encode";
 import type { ModelDevice } from "./model-runtime";
-import { purgeStaleModels } from "./purge-stale-models";
-import type { ResumableCache } from "./resumable-cache";
-import { createResumableCache } from "./resumable-cache";
-import { settleAll } from "./settle-all";
+import type { ModelFiles } from "./model-status";
 import { collectShouting, positionShouted } from "./shouting";
 import { splitWords } from "./split-words";
 
@@ -53,50 +41,15 @@ type DetectorOptions = {
   model?: ModelId;
   onProgress?: ModelProgress;
   overlapWords?: number;
-
-  resumableCache?: boolean;
 };
-
-const weightsCache = (report: ModelProgress, store: ChunkStore, weights: string): ResumableCache =>
-  createResumableCache({
-    onProgress: ({ loaded, name, total }) => {
-      if (name !== weights || total === 0) {
-        return;
-      }
-
-      report(Math.min(loaded / total, 1), "model.downloading");
-    },
-    store,
-  });
-
-const parseJson = (bytes: Uint8Array, url: string): object => {
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
-
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new TypeError(`${url} is not a JSON object`);
-  }
-
-  return parsed;
-};
-
-const ignoreProgress = () => undefined;
 
 /* transformers.js checks whether tokenizer_config.json exists at `main` before it loads a tokenizer,
    whatever revision it is handed, so its loader makes an unpinned request on every load and fails
-   outright with the network off. The two files are fetched here instead, pinned like the weights and
-   kept in the same cache. DebertaV2Tokenizer, the class two of the models name, differs from the
-   base class only in returning token type ids, which GLiNER never takes. */
-const loadTokenizer = async (spec: ModelSpec, cache: ResumableCache | undefined) => {
-  const [tokenizerJson, tokenizerConfig] = await settleAll(
-    tokenizerUrls(spec).map((url) =>
-      fetchModelBytes(url, { cache, onProgress: ignoreProgress }).then((bytes) =>
-        parseJson(bytes, url),
-      ),
-    ),
-  );
-
-  return new PreTrainedTokenizer(tokenizerJson, tokenizerConfig);
-};
+   outright with the network off. The model store fetches the two files instead, pinned like the
+   weights and kept beside them. DebertaV2Tokenizer, the class two of the models name, differs from
+   the base class only in returning token type ids, which GLiNER never takes. */
+const loadTokenizer = (files: ModelFiles) =>
+  new PreTrainedTokenizer(files.tokenizer, files.tokenizerConfig);
 
 type Tokenizer = PreTrainedTokenizer;
 
@@ -148,7 +101,6 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     model = DEFAULT_MODEL_ID,
     onProgress,
     overlapWords = OVERLAP_WORDS,
-    resumableCache = "caches" in globalThis,
   } = options;
 
   const report: ModelProgress = (fraction, stage) => {
@@ -156,24 +108,10 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
   };
 
   const spec = modelById(model);
-  const weights = weightsUrl(spec);
-  const chunks = createIndexedDbChunkStore();
-  const cache = resumableCache ? weightsCache(report, chunks, weights) : undefined;
-  const loadFiles = async () => {
-    const tokenizer = await loadTokenizer(spec, cache);
-    // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- validate the small tokenizer before downloading the weights
-    const bytes = await fetchModelBytes(weights, {
-      cache,
-      onProgress: (fraction) => {
-        report(fraction, "model.downloading");
-      },
-    });
-
-    return { bytes, tokenizer };
-  };
-  const { bytes, tokenizer } = await (cache === undefined
-    ? loadFiles()
-    : withCacheLock(revisionUrl(spec), "shared", loadFiles));
+  const files = await openModel(spec, (fraction) => {
+    report(fraction, "model.downloading");
+  });
+  const tokenizer = loadTokenizer(files);
   const frame = frameOf(tokenizer);
 
   const encodeCache = new Map<string, Array<number>>();
@@ -203,16 +141,7 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
     report(0, "model.slowDevice");
   }
 
-  const run = await loadRunner(bytes, device, spec.repo, report);
-
-  if (cache !== undefined) {
-    try {
-      await purgeStaleModels({ models: MODELS, store: chunks });
-    } catch (error) {
-      // oxlint-disable-next-line eslint/no-console -- a stale-weights purge failure is recoverable, so it is surfaced in the console instead of thrown
-      console.warn("Could not clear superseded model weights", error);
-    }
-  }
+  const run = await loadRunner(files.weights, device, spec.repo, report);
 
   report(1, "model.ready");
 

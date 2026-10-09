@@ -1,130 +1,238 @@
-/* oxlint-disable anti-slop/no-module-mocking -- only the home directory is substituted; downloads exercise the real disk cache in a scratch folder */
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import type * as Os from "node:os";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ModelSpec } from "./catalog";
 import { modelById, tokenizerUrls, weightsUrl } from "./catalog";
-import { cachePathFor, fetchKept, MODEL_CACHE_DIR } from "./disk-cache";
-import { downloadModel, inspectModel, removeModel } from "./model-store-node";
-
-const scratch = vi.hoisted(() => ({ directory: "" }));
-
-vi.mock("node:os", async (importOriginal) => {
-  const original = await importOriginal<typeof Os>();
-  const { mkdtemp: makeTemp } = await import("node:fs/promises");
-
-  scratch.directory = await makeTemp(`${original.tmpdir()}/localveil-models-`);
-
-  return { ...original, homedir: () => scratch.directory };
-});
+import { serveFiles, urlOf, WEIGHTS_BODY } from "./model-store-fixture";
+import { createNodeModelStore } from "./model-store-node";
 
 const MODEL = modelById("gliner-pii-base");
+const OTHER = modelById("gliner-multi-pii");
 const [TOKENIZER, TOKENIZER_CONFIG] = tokenizerUrls(MODEL);
-const EVERYTHING = [TOKENIZER, TOKENIZER_CONFIG, weightsUrl(MODEL)];
-const BODY = new Uint8Array(12);
+const WEIGHTS = weightsUrl(MODEL);
+const EVERYTHING = [TOKENIZER, TOKENIZER_CONFIG, WEIGHTS];
+const TOKENIZER_JSON = { model: {} };
 
-const keep = (urls: Array<string>) =>
-  Promise.all(urls.map((url) => writeFile(cachePathFor(url), BODY)));
+const ignore = () => undefined;
+
+const superseded = (model: ModelSpec): ModelSpec => ({ ...model, revision: "0".repeat(40) });
+
+let directory = "";
+
+const failFetch = (failing: string, failure: () => Promise<void>) => {
+  const serve = fetch;
+
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (urlOf(input) === failing) {
+      await failure();
+    }
+
+    return serve(input, init);
+  });
+};
+
+// Storage can become unavailable after the network request began, even if the initial stat succeeded.
+const refuseSavingAt = (url: string) => {
+  failFetch(url, async () => {
+    await rm(directory, { force: true, recursive: true });
+    await writeFile(directory, "blocked");
+  });
+};
 
 beforeEach(async () => {
-  await mkdir(MODEL_CACHE_DIR, { recursive: true });
-  vi.stubGlobal(
-    "fetch",
-    vi.fn<typeof fetch>(() => Promise.resolve(new Response(BODY))),
-  );
+  directory = await mkdtemp(path.join(tmpdir(), "localveil-models-"));
 });
 
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  await rm(MODEL_CACHE_DIR, { force: true, recursive: true });
+  await rm(directory, { force: true, recursive: true });
 });
 
-afterAll(async () => {
-  await rm(scratch.directory, { force: true, recursive: true });
-});
+describe("inspectModel on disk", () => {
+  it("calls a model ready once its weights and tokenizer are all on disk", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
 
-// Storage can become unavailable after the network request began, even if the initial stat succeeded.
-const refuseSaving = () => {
-  vi.mocked(fetch).mockImplementation(async () => {
-    await rm(MODEL_CACHE_DIR, { force: true, recursive: true });
-    await writeFile(MODEL_CACHE_DIR, "blocked");
+    await store.downloadModel(MODEL, ignore);
 
-    return new Response(BODY);
-  });
-};
-
-describe("the CLI's model store", () => {
-  it("reports a model ready once its weights and tokenizer are all on disk", async () => {
-    await keep(EVERYTHING);
-
-    await expect(inspectModel(MODEL)).resolves.toEqual({
-      bytes: 12,
-      path: cachePathFor(weightsUrl(MODEL)),
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({
+      bytes: WEIGHTS_BODY.length,
+      path: store.weightsPath(MODEL),
       state: "ready",
     });
   });
 
   it("does not call weights without their tokenizer ready, since they cannot load offline", async () => {
-    await keep([weightsUrl(MODEL)]);
+    const store = createNodeModelStore(directory);
 
-    await expect(inspectModel(MODEL)).resolves.toMatchObject({ state: "partial" });
+    await writeFile(store.weightsPath(MODEL), WEIGHTS_BODY);
+
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({
+      loaded: WEIGHTS_BODY.length,
+      state: "partial",
+      total: MODEL.bytes,
+    });
   });
 
-  it("reports a model with no weights on disk as absent", async () => {
-    await keep(tokenizerUrls(MODEL));
+  it("reports a model whose weights never landed as absent", async () => {
+    serveFiles();
+    failFetch(WEIGHTS, () => Promise.reject(new TypeError("offline")));
+    const store = createNodeModelStore(directory);
 
-    await expect(inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+    await expect(store.downloadModel(MODEL, ignore)).rejects.toThrow("offline");
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
   });
+});
 
-  it("persists every file before reporting a download complete", async () => {
-    await downloadModel(MODEL, () => undefined);
+describe("downloadModel on disk", () => {
+  it("keeps the tokenizer before the weights, and leaves no half-written file", async () => {
+    const asked = serveFiles();
+    const store = createNodeModelStore(directory);
 
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual(EVERYTHING);
-    await expect(inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
-    for (const url of EVERYTHING) {
-      const stored = await readFile(cachePathFor(url));
+    await store.downloadModel(MODEL, ignore);
 
-      expect(new Uint8Array(stored)).toEqual(BODY);
-    }
-    const names = await readdir(MODEL_CACHE_DIR);
+    expect(asked.toSorted()).toEqual(EVERYTHING.toSorted());
+    expect(asked.at(-1)).toBe(WEIGHTS);
+    const names = await readdir(directory);
 
-    expect(names.some((file) => file.includes(".part-"))).toBe(false);
+    expect(names).toHaveLength(3);
+    expect(names.some((name) => name.includes(".part-"))).toBe(false);
   });
 
   it("fetches only what is missing and reports already kept weights complete", async () => {
-    await keep([TOKENIZER, weightsUrl(MODEL)]);
+    const store = createNodeModelStore(directory);
+
+    await writeFile(store.weightsPath(MODEL), WEIGHTS_BODY);
+    const asked = serveFiles();
     const reported: Array<number> = [];
 
-    await downloadModel(MODEL, (fraction) => {
+    await store.downloadModel(MODEL, (fraction) => {
       reported.push(fraction);
     });
 
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([TOKENIZER_CONFIG]);
+    expect(asked.toSorted()).toEqual([TOKENIZER, TOKENIZER_CONFIG].toSorted());
     expect(reported).toEqual([1]);
   });
 
-  it("rejects explicit downloads when saving the weights fails", async () => {
-    await keep(tokenizerUrls(MODEL));
-    refuseSaving();
+  it("rejects when saving the weights fails", async () => {
+    serveFiles();
+    refuseSavingAt(WEIGHTS);
 
-    await expect(downloadModel(MODEL, () => undefined)).rejects.toThrow("EEXIST");
+    await expect(createNodeModelStore(directory).downloadModel(MODEL, ignore)).rejects.toThrow(
+      "EEXIST",
+    );
+  });
+});
+
+describe("openModel on disk", () => {
+  it("downloads what is missing and hands back the tokenizer pair and the weights", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toEqual({
+      tokenizer: TOKENIZER_JSON,
+      tokenizerConfig: TOKENIZER_JSON,
+      weights: WEIGHTS_BODY,
+    });
+    await expect(store.inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
   });
 
-  it("still lets inference use fetched bytes if they cannot be saved", async () => {
-    refuseSaving();
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("opens a model it already keeps again without the network", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+    const first = await store.openModel(MODEL, ignore);
+    const offline = vi.fn<typeof fetch>(() => Promise.reject(new TypeError("offline")));
 
-    await expect(fetchKept(weightsUrl(MODEL), () => undefined)).resolves.toEqual(BODY);
-    expect(warn).toHaveBeenCalledOnce();
+    vi.stubGlobal("fetch", offline);
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toEqual(first);
+    expect(offline).not.toHaveBeenCalled();
   });
 
+  it("reports the weights' progress and not the tokenizer's", async () => {
+    const asked = serveFiles();
+    const reported: Array<{ fraction: number; weightsAsked: boolean }> = [];
+
+    await createNodeModelStore(directory).openModel(MODEL, (fraction) => {
+      reported.push({ fraction, weightsAsked: asked.includes(WEIGHTS) });
+    });
+
+    expect(reported.every(({ weightsAsked }) => weightsAsked)).toBe(true);
+    expect(reported.at(-1)?.fraction).toBe(1);
+  });
+
+  it("still hands back the weights when they cannot be saved, and says so", async () => {
+    serveFiles();
+    refuseSavingAt(WEIGHTS);
+    const warn = vi.spyOn(console, "warn").mockImplementation(ignore);
+
+    await expect(createNodeModelStore(directory).openModel(MODEL, ignore)).resolves.toMatchObject({
+      weights: WEIGHTS_BODY,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("Could not keep the model"),
+      expect.anything(),
+    );
+  });
+
+  it("deletes superseded revisions and dropped exports, and keeps every catalogued model", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+    const droppedExport: ModelSpec = { ...MODEL, file: "model_fp16.onnx" };
+    const backup = `${store.weightsPath(MODEL)}.original`;
+    const inFlight = `${store.weightsPath(superseded(OTHER))}.part-0`;
+
+    await store.downloadModel(superseded(MODEL), ignore);
+    await store.downloadModel(droppedExport, ignore);
+    await store.downloadModel(OTHER, ignore);
+    await writeFile(backup, WEIGHTS_BODY);
+    await writeFile(inFlight, WEIGHTS_BODY);
+
+    await store.openModel(MODEL, ignore);
+
+    await expect(store.inspectModel(superseded(MODEL))).resolves.toEqual({ state: "absent" });
+    await expect(store.inspectModel(droppedExport)).resolves.toEqual({ state: "absent" });
+    await expect(store.inspectModel(OTHER)).resolves.toMatchObject({ state: "ready" });
+    await expect(store.inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
+    const left = await readdir(directory);
+
+    expect(left).toContain(path.basename(backup));
+    expect(left).toContain(path.basename(inFlight));
+  });
+
+  it("still opens the model when clearing superseded files fails", async () => {
+    serveFiles();
+    const store = createNodeModelStore(directory);
+    const warn = vi.spyOn(console, "warn").mockImplementation(ignore);
+
+    // A directory under a stale file's name cannot be removed as a file.
+    await mkdir(store.weightsPath(superseded(MODEL)));
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toMatchObject({
+      weights: WEIGHTS_BODY,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "Could not clear superseded model weights",
+      expect.anything(),
+    );
+  });
+});
+
+describe("removeModel on disk", () => {
   it("deletes every file of a model, and does not mind one that was never there", async () => {
-    await keep(EVERYTHING);
-    await removeModel(MODEL);
-    await removeModel(MODEL);
+    serveFiles();
+    const store = createNodeModelStore(directory);
 
-    await expect(inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+    await store.downloadModel(MODEL, ignore);
+    await store.downloadModel(OTHER, ignore);
+    await store.removeModel(MODEL);
+    await store.removeModel(MODEL);
+
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+    await expect(store.inspectModel(OTHER)).resolves.toMatchObject({ state: "ready" });
   });
 });

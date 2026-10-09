@@ -144,7 +144,6 @@ const run = async () => {
         note(`  ${stage} ${(fraction * 100).toFixed(0)}%`);
       }
     },
-    resumableCache: false,
   });
 
   if (floor !== undefined) {

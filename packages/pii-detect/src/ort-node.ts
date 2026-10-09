@@ -1,14 +1,10 @@
 import * as ort from "onnxruntime-node";
 
-import { fetchKept } from "./disk-cache";
 import { toLogits } from "./gliner-decode";
 import { toFeeds } from "./gliner-feeds";
-import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime";
+import type { ModelDevice, RunModel } from "./model-runtime";
 
 const pickDevice = (): Promise<ModelDevice> => Promise.resolve("wasm");
-
-const fetchModelBytes = (url: string, options: FetchModelOptions): Promise<Uint8Array> =>
-  fetchKept(url, options.onProgress);
 
 const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promise<RunModel> => {
   const session = await ort.InferenceSession.create(bytes);
@@ -27,4 +23,4 @@ const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promi
   };
 };
 
-export { createModelRunner, fetchModelBytes, pickDevice };
+export { createModelRunner, pickDevice };

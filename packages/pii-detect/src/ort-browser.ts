@@ -1,9 +1,8 @@
 import * as ort from "onnxruntime-web/webgpu";
 
-import { readBytes } from "./fetch-bytes";
 import { toLogits } from "./gliner-decode";
 import { toFeeds } from "./gliner-feeds";
-import type { FetchModelOptions, ModelDevice, RunModel } from "./model-runtime";
+import type { ModelDevice, RunModel } from "./model-runtime";
 
 const pickDevice = async (): Promise<ModelDevice> => {
   if (!("gpu" in navigator)) {
@@ -31,22 +30,6 @@ const pickDevice = async (): Promise<ModelDevice> => {
   }
 };
 
-const fetchModelBytes = async (url: string, options: FetchModelOptions): Promise<Uint8Array> => {
-  const { cache, onProgress } = options;
-
-  if (cache !== undefined) {
-    const response = await cache.match(url);
-
-    if (response === undefined) {
-      throw new Error(`The model cache could not produce ${url}`);
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
-  }
-
-  return readBytes(await fetch(url), onProgress);
-};
-
 const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promise<RunModel> => {
   const session = await ort.InferenceSession.create(bytes, { executionProviders: [device] });
   const output = session.outputNames.at(0);
@@ -64,4 +47,4 @@ const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promis
   };
 };
 
-export { createModelRunner, fetchModelBytes, pickDevice };
+export { createModelRunner, pickDevice };

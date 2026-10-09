@@ -1,49 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ChunkStore, Manifest } from "./chunk-store";
+import type { ChunkStore } from "./chunk-store";
+import { memoryChunks } from "./model-store-fixture";
 import type { DownloadOptions } from "./resumable-download";
 import { downloadResumable } from "./resumable-download";
 
 const URL_UNDER_TEST = "https://example.com/model.onnx_data";
-
-const memoryStore = () => {
-  const chunks = new Map<string, Map<number, ArrayBuffer>>();
-  const manifests = new Map<string, Manifest>();
-
-  const store: ChunkStore = {
-    append: (url, start, bytes) => {
-      const existing = chunks.get(url) ?? new Map<number, ArrayBuffer>();
-
-      existing.set(start, bytes);
-      chunks.set(url, existing);
-
-      return Promise.resolve();
-    },
-    clear: (url) => {
-      chunks.delete(url);
-      manifests.delete(url);
-
-      return Promise.resolve();
-    },
-    listUrls: () => Promise.resolve([...manifests.keys()]),
-    readManifest: (url) => Promise.resolve(manifests.get(url)),
-    readOffsets: (url) =>
-      Promise.resolve([...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).keys()]),
-    readParts: (url) =>
-      Promise.resolve(
-        [...(chunks.get(url) ?? new Map<number, ArrayBuffer>()).entries()]
-          .toSorted(([left], [right]) => left - right)
-          .map(([, bytes]) => new Blob([bytes])),
-      ),
-    writeManifest: (url, manifest) => {
-      manifests.set(url, manifest);
-
-      return Promise.resolve();
-    },
-  };
-
-  return { chunks, manifests, store };
-};
 
 type Span = { end: number; start: number };
 
@@ -140,7 +102,7 @@ describe("downloadResumable", () => {
     const body = bodyOf(16);
     const first = rangeServer(body);
     const controller = new AbortController();
-    const { chunks, store } = memoryStore();
+    const store = memoryChunks();
 
     const stoppingAfterSecond: typeof fetch = async (input, init) => {
       const response = await first.fetchRange(input, init);
@@ -155,7 +117,7 @@ describe("downloadResumable", () => {
     await expect(
       run(stoppingAfterSecond, store, { concurrency: 1, signal: controller.signal }),
     ).rejects.toThrow(/abort/iv);
-    expect([...(chunks.get(URL_UNDER_TEST)?.keys() ?? [])]).toEqual([0, 4]);
+    await expect(store.readOffsets(URL_UNDER_TEST)).resolves.toEqual([0, 4]);
 
     const second = rangeServer(body);
     const blob = await run(second.fetchRange, store);
@@ -167,7 +129,7 @@ describe("downloadResumable", () => {
   it("assembles the whole body from several ranges", async () => {
     const body = bodyOf(10);
     const { fetchRange } = rangeServer(body);
-    const blob = await run(fetchRange, memoryStore().store);
+    const blob = await run(fetchRange, memoryChunks());
 
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(body);
   });
@@ -175,7 +137,7 @@ describe("downloadResumable", () => {
   it("asks for every range once, plus the size probe", async () => {
     const { calls, fetchRange } = rangeServer(bodyOf(10));
 
-    await run(fetchRange, memoryStore().store);
+    await run(fetchRange, memoryChunks());
 
     expect(calls).toEqual([
       { end: 0, start: 0 },
@@ -188,7 +150,7 @@ describe("downloadResumable", () => {
   it("assembles the whole body from ranges that come back out of order", async () => {
     const body = bodyOf(40);
     const { fetchRange } = rangeServer(body, "v1", ({ start }) => 40 - start);
-    const blob = await run(fetchRange, memoryStore().store);
+    const blob = await run(fetchRange, memoryChunks());
 
     expect(new Uint8Array(await blob.arrayBuffer())).toEqual(body);
   });
@@ -196,7 +158,7 @@ describe("downloadResumable", () => {
   it("keeps several ranges in flight at the same time", async () => {
     const { fetchRange, peak } = rangeServer(bodyOf(40), "v1", () => 5);
 
-    await run(fetchRange, memoryStore().store);
+    await run(fetchRange, memoryChunks());
 
     expect(peak()).toBe(6);
   });
@@ -204,14 +166,14 @@ describe("downloadResumable", () => {
   it("holds the number of ranges in flight to the concurrency it was given", async () => {
     const { fetchRange, peak } = rangeServer(bodyOf(40), "v1", () => 5);
 
-    await run(fetchRange, memoryStore().store, { concurrency: 2 });
+    await run(fetchRange, memoryChunks(), { concurrency: 2 });
 
     expect(peak()).toBe(2);
   });
 
   it("picks up from the byte a previous run reached", async () => {
     const body = bodyOf(10);
-    const { store } = memoryStore();
+    const store = memoryChunks();
 
     await store.append(URL_UNDER_TEST, 0, body.slice(0, 4).buffer);
     await store.writeManifest(URL_UNDER_TEST, { chunkSize: 4, etag: "v1", total: 10 });
@@ -229,7 +191,7 @@ describe("downloadResumable", () => {
 
   it("asks only for the ranges a half-finished store is missing, gap and all", async () => {
     const body = bodyOf(20);
-    const { store } = memoryStore();
+    const store = memoryChunks();
 
     await store.append(URL_UNDER_TEST, 0, body.slice(0, 4).buffer);
     await store.append(URL_UNDER_TEST, 8, body.slice(8, 12).buffer);
@@ -244,7 +206,7 @@ describe("downloadResumable", () => {
 
   it("throws away every stored chunk when the file changed and fetches them all again", async () => {
     const body = bodyOf(20);
-    const { store } = memoryStore();
+    const store = memoryChunks();
     const stale = Uint8Array.from({ length: 4 }, () => 9);
 
     await store.append(URL_UNDER_TEST, 0, stale.buffer);
@@ -260,7 +222,7 @@ describe("downloadResumable", () => {
 
   it("starts over when the file changed under a resumed download", async () => {
     const body = bodyOf(10);
-    const { store } = memoryStore();
+    const store = memoryChunks();
 
     await store.append(URL_UNDER_TEST, 0, new Uint8Array([9, 9, 9, 9]).buffer);
     await store.writeManifest(URL_UNDER_TEST, { chunkSize: 4, etag: "stale", total: 10 });
@@ -273,7 +235,7 @@ describe("downloadResumable", () => {
   });
 
   it("keeps a manifest that a later run can resume from", async () => {
-    const { manifests, store } = memoryStore();
+    const store = memoryChunks();
     let served = 0;
 
     const fetchRange: typeof fetch = (_input, init) => {
@@ -298,24 +260,28 @@ describe("downloadResumable", () => {
 
     await expect(run(fetchRange, store)).rejects.toThrow(/connection lost/v);
 
-    expect(manifests.get(URL_UNDER_TEST)).toEqual({ chunkSize: 4, etag: "v1", total: 10 });
+    await expect(store.readManifest(URL_UNDER_TEST)).resolves.toEqual({
+      chunkSize: 4,
+      etag: "v1",
+      total: 10,
+    });
   });
 
   it("keeps completed chunks until the caller has saved the assembled file", async () => {
-    const { chunks, manifests, store } = memoryStore();
+    const store = memoryChunks();
     const { fetchRange } = rangeServer(bodyOf(10));
 
     await run(fetchRange, store);
 
-    expect(chunks.get(URL_UNDER_TEST)?.size).toBeGreaterThan(0);
-    expect(manifests.get(URL_UNDER_TEST)).toBeDefined();
+    await expect(store.readOffsets(URL_UNDER_TEST)).resolves.not.toEqual([]);
+    await expect(store.readManifest(URL_UNDER_TEST)).resolves.toBeDefined();
   });
 
   it("reports progress that never drops back, and ends on the full size", async () => {
     const onProgress = vi.fn<(loaded: number, total: number) => void>();
     const { fetchRange } = rangeServer(bodyOf(40), "v1", ({ start }) => 40 - start);
 
-    await run(fetchRange, memoryStore().store, { onProgress });
+    await run(fetchRange, memoryChunks(), { onProgress });
 
     const reported = onProgress.mock.calls.map(([loaded]) => loaded);
 
@@ -325,30 +291,30 @@ describe("downloadResumable", () => {
   });
 
   it("hangs on to the chunks that arrived when one of them fails", async () => {
-    const { chunks, store } = memoryStore();
+    const store = memoryChunks();
     const { fetchRange } = rangeServer(bodyOf(20));
 
     await expect(run(failingAt(8, fetchRange), store)).rejects.toThrow(/connection lost/v);
 
-    const banked = [...(chunks.get(URL_UNDER_TEST) ?? new Map<number, ArrayBuffer>()).keys()];
+    const banked = await store.readOffsets(URL_UNDER_TEST);
 
     expect(banked.toSorted((left, right) => left - right)).toEqual([0, 4, 12, 16]);
   });
 
   it("refuses a server that ignores the range request", async () => {
-    await expect(run(ignoresRange, memoryStore().store)).rejects.toThrow(/cannot be resumed/v);
+    await expect(run(ignoresRange, memoryChunks())).rejects.toThrow(/cannot be resumed/v);
   });
 
   it("refuses a range response with no total size", async () => {
-    await expect(run(totalless, memoryStore().store)).rejects.toThrow(/without a total size/v);
+    await expect(run(totalless, memoryChunks())).rejects.toThrow(/without a total size/v);
   });
 
   it("stops rather than spinning when a chunk comes back empty", async () => {
-    await expect(run(emptyAfterProbe, memoryStore().store)).rejects.toThrow(/empty chunk/v);
+    await expect(run(emptyAfterProbe, memoryChunks())).rejects.toThrow(/empty chunk/v);
   });
 
   it("refuses to hand back an assembly that is the wrong size", async () => {
-    const { store } = memoryStore();
+    const store = memoryChunks();
     const short: ChunkStore = {
       ...store,
       readParts: () => Promise.resolve([new Blob([bodyOf(3)])]),
@@ -360,7 +326,7 @@ describe("downloadResumable", () => {
 
   it("refetches everything when the chunk size changed under a stored download", async () => {
     const body = bodyOf(20);
-    const { store } = memoryStore();
+    const store = memoryChunks();
 
     await store.append(URL_UNDER_TEST, 0, body.slice(0, 8).buffer);
     await store.writeManifest(URL_UNDER_TEST, { chunkSize: 8, etag: "v1", total: 20 });
@@ -374,7 +340,7 @@ describe("downloadResumable", () => {
 
   it("clears the store when the chunks assemble to the wrong size, so a retry can work", async () => {
     const body = bodyOf(10);
-    const { manifests, store } = memoryStore();
+    const store = memoryChunks();
 
     await store.append(URL_UNDER_TEST, 0, body.slice(0, 4).buffer);
     await store.append(URL_UNDER_TEST, 4, body.slice(4, 8).buffer);
@@ -385,7 +351,7 @@ describe("downloadResumable", () => {
 
     await expect(run(fetchRange, store)).rejects.toThrow(/corrupt/v);
     expect(await store.readOffsets(URL_UNDER_TEST)).toEqual([]);
-    expect(manifests.get(URL_UNDER_TEST)).toBeUndefined();
+    await expect(store.readManifest(URL_UNDER_TEST)).resolves.toBeUndefined();
 
     const second = rangeServer(body);
     const blob = await run(second.fetchRange, store);
@@ -395,7 +361,7 @@ describe("downloadResumable", () => {
 
   it("writes the manifest once rather than after every chunk", async () => {
     const body = bodyOf(20);
-    const { store } = memoryStore();
+    const store = memoryChunks();
     const writes = vi.spyOn(store, "writeManifest");
     const { fetchRange } = rangeServer(body);
 
