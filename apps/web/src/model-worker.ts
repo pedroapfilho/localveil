@@ -1,5 +1,6 @@
 import { createDetector } from "@repo/pii-detect";
-import type { ModelId } from "@repo/pii-detect";
+import type { ModelId } from "@repo/pii-detect/models";
+import { isModelId } from "@repo/pii-detect/models";
 import type { Detect } from "@repo/redact-core";
 import { serveDetect } from "@repo/redact-core";
 
@@ -10,34 +11,32 @@ const post = (message: ModelResponse) => {
   globalThis.postMessage(message);
 };
 
-/* The host spawns one worker per model and replaces it on a switch, so a second model here would
-   only come from a stale connect; it still gets the model it asked for rather than the wrong one. */
-let pending: { detector: Promise<Detect>; model: ModelId } | undefined;
+let loading: Promise<Detect> | undefined;
 
-const loadDetector = async (model: ModelId) => {
-  if (pending?.model !== model) {
-    pending = {
-      detector: createDetector({
-        model,
-        onProgress: (fraction, stage) => {
-          post({ fraction, stage, type: "model-progress" });
-        },
-      }),
-      model,
-    };
-  }
-
-  const loading = pending;
-
+// A failed load has posted why, and is dropped so the next file starts afresh.
+const dropIfFailed = async (started: Promise<Detect>) => {
   try {
-    return await loading.detector;
-  } catch (error) {
-    if (pending === loading) {
-      pending = undefined;
+    await started;
+  } catch {
+    if (loading === started) {
+      loading = undefined;
     }
-
-    throw error;
   }
+};
+
+// Every file shares one load, which posts each step of its lifecycle, failure included.
+const loadDetector = (model: ModelId): Promise<Detect> => {
+  if (loading === undefined) {
+    loading = createDetector({
+      model,
+      onLoad: (event) => {
+        post({ event, type: "model-load" });
+      },
+    });
+    void dropIfFailed(loading);
+  }
+
+  return loading;
 };
 
 const detectWith =
@@ -48,10 +47,6 @@ const detectWith =
     return ready(text);
   };
 
-const warmUp = async (model: ModelId) => {
-  await loadDetector(model).catch(() => undefined);
-};
-
 const channels = new Map<string, MessagePort>();
 
 const hangUp = (channel: string) => {
@@ -59,9 +54,11 @@ const hangUp = (channel: string) => {
   channels.delete(channel);
 };
 
-const isEmscriptenThread = self.name.startsWith("em-pthread");
+/* The host spawns one worker per model and names it after that model. ONNX Runtime's wasm threads
+   load this same script under an em-pthread name, so they find no model and stand down. */
+const model = isModelId(self.name) ? self.name : undefined;
 
-if (!isEmscriptenThread) {
+if (model !== undefined) {
   globalThis.addEventListener("message", (event: MessageEvent<ModelRequest>) => {
     if (event.data.type === "disconnect") {
       hangUp(event.data.channel);
@@ -69,14 +66,15 @@ if (!isEmscriptenThread) {
       return;
     }
 
-    const { channel, model, port } = event.data;
+    const { channel, port } = event.data;
 
     channels.set(channel, port);
     port.addEventListener("close", () => {
       hangUp(channel);
     });
 
-    void warmUp(model);
+    // The load starts as a file connects, so it overlaps the reading of that file.
+    void loadDetector(model);
     serveDetect(port, detectWith(model));
   });
 }

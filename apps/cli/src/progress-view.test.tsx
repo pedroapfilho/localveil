@@ -1,3 +1,4 @@
+import type { ModelLoadState } from "@repo/pii-detect/models";
 import type { FileStageKey } from "@repo/redact-core";
 import { cleanup, render } from "ink-testing-library";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,7 +9,8 @@ const defaults = {
   fileIndex: 1,
   fileName: "invoice.pdf",
   fraction: 0.42,
-  modelFraction: null as number | null,
+  model: { kind: "ready" } as ModelLoadState,
+  slowDevice: false,
   stage: "stage.detecting" as FileStageKey | null,
   stopping: false,
   total: 3,
@@ -41,7 +43,9 @@ describe("ProgressView", () => {
   });
 
   it("shows the download while the model is still arriving", () => {
-    const { lastFrame } = render(<ProgressView {...defaults} modelFraction={0.1} />);
+    const { lastFrame } = render(
+      <ProgressView {...defaults} model={{ downloaded: 0.1, kind: "loading" }} />,
+    );
 
     expect(lastFrame()).toContain("Downloading the detection model");
     expect(lastFrame()).toContain("Downloaded once");

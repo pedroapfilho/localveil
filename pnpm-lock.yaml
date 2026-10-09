@@ -404,9 +404,6 @@ importers:
       '@napi-rs/canvas':
         specifier: ^1.0.9
         version: 1.0.9
-      '@repo/pii-detect':
-        specifier: workspace:*
-        version: link:../pii-detect
       '@repo/redact-core':
         specifier: workspace:*
         version: link:../redact-core

@@ -14,30 +14,6 @@ const ZIP_NAME = "localveil.zip";
 
 const MODEL_TOAST = "model-load";
 
-type Deferred = { promise: Promise<void>; reject: (error: Error) => void; resolve: () => void };
-
-type ModelState =
-  | { deferred: Deferred; kind: "loading" }
-  | { kind: "idle" }
-  | { kind: "lost"; reason: string }
-  | { kind: "ready" };
-
-const deferred = (): Deferred => {
-  let resolve: Deferred["resolve"] | undefined;
-  let reject: Deferred["reject"] | undefined;
-
-  const promise = new Promise<void>((settle, fail) => {
-    resolve = settle;
-    reject = fail;
-  });
-
-  if (resolve === undefined || reject === undefined) {
-    throw new TypeError("The promise executor did not run");
-  }
-
-  return { promise, reject, resolve };
-};
-
 const triggerDownload = (blob: Blob) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -58,7 +34,8 @@ const useRedaction = () => {
 
   const saidSlowRef = useRef(false);
 
-  const modelRef = useRef<ModelState>({ kind: "idle" });
+  // Only a load that downloads is announced; a model already kept comes ready without a word.
+  const announcedRef = useRef(false);
 
   useEffect(() => {
     translateRef.current = t;
@@ -117,26 +94,8 @@ const useRedaction = () => {
         );
       },
 
-      onModelLost: (reason) => {
-        const lost = modelRef.current;
-        const { refresh, reportWorkerProgress, selected } = useModelLibrary.getState();
-
-        reportWorkerProgress(selected, undefined);
-        void refresh(selected);
-
-        modelRef.current = { kind: "lost", reason };
-
-        if (lost.kind === "loading") {
-          lost.deferred.reject(new Error(reason));
-
-          return;
-        }
-
-        toast.error(reason);
-      },
-
-      onModelProgress: (fraction, stage) => {
-        if (stage === "model.slowDevice") {
+      onModelLoad: (event) => {
+        if (event.kind === "slow-device") {
           if (!saidSlowRef.current) {
             saidSlowRef.current = true;
             toast.warning(translateRef.current("model.slowDevice"));
@@ -145,39 +104,49 @@ const useRedaction = () => {
           return;
         }
 
-        const pending = modelRef.current;
         const { refresh, reportWorkerProgress, selected } = useModelLibrary.getState();
 
-        if (stage === "model.downloading") {
-          reportWorkerProgress(selected, fraction);
-        }
+        if (event.kind === "loading") {
+          if (event.downloaded === undefined) {
+            return;
+          }
 
-        if (stage === "model.ready") {
-          modelRef.current = { kind: "ready" };
-          reportWorkerProgress(selected, undefined);
-          void refresh(selected);
+          reportWorkerProgress(selected, event.downloaded);
 
-          if (pending.kind === "loading") {
-            pending.deferred.resolve();
+          if (!announcedRef.current) {
+            announcedRef.current = true;
+            toast.loading(translateRef.current("model.downloading"), { id: MODEL_TOAST });
           }
 
           return;
         }
 
-        if (pending.kind === "loading") {
+        reportWorkerProgress(selected, undefined);
+        void refresh(selected);
+
+        if (event.kind === "failed") {
+          toast.error(translateRef.current("model.failed"), { id: MODEL_TOAST });
+        } else if (announcedRef.current) {
+          toast.success(translateRef.current("model.ready"), { id: MODEL_TOAST });
+        }
+
+        announcedRef.current = false;
+      },
+
+      onModelLost: (reason) => {
+        const { refresh, reportWorkerProgress, selected } = useModelLibrary.getState();
+
+        reportWorkerProgress(selected, undefined);
+        void refresh(selected);
+
+        if (announcedRef.current) {
+          announcedRef.current = false;
+          toast.error(translateRef.current("model.failed"), { id: MODEL_TOAST });
+
           return;
         }
 
-        const started = deferred();
-
-        modelRef.current = { deferred: started, kind: "loading" };
-
-        toast.promise(started.promise, {
-          error: translateRef.current("model.failed"),
-          id: MODEL_TOAST,
-          loading: translateRef.current("model.downloading"),
-          success: translateRef.current("model.ready"),
-        });
+        toast.error(reason);
       },
       onProgress: (id, fraction, stage) => {
         useJobStore.getState().setState(id, { progress: fraction, stage, status: "running" });
@@ -205,12 +174,12 @@ const useRedaction = () => {
           return;
         }
 
-        // A load that was under way belonged to the old model; its toast would never settle.
-        if (modelRef.current.kind === "loading") {
+        // A download that was under way belonged to the old model; its toast would never settle.
+        if (announcedRef.current) {
           toast.dismiss(MODEL_TOAST);
         }
 
-        modelRef.current = { kind: "idle" };
+        announcedRef.current = false;
         previous.reportWorkerProgress(previous.selected, undefined);
         poolRef.current?.setModel(state.selected);
       }),

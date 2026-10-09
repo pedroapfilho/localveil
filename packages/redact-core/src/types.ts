@@ -16,8 +16,6 @@ type DetectedText = { spans: Array<Span>; text: string };
 
 type DocumentLanguage = "en" | "es" | "pt";
 
-type ModelStageKey = "model.downloading" | "model.ready" | "model.slowDevice";
-
 type FileStageKey =
   | "stage.assembling"
   | "stage.detecting"
@@ -29,8 +27,6 @@ type FileStageKey =
   | "stage.redacting"
   | "stage.rendering";
 
-type StageKey = FileStageKey | ModelStageKey;
-
 type WarningKey =
   | "warning.droppedCharacters"
   | "warning.lowConfidence"
@@ -39,8 +35,6 @@ type WarningKey =
   | "warning.scannedPages";
 
 type FileProgress = (fraction: number, stage: FileStageKey) => void;
-
-type ModelProgress = (fraction: number, stage: ModelStageKey) => void;
 
 type RedactionResult = {
   blob: Blob;
@@ -96,14 +90,11 @@ export type {
   DocumentLanguage,
   FileProgress,
   FileStageKey,
-  ModelProgress,
-  ModelStageKey,
   PiiLabel,
   PositionedWord,
   Rect,
   RedactionResult,
   Redactor,
   Span,
-  StageKey,
   WarningKey,
 };

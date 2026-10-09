@@ -1,4 +1,4 @@
-import type { ModelId } from "@repo/pii-detect/models";
+import type { ModelId, ModelLoadState } from "@repo/pii-detect/models";
 import type { FileStageKey } from "@repo/redact-core";
 import { describeError } from "@repo/redact-core";
 import { useCallback, useRef, useState } from "react";
@@ -9,7 +9,8 @@ import { runRedaction } from "./run-redaction";
 type RunProgressState = {
   fileIndex: number;
   fraction: number;
-  modelFraction: number | null;
+  model: ModelLoadState;
+  slowDevice: boolean;
   stage: FileStageKey | null;
 };
 
@@ -20,7 +21,13 @@ type RedactionRunOptions = {
   outputDirectory: string;
 };
 
-const INITIAL: RunProgressState = { fileIndex: 0, fraction: 0, modelFraction: null, stage: null };
+const INITIAL: RunProgressState = {
+  fileIndex: 0,
+  fraction: 0,
+  model: { kind: "loading" },
+  slowDevice: false,
+  stage: null,
+};
 
 const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionRunOptions) => {
   const [progress, setProgress] = useState(INITIAL);
@@ -48,10 +55,14 @@ const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionR
               model,
 
               onFileProgress: ({ fraction, index, stage }) => {
-                setProgress({ fileIndex: index, fraction, modelFraction: null, stage });
+                setProgress((current) => ({ ...current, fileIndex: index, fraction, stage }));
               },
-              onModelProgress: (fraction) => {
-                setProgress((current) => ({ ...current, modelFraction: fraction }));
+              onModelLoad: (event) => {
+                setProgress((current) =>
+                  event.kind === "slow-device"
+                    ? { ...current, slowDevice: true }
+                    : { ...current, model: event },
+                );
               },
               outputDirectory,
               signal: controller.signal,

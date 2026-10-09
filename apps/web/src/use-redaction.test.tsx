@@ -156,15 +156,7 @@ const nthCall = <Call,>(calls: ReadonlyArray<Call>, at: number) => {
   return call;
 };
 
-const modelNotice = () => {
-  const [given] = nthCall(vi.mocked(toast.promise).mock.calls, 0);
-
-  if (!(given instanceof Promise)) {
-    throw new Error("The hook never handed sonner a promise");
-  }
-
-  return given;
-};
+const MODEL_FAILED = "The detection model could not be loaded. Reload the page to try again.";
 
 const submitTwo = () => {
   renderWithI18n(<Harness />);
@@ -189,7 +181,8 @@ beforeEach(() => {
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
 
-  vi.spyOn(toast, "promise").mockImplementation(() => ({ unwrap: () => Promise.resolve() }));
+  vi.spyOn(toast, "loading").mockImplementation(() => "");
+  vi.spyOn(toast, "success").mockImplementation(() => "");
 });
 
 afterEach(() => {
@@ -314,7 +307,7 @@ describe("what the pool reports", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0, "model.slowDevice");
+      pool().onModelLoad({ kind: "slow-device" });
     });
 
     expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
@@ -326,8 +319,8 @@ describe("what the pool reports", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0, "model.slowDevice");
-      pool().onModelProgress(0, "model.slowDevice");
+      pool().onModelLoad({ kind: "slow-device" });
+      pool().onModelLoad({ kind: "slow-device" });
     });
 
     expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
@@ -337,10 +330,10 @@ describe("what the pool reports", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0, "model.slowDevice");
+      pool().onModelLoad({ kind: "slow-device" });
     });
 
-    expect(vi.mocked(toast.promise)).not.toHaveBeenCalled();
+    expect(vi.mocked(toast.loading)).not.toHaveBeenCalled();
   });
 });
 
@@ -349,71 +342,98 @@ describe("the model download", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.1, "model.downloading");
-      pool().onModelProgress(0.4, "model.downloading");
-      pool().onModelProgress(0.9, "model.downloading");
+      pool().onModelLoad({ kind: "loading" });
+      pool().onModelLoad({ downloaded: 0.1, kind: "loading" });
+      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
+      pool().onModelLoad({ downloaded: 0.9, kind: "loading" });
     });
 
-    expect(vi.mocked(toast.promise)).toHaveBeenCalledTimes(1);
-
-    const [, copy] = nthCall(vi.mocked(toast.promise).mock.calls, 0);
-
-    expect(copy?.loading).toBe("Downloading the detection model");
-    expect(copy?.success).toBe("Detection model ready");
+    expect(vi.mocked(toast.loading).mock.calls).toEqual([
+      ["Downloading the detection model", { id: "model-load" }],
+    ]);
   });
 
-  it("settles when the model is ready", async () => {
+  it("settles when the model is ready", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.4, "model.downloading");
+      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
+      pool().onModelLoad({ kind: "ready" });
     });
 
-    const notice = modelNotice();
-
-    act(() => {
-      pool().onModelProgress(1, "model.ready");
+    expect(vi.mocked(toast.success)).toHaveBeenCalledExactlyOnceWith("Detection model ready", {
+      id: "model-load",
     });
-
-    await expect(notice).resolves.toBeUndefined();
   });
 
-  it("fails when the model is beyond recovery", async () => {
+  it("turns into the failure, and clears the picker's progress, when the load fails", () => {
+    submitTwo();
+
+    act(() => {
+      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
+    });
+
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBe(0.4);
+
+    act(() => {
+      pool().onModelLoad({ kind: "failed", reason: "network down" });
+    });
+
+    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
+      id: "model-load",
+    });
+    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBeUndefined();
+  });
+
+  it("says a load failed even when nothing was downloading", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.4, "model.downloading");
+      pool().onModelLoad({ kind: "loading" });
+      pool().onModelLoad({ kind: "failed", reason: "no wasm" });
     });
 
-    const notice = modelNotice();
+    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
+      id: "model-load",
+    });
+  });
+
+  it("fails when the model is beyond recovery", () => {
+    renderWithI18n(<Harness />);
 
     act(() => {
+      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
       pool().onModelLost("The detection model stopped answering");
     });
 
-    await expect(notice).rejects.toThrow("The detection model stopped answering");
+    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
+      id: "model-load",
+    });
   });
 
   it("is announced again when the weights are fetched a second time", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(0.4, "model.downloading");
-      pool().onModelProgress(1, "model.ready");
-      pool().onModelProgress(0.2, "model.downloading");
+      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
+      pool().onModelLoad({ kind: "ready" });
+      pool().onModelLoad({ downloaded: 0.2, kind: "loading" });
     });
 
-    expect(vi.mocked(toast.promise)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(toast.loading)).toHaveBeenCalledTimes(2);
   });
 
-  it("says nothing for a model that was ready before anyone asked", () => {
+  it("says nothing for a model that was kept before anyone asked", () => {
     renderWithI18n(<Harness />);
 
     act(() => {
-      pool().onModelProgress(1, "model.ready");
+      pool().onModelLoad({ kind: "loading" });
+      pool().onModelLoad({ kind: "ready" });
     });
 
-    expect(vi.mocked(toast.promise)).not.toHaveBeenCalled();
+    expect(vi.mocked(toast.loading)).not.toHaveBeenCalled();
+    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
   });
 });
 
@@ -521,7 +541,7 @@ describe("the chosen model", () => {
     submitTwo();
 
     act(() => {
-      pool().onModelProgress(0.1, "model.downloading");
+      pool().onModelLoad({ downloaded: 0.1, kind: "loading" });
     });
 
     act(() => {
@@ -535,13 +555,13 @@ describe("the chosen model", () => {
     submitTwo();
 
     act(() => {
-      pool().onModelProgress(0.3, "model.downloading");
+      pool().onModelLoad({ downloaded: 0.3, kind: "loading" });
     });
 
     expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBe(0.3);
 
     act(() => {
-      pool().onModelProgress(1, "model.ready");
+      pool().onModelLoad({ kind: "ready" });
     });
 
     expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBeUndefined();

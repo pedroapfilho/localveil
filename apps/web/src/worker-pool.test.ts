@@ -244,18 +244,30 @@ describe("when a worker goes quiet", () => {
     expect(reported.errors).toEqual([]);
   });
 
-  it("counts the model downloading as a sign of life", () => {
+  it("counts each step of the model load as a sign of life", () => {
     const pool = build();
 
     pool.submit(job("a"));
     taskAt(0).progress();
 
-    for (let tick = 0; tick < 3; tick += 1) {
+    for (const event of [
+      { kind: "loading" },
+      { downloaded: 0.5, kind: "loading" },
+      { kind: "slow-device" },
+    ] as const) {
       vi.advanceTimersByTime(90_000);
-      modelHost().onProgress(0.5, "model.downloading");
+      modelHost().onLoad(event);
     }
 
     expect(reported.errors).toEqual([]);
+  });
+
+  it("passes the model load on, failure included", () => {
+    build();
+
+    modelHost().onLoad({ kind: "failed", reason: "network down" });
+
+    expect(reported.model).toEqual([{ kind: "failed", reason: "network down" }]);
   });
 
   it("reports the failure only once, however late the task settles", () => {

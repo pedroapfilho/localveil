@@ -1,5 +1,4 @@
 /* oxlint-disable anti-slop/no-module-mocking -- the ONNX runtime is a wasm engine and the model store holds the weights; the module seams are the only practical hermetic substitute */
-import type { StageKey } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openModel } from "#model-store";
@@ -8,6 +7,7 @@ import { createModelRunner, pickDevice } from "#ort";
 import type { ModelId } from "./catalog";
 import { DEFAULT_MODEL_ID, modelById } from "./catalog";
 import { createDetector } from "./detector";
+import type { ModelLoadEvent } from "./model-lifecycle";
 import type { Respond } from "./model-run-fixture";
 import { fakeModelRun, MODEL_FILES } from "./model-run-fixture";
 
@@ -21,6 +21,16 @@ vi.mock("#ort", () => ({
 }));
 
 const openedRepos = () => vi.mocked(openModel).mock.calls.map(([model]) => model.repo);
+
+const recordLoad = () => {
+  const events: Array<ModelLoadEvent> = [];
+
+  const onLoad = (event: ModelLoadEvent) => {
+    events.push(event);
+  };
+
+  return { events, onLoad };
+};
 
 const setup = (respond: Respond = () => [], model: ModelId = DEFAULT_MODEL_ID) => {
   const fake = fakeModelRun(modelById(model), respond);
@@ -133,21 +143,16 @@ describe("createDetector", () => {
       .mockRejectedValueOnce(new Error("no adapter"))
       .mockResolvedValueOnce(run);
 
-    const stages: Array<string> = [];
+    const { events, onLoad } = recordLoad();
 
-    await createDetector({
-      onProgress: (_fraction, stage) => {
-        stages.push(stage);
-      },
-    });
+    await createDetector({ onLoad });
 
     expect(openModel).toHaveBeenCalledOnce();
     expect(vi.mocked(createModelRunner).mock.calls).toEqual([
       [MODEL_FILES.weights, "webgpu"],
       [MODEL_FILES.weights, "wasm"],
     ]);
-    expect(stages).toContain("model.slowDevice");
-    expect(stages.at(-1)).toBe("model.ready");
+    expect(events).toEqual([{ kind: "loading" }, { kind: "slow-device" }, { kind: "ready" }]);
   });
 
   it("rejects with the original failure visible when wasm also fails", async () => {
@@ -159,18 +164,10 @@ describe("createDetector", () => {
 
     await expect(createDetector()).rejects.toThrow(/no adapter/v);
   });
-
-  it("does not swallow a load failure into an empty detection", async () => {
-    setup();
-    vi.mocked(pickDevice).mockResolvedValue("wasm");
-    vi.mocked(openModel).mockRejectedValue(new Error("network down"));
-
-    await expect(createDetector()).rejects.toThrow(/network down/v);
-  });
 });
 
-describe("loading the model", () => {
-  it("reports what the store downloads as the model download, then the model ready", async () => {
+describe("the model load", () => {
+  it("carries the fraction downloaded while a fresh model arrives, then comes ready", async () => {
     setup();
     vi.mocked(openModel).mockImplementation((_model, onProgress) => {
       onProgress(0.25);
@@ -178,19 +175,59 @@ describe("loading the model", () => {
 
       return Promise.resolve(MODEL_FILES);
     });
-    const reported: Array<{ fraction: number; stage: StageKey }> = [];
+    const { events, onLoad } = recordLoad();
 
-    await createDetector({
-      onProgress: (fraction, stage) => {
-        reported.push({ fraction, stage });
-      },
+    await createDetector({ onLoad });
+
+    expect(events).toEqual([
+      { kind: "loading" },
+      { downloaded: 0.25, kind: "loading" },
+      { downloaded: 1, kind: "loading" },
+      { kind: "ready" },
+    ]);
+  });
+
+  it("loads a model it already keeps without any download", async () => {
+    setup();
+    const { events, onLoad } = recordLoad();
+
+    await createDetector({ onLoad });
+
+    expect(events).toEqual([{ kind: "loading" }, { kind: "ready" }]);
+  });
+
+  it("notes a device without a GPU and carries on to ready", async () => {
+    setup();
+    vi.mocked(pickDevice).mockResolvedValue("wasm");
+    const { events, onLoad } = recordLoad();
+
+    await createDetector({ onLoad });
+
+    expect(events).toEqual([{ kind: "loading" }, { kind: "slow-device" }, { kind: "ready" }]);
+  });
+
+  it("fails with the reason, and rejects rather than detecting nothing", async () => {
+    setup();
+    vi.mocked(openModel).mockRejectedValue(new Error("network down"));
+    const { events, onLoad } = recordLoad();
+
+    await expect(createDetector({ onLoad })).rejects.toThrow(/network down/v);
+    expect(events).toEqual([{ kind: "loading" }, { kind: "failed", reason: "network down" }]);
+  });
+
+  it("hands the store the stop, and builds no session once it lands", async () => {
+    setup();
+    const controller = new AbortController();
+
+    vi.mocked(openModel).mockImplementation(() => {
+      controller.abort();
+
+      return Promise.resolve(MODEL_FILES);
     });
 
-    expect(reported).toEqual([
-      { fraction: 0.25, stage: "model.downloading" },
-      { fraction: 1, stage: "model.downloading" },
-      { fraction: 1, stage: "model.ready" },
-    ]);
+    await expect(createDetector({ signal: controller.signal })).rejects.toThrow(/abort/iv);
+    expect(vi.mocked(openModel).mock.calls[0]?.[2]).toBe(controller.signal);
+    expect(createModelRunner).not.toHaveBeenCalled();
   });
 
   it("opens the default model", async () => {

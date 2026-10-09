@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.9",
-    "@repo/pii-detect": "workspace:*",
     "@repo/redact-core": "workspace:*",
     "@repo/redact-formats": "workspace:*"
   },

@@ -1,3 +1,4 @@
+import type { ModelLoadState } from "@repo/pii-detect/models";
 import type { FileStageKey } from "@repo/redact-core";
 import { Box, Text, useWindowSize } from "ink";
 
@@ -12,7 +13,8 @@ type Props = {
   fileIndex: number;
   fileName: string;
   fraction: number;
-  modelFraction: number | null;
+  model: ModelLoadState;
+  slowDevice: boolean;
   stage: FileStageKey | null;
   stopping: boolean;
   total: number;
@@ -22,7 +24,8 @@ const ProgressView = ({
   fileIndex,
   fileName,
   fraction,
-  modelFraction,
+  model,
+  slowDevice,
   stage,
   stopping,
   total,
@@ -30,18 +33,21 @@ const ProgressView = ({
   const { columns } = useWindowSize();
   const barWidth = Math.max(BAR_MIN, Math.min(BAR_MAX, columns - 12));
   const nameWidth = Math.max(BAR_MIN, columns - 24);
+  const downloaded = model.kind === "loading" ? model.downloaded : undefined;
 
   return (
     <Box flexDirection="column" gap={1}>
-      {modelFraction === null ? null : (
+      {downloaded === undefined ? null : (
         <Box flexDirection="column">
           <Text bold>{describeKey("model.downloading")}</Text>
 
           <Text dimColor>Downloaded once and then kept.</Text>
 
-          <ProgressBar fraction={modelFraction} width={barWidth} />
+          <ProgressBar fraction={downloaded} width={barWidth} />
         </Box>
       )}
+
+      {slowDevice ? <Text dimColor>{describeKey("model.slowDevice")}</Text> : null}
 
       <Box flexDirection="column">
         <Text bold>{`File ${fileIndex + 1} of ${total}`}</Text>

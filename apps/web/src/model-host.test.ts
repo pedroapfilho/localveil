@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-unknown-parameters -- the fake Worker mirrors the untyped postMessage wire, so its params are unknown by contract */
+import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createModelHost, MAX_RESPAWNS } from "./model-host";
@@ -13,7 +14,10 @@ class FakeWorker {
 
   private readonly handlers = new Map<string, Set<Listener>>();
 
-  constructor() {
+  constructor(
+    readonly url: URL,
+    readonly options: WorkerOptions,
+  ) {
     FakeWorker.instances.push(this);
   }
 
@@ -45,16 +49,16 @@ class FakeWorker {
 }
 
 const lost: Array<{ fatal: boolean; reason: string }> = [];
-const progress: Array<string> = [];
+const loads: Array<ModelLoadEvent> = [];
 
 const build = () =>
   createModelHost({
     model: "gliner-multi-pii",
+    onLoad: (event) => {
+      loads.push(event);
+    },
     onLost: (reason, fatal) => {
       lost.push({ fatal, reason });
-    },
-    onProgress: (_fraction, stage) => {
-      progress.push(stage);
     },
   });
 
@@ -71,7 +75,7 @@ const workerAt = (index: number) => {
 beforeEach(() => {
   FakeWorker.instances = [];
   lost.length = 0;
-  progress.length = 0;
+  loads.length = 0;
   vi.stubGlobal("Worker", FakeWorker);
 });
 
@@ -80,13 +84,25 @@ afterEach(() => {
 });
 
 describe("createModelHost", () => {
-  it("passes the model's own progress along", () => {
+  it("names the worker after the model it loads", () => {
+    build();
+
+    expect(workerAt(0).options).toEqual({ name: "gliner-multi-pii", type: "module" });
+  });
+
+  it("passes the model's load along, failure included", () => {
     build();
     workerAt(0).emit("message", {
-      data: { fraction: 0.5, stage: "model.downloading", type: "model-progress" },
+      data: { event: { downloaded: 0.5, kind: "loading" }, type: "model-load" },
+    });
+    workerAt(0).emit("message", {
+      data: { event: { kind: "failed", reason: "network down" }, type: "model-load" },
     });
 
-    expect(progress).toEqual(["model.downloading"]);
+    expect(loads).toEqual([
+      { downloaded: 0.5, kind: "loading" },
+      { kind: "failed", reason: "network down" },
+    ]);
   });
 
   it("hands a port over with the channel it belongs to", () => {
@@ -95,9 +111,14 @@ describe("createModelHost", () => {
 
     host.connect("c1", port1);
 
-    expect(workerAt(0).posted).toEqual([
-      { channel: "c1", model: "gliner-multi-pii", port: port1, type: "connect" },
-    ]);
+    expect(workerAt(0).posted).toEqual([{ channel: "c1", port: port1, type: "connect" }]);
+  });
+
+  it("names a replacement after the same model", () => {
+    build();
+    workerAt(0).emit("error", {});
+
+    expect(workerAt(1).options.name).toBe("gliner-multi-pii");
   });
 
   it("can hang up on a channel whose port was never taken up", () => {
@@ -141,11 +162,11 @@ describe("when the model worker dies", () => {
     workerAt(0).emit("error", {});
     workerAt(0).emit("error", {});
     workerAt(0).emit("message", {
-      data: { fraction: 0.1, stage: "model.downloading", type: "model-progress" },
+      data: { event: { downloaded: 0.1, kind: "loading" }, type: "model-load" },
     });
 
     expect(lost.length).toBe(1);
-    expect(progress).toEqual([]);
+    expect(loads).toEqual([]);
     expect(FakeWorker.instances.length).toBe(2);
   });
 

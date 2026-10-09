@@ -145,9 +145,9 @@ const run = async () => {
   const detect = await createDetector({
     minScore: floor === undefined ? APPLY_SCORE : Number(floor),
     model,
-    onProgress: (fraction, stage) => {
-      if (stage === "model.downloading") {
-        note(`  ${stage} ${(fraction * 100).toFixed(0)}%`);
+    onLoad: (event) => {
+      if (event.kind === "loading" && event.downloaded !== undefined) {
+        note(`  downloading ${(event.downloaded * 100).toFixed(0)}%`);
       }
     },
   });

@@ -1,16 +1,18 @@
-import type { ModelId } from "@repo/pii-detect/models";
+import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect wraps a wasm model runtime; the module seam is the only practical hermetic substitute */
 /* oxlint-disable anti-slop/no-unknown-parameters -- the serveDetect double mirrors the untyped MessagePort wire */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ModelRequest } from "./worker-protocol";
+import type { ModelRequest, ModelResponse } from "./worker-protocol";
+
+type LoadOptions = { model: string; onLoad: (event: ModelLoadEvent) => void };
 
 const detect = vi.fn(() => Promise.resolve([]));
 const serveDetect = vi.fn();
-const createDetector = vi.fn((_options: { model: string }) => Promise.resolve(detect));
+const createDetector = vi.fn((_options: LoadOptions) => Promise.resolve(detect));
 
 vi.mock("@repo/pii-detect", () => ({
-  createDetector: (options: { model: string }) => createDetector(options),
+  createDetector: (options: LoadOptions) => createDetector(options),
 }));
 
 vi.mock("@repo/redact-core", () => ({
@@ -18,6 +20,8 @@ vi.mock("@repo/redact-core", () => ({
     serveDetect(port, served);
   },
 }));
+
+const posted: Array<ModelResponse> = [];
 
 const loadWorkerNamed = async (name: string) => {
   const captured: Array<EventListener> = [];
@@ -38,43 +42,107 @@ const loadWorkerNamed = async (name: string) => {
   return captured;
 };
 
-const connectRequest = (port: MessagePort, model: ModelId = "gliner-multi-pii") =>
-  new MessageEvent("message", {
-    data: { channel: "a", model, port, type: "connect" } satisfies ModelRequest,
+const loadWorkerFor = async (model: ModelId) => {
+  const [listen] = await loadWorkerNamed(model);
+
+  if (listen === undefined) {
+    throw new Error(`The worker named ${model} took no requests`);
+  }
+
+  return listen;
+};
+
+const ports: Array<MessagePort> = [];
+
+const connectRequest = (channel = "a") => {
+  const { port1, port2 } = new MessageChannel();
+
+  ports.push(port1, port2);
+
+  return new MessageEvent("message", {
+    data: { channel, port: port2, type: "connect" } satisfies ModelRequest,
+  });
+};
+
+const settle = () =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
   });
 
+beforeEach(() => {
+  posted.length = 0;
+  vi.spyOn(globalThis, "postMessage").mockImplementation((message: ModelResponse) => {
+    posted.push(message);
+  });
+});
+
 afterEach(() => {
+  for (const port of ports) {
+    port.close();
+  }
+
+  ports.length = 0;
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("model worker", () => {
   it("serves a connect request on its own thread", async () => {
-    const [listen] = await loadWorkerNamed("");
-    const { port1, port2 } = new MessageChannel();
+    const listen = await loadWorkerFor("gliner-multi-pii");
+    const request = connectRequest();
 
-    listen?.(connectRequest(port2));
+    listen(request);
 
-    expect(serveDetect.mock.calls.some(([served]) => served === port2)).toBe(true);
-
-    port1.close();
-    port2.close();
+    expect(serveDetect.mock.calls.some(([served]) => served === request.data.port)).toBe(true);
   });
 
-  it("loads the model the connect request names, once", async () => {
-    const [listen] = await loadWorkerNamed("");
-    const first = new MessageChannel();
-    const second = new MessageChannel();
+  it("loads the model it is named after, once", async () => {
+    const listen = await loadWorkerFor("gliner-pii-base");
 
-    listen?.(connectRequest(first.port2, "gliner-pii-base"));
-    listen?.(connectRequest(second.port2, "gliner-pii-base"));
+    listen(connectRequest("a"));
+    listen(connectRequest("b"));
 
     expect(createDetector.mock.calls.map(([options]) => options.model)).toEqual([
       "gliner-pii-base",
     ]);
+  });
 
-    for (const port of [first.port1, first.port2, second.port1, second.port2]) {
-      port.close();
-    }
+  it("posts each step of the load", async () => {
+    createDetector.mockImplementationOnce(({ onLoad }) => {
+      onLoad({ kind: "loading" });
+      onLoad({ downloaded: 0.5, kind: "loading" });
+      onLoad({ kind: "ready" });
+
+      return Promise.resolve(detect);
+    });
+    const listen = await loadWorkerFor("gliner-multi-pii");
+
+    listen(connectRequest());
+
+    expect(posted).toEqual([
+      { event: { kind: "loading" }, type: "model-load" },
+      { event: { downloaded: 0.5, kind: "loading" }, type: "model-load" },
+      { event: { kind: "ready" }, type: "model-load" },
+    ]);
+  });
+
+  it("posts a failed load instead of swallowing it, and starts afresh for the next file", async () => {
+    createDetector.mockImplementationOnce(({ onLoad }) => {
+      onLoad({ kind: "failed", reason: "network down" });
+
+      return Promise.reject(new Error("network down"));
+    });
+    const listen = await loadWorkerFor("gliner-multi-pii");
+
+    listen(connectRequest("a"));
+    await settle();
+    listen(connectRequest("b"));
+
+    expect(posted).toContainEqual({
+      event: { kind: "failed", reason: "network down" },
+      type: "model-load",
+    });
+    expect(createDetector).toHaveBeenCalledTimes(2);
   });
 
   it("stands down when it comes up as an ONNX Runtime thread", async () => {

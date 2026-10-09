@@ -1,19 +1,20 @@
-/* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-node and workerpool wrap wasm engines and worker threads; the module seam is the only practical hermetic substitute */
+/* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect and workerpool wrap the model runtime and worker threads; the module seam is the only practical hermetic substitute */
 import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import type { FileStageKey, ProgressEvent } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runRedaction } from "./run-redaction";
 
-const { createNodeDetector, redactFile } = vi.hoisted(() => ({
-  createNodeDetector: vi.fn(),
+const { createDetector, redactFile } = vi.hoisted(() => ({
+  createDetector: vi.fn(),
   redactFile: vi.fn(),
 }));
 
-vi.mock("@repo/redact-node", () => ({ createNodeDetector }));
+vi.mock("@repo/pii-detect", () => ({ createDetector }));
 
 vi.mock("workerpool", () => ({
   default: {
@@ -47,15 +48,15 @@ const makeWorkspace = async () => {
 const runOptions = (directory: string, files: Array<string>, signal: AbortSignal) => ({
   files,
   onFileProgress: vi.fn(),
-  onModelProgress: vi.fn(),
+  onModelLoad: vi.fn(),
   outputDirectory: directory,
   signal,
 });
 
 beforeEach(() => {
-  createNodeDetector.mockReset();
+  createDetector.mockReset();
   redactFile.mockReset();
-  createNodeDetector.mockResolvedValue(() => Promise.resolve([]));
+  createDetector.mockResolvedValue(() => Promise.resolve([]));
   redactFile.mockResolvedValue({ bytes: REDACTED, redactionCount: 2, warnings: [] });
 });
 
@@ -83,21 +84,64 @@ describe("runRedaction", () => {
     expect(result.redactionCount).toBe(4);
   });
 
-  it("passes the model download along so the caller can show it", async () => {
+  it("passes the model load along so the caller can show it", async () => {
     const { directory, first } = await makeWorkspace();
     const options = runOptions(directory, [first], new AbortController().signal);
 
-    createNodeDetector.mockImplementation(
-      ({ onModelProgress }: { onModelProgress: (fraction: number) => void }) => {
-        onModelProgress(0.25);
+    createDetector.mockImplementation(({ onLoad }: { onLoad: (event: ModelLoadEvent) => void }) => {
+      onLoad({ downloaded: 0.25, kind: "loading" });
 
-        return Promise.resolve(() => []);
-      },
-    );
+      return Promise.resolve(() => []);
+    });
 
     await runRedaction(options);
 
-    expect(options.onModelProgress).toHaveBeenCalledWith(0.25);
+    expect(options.onModelLoad).toHaveBeenCalledWith({ downloaded: 0.25, kind: "loading" });
+  });
+
+  it("hands the model load the run's signal, so a stop ends the download", async () => {
+    const { directory, first } = await makeWorkspace();
+    const controller = new AbortController();
+
+    await runRedaction(runOptions(directory, [first], controller.signal));
+
+    expect(createDetector).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
+  it("returns cancelled when a stop makes the model load reject", async () => {
+    const { directory, first, second } = await makeWorkspace();
+    const controller = new AbortController();
+    const options = runOptions(directory, [first, second], controller.signal);
+
+    createDetector.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            reject(new DOMException("The model load was stopped", "AbortError"));
+          });
+        }),
+    );
+
+    const running = runRedaction(options);
+
+    controller.abort();
+
+    const result = await running;
+
+    expect(result.cancelled).toBe(true);
+    expect(redactFile).not.toHaveBeenCalled();
+  });
+
+  it("fails the run when the model cannot load", async () => {
+    const { directory, first } = await makeWorkspace();
+    const options = runOptions(directory, [first], new AbortController().signal);
+
+    createDetector.mockRejectedValue(new Error("network down"));
+
+    await expect(runRedaction(options)).rejects.toThrow("network down");
+    expect(redactFile).not.toHaveBeenCalled();
   });
 
   it("reports which file each stage belongs to while it works", async () => {
@@ -185,7 +229,7 @@ describe("runRedaction", () => {
     const controller = new AbortController();
     const options = runOptions(directory, [first, second], controller.signal);
 
-    createNodeDetector.mockReturnValue(new Promise(() => {}));
+    createDetector.mockReturnValue(new Promise(() => {}));
 
     const running = runRedaction(options);
 
@@ -204,7 +248,7 @@ describe("runRedaction", () => {
     const controller = new AbortController();
     const options = runOptions(directory, [first, second], controller.signal);
 
-    createNodeDetector.mockReturnValue(
+    createDetector.mockReturnValue(
       new Promise((resolve) => {
         controller.signal.addEventListener("abort", () => {
           resolve(() => Promise.resolve([]));
