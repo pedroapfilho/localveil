@@ -2,6 +2,7 @@ import { readdir, rename, rm, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { aborted } from "node:util";
 import { MessageChannel } from "node:worker_threads";
 
 import type { ModelId } from "@repo/pii-detect/models";
@@ -13,7 +14,7 @@ import {
   toArrayBuffer,
   uniqueFilename,
 } from "@repo/redact-core";
-import type { FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
+import type { Detect, FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
 import type { NodeRedactionOutput } from "@repo/redact-node";
 import { createNodeDetector } from "@repo/redact-node";
 import workerpool from "workerpool";
@@ -70,6 +71,15 @@ type RunOptions = {
   signal: AbortSignal;
 };
 
+const unlessStopped = async (
+  loading: Promise<Detect>,
+  signal: AbortSignal,
+): Promise<Detect | undefined> => {
+  await Promise.race([loading, aborted(signal, loading)]);
+
+  return signal.aborted ? undefined : loading;
+};
+
 const availableName = async (directory: string): Promise<string> => {
   const taken = new Set(await readdir(directory));
 
@@ -106,7 +116,19 @@ const runRedaction = async ({
   outputDirectory,
   signal,
 }: RunOptions): Promise<RunResult> => {
-  const detect = await createNodeDetector({ model, onModelProgress });
+  // The model load takes no signal, so a stop during it is answered without waiting the load out.
+  const detect = await unlessStopped(createNodeDetector({ model, onModelProgress }), signal);
+
+  if (detect === undefined) {
+    return {
+      cancelled: true,
+      failures: [],
+      fileCount: 0,
+      redactionCount: 0,
+      warnings: [],
+      zipPath: null,
+    };
+  }
 
   const pool = workerpool.pool(WORKER_SCRIPT, {
     maxWorkers: jobs ?? defaultJobs(),

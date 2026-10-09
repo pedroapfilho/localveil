@@ -3,6 +3,8 @@ const en = {
   "app.name": "localveil",
   "app.skipToContent": "Skip to content",
   "app.tagline": "Redact personal data from your files. Nothing leaves your device.",
+  "cli.stopHint": "Press Ctrl+C to stop. Nothing leaves this machine.",
+  "cli.stopping": "Stopping now, so no archive will be written.",
   "download.button": "Download ZIP ({count})",
   "download.excluded": "{count} files were left out because they failed.",
   "dropzone.files": "Choose files",
