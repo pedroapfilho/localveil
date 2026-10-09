@@ -21,7 +21,7 @@ const LABEL_KEYS = {
 type DetectionReviewProps = {
   covered: ReadonlyArray<string>;
   detections: Array<Detection>;
-  onApply: () => void;
+  onApply: (covered: ReadonlyArray<string>) => void;
   onCoveredChange: (covered: ReadonlyArray<string>) => void;
 };
 
@@ -68,11 +68,15 @@ const DetectionReview = ({
   const groups = useMemo(() => groupByLabel(certain), [certain]);
   const painting = useMemo(() => new Set(covered), [covered]);
 
+  const applyCovered = () => {
+    onApply(covered);
+  };
+
   if (certain.length === 0 && maybe.length === 0) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-muted-foreground text-sm">{t("review.nothing")}</p>
-        <Button className="self-start" onClick={onApply} size="sm">
+        <Button className="self-start" onClick={applyCovered} size="sm">
           {t("review.apply")}
         </Button>
       </div>
@@ -191,15 +195,12 @@ const DetectionReview = ({
       </p>
 
       <div className="flex gap-2">
-        <Button onClick={onApply} size="sm">
+        <Button onClick={applyCovered} size="sm">
           {t("review.apply")}
         </Button>
         <Button
           onClick={() => {
-            onCoveredChange([
-              ...new Set([...covered, ...certain.map((detection) => detection.id)]),
-            ]);
-            onApply();
+            onApply([...new Set([...covered, ...certain.map((detection) => detection.id)])]);
           }}
           size="sm"
           variant="outline"

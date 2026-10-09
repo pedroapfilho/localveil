@@ -5,17 +5,13 @@ import { toast } from "sonner";
 
 import type { ModelPickerProps } from "./components/model-picker";
 import { useModelLibrary } from "./model-library";
-import { useJobStore } from "./store";
+import { holdsModel, useJobStore } from "./store";
 
-const isInFlight = (status: string) => status === "queued" || status === "running";
-
-/* Files already in review keep the analysis their model gave them; only work still reaching the
-   model would be split across two of them, so that is what holds a switch back. */
-const useModelPicker = (): ModelPickerProps => {
+const useModelPicker = (onSelect: (id: ModelId) => void): ModelPickerProps => {
   const { t } = useTranslations();
   const entries = useModelLibrary((state) => state.entries);
   const selected = useModelLibrary((state) => state.selected);
-  const busy = useJobStore((state) => state.jobs.some((job) => isInFlight(job.status)));
+  const busy = useJobStore((state) => holdsModel(state.jobs));
 
   const runDownload = async (id: ModelId) => {
     const { name } = modelById(id);
@@ -58,11 +54,7 @@ const useModelPicker = (): ModelPickerProps => {
     onRemove: (id) => {
       void runRemove(id);
     },
-    onSelect: (id) => {
-      if (!busy) {
-        useModelLibrary.getState().select(id);
-      }
-    },
+    onSelect,
     onStop: (id) => {
       useModelLibrary.getState().cancel(id);
     },

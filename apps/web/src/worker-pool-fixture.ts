@@ -51,6 +51,7 @@ type Pooled = {
   destroyedHosts: number;
   disconnected: Array<string>;
   host: ModelHostOptions | undefined;
+  maxWorkers: number | undefined;
   modelGone: boolean;
   models: Array<string>;
   overflowAfter: number;
@@ -63,6 +64,7 @@ const pooled: Pooled = {
   destroyedHosts: 0,
   disconnected: [],
   host: undefined,
+  maxWorkers: undefined,
   modelGone: false,
   models: [],
   overflowAfter: Number.POSITIVE_INFINITY,
@@ -73,16 +75,16 @@ const pooled: Pooled = {
 type Reported = {
   analysed: Array<string>;
   done: Array<string>;
-  errors: Array<{ id: string; message: string; unsupported: boolean }>;
+  failed: Array<{ cause: unknown; id: string }>;
   model: Array<ModelLoadEvent>;
-  modelLost: Array<string>;
+  modelLost: Array<{ failedBefore: number; fatal: boolean; reason: string }>;
   progress: Array<{ fraction: number; id: string }>;
 };
 
 const reported: Reported = {
   analysed: [],
   done: [],
-  errors: [],
+  failed: [],
   model: [],
   modelLost: [],
   progress: [],
@@ -115,29 +117,32 @@ const modelHostDouble = {
 
 const workerpoolDouble = {
   default: {
-    pool: () => ({
-      exec: (_method: string, params: Array<unknown>, options: ExecOptions) => {
-        if (pooled.tasks.length >= pooled.overflowAfter) {
-          throw new Error("Max queue size of 1 reached");
-        }
+    pool: (_script: string, settings: { maxWorkers: number }) => {
+      pooled.maxWorkers = settings.maxWorkers;
 
-        const task = new FakeTask(params, options);
+      return {
+        exec: (_method: string, params: Array<unknown>, options: ExecOptions) => {
+          if (pooled.tasks.length >= pooled.overflowAfter) {
+            throw new Error("Max queue size of 1 reached");
+          }
 
-        pooled.tasks.push(task);
+          const task = new FakeTask(params, options);
 
-        return task;
-      },
-      terminate: () => {
-        pooled.terminated += 1;
+          pooled.tasks.push(task);
 
-        return Promise.resolve();
-      },
-    }),
+          return task;
+        },
+        terminate: () => {
+          pooled.terminated += 1;
+
+          return Promise.resolve();
+        },
+      };
+    },
   },
 };
 
-const poolOptions = (maxWorkers: number) => ({
-  maxWorkers,
+const poolOptions = () => ({
   model: "gliner-multi-pii" as const,
   onAnalysed: (id: string) => {
     reported.analysed.push(id);
@@ -145,14 +150,14 @@ const poolOptions = (maxWorkers: number) => ({
   onDone: (id: string) => {
     reported.done.push(id);
   },
-  onError: (id: string, message: string, unsupported: boolean) => {
-    reported.errors.push({ id, message, unsupported });
+  onFailed: (id: string, cause: unknown) => {
+    reported.failed.push({ cause, id });
   },
   onModelLoad: (event: ModelLoadEvent) => {
     reported.model.push(event);
   },
-  onModelLost: (reason: string) => {
-    reported.modelLost.push(reason);
+  onModelLost: (reason: string, fatal: boolean) => {
+    reported.modelLost.push({ failedBefore: reported.failed.length, fatal, reason });
   },
   onProgress: (id: string, fraction: number) => {
     reported.progress.push({ fraction, id });
@@ -170,8 +175,9 @@ const resetFixture = () => {
   pooled.host = undefined;
   pooled.destroyedHosts = 0;
   pooled.models.length = 0;
+  pooled.maxWorkers = undefined;
   reported.done.length = 0;
-  reported.errors.length = 0;
+  reported.failed.length = 0;
   reported.model.length = 0;
   reported.modelLost.length = 0;
   reported.progress.length = 0;

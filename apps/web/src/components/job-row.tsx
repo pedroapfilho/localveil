@@ -29,43 +29,26 @@ import { m } from "motion/react";
 import { useState } from "react";
 
 import { APPEAR, staggered } from "../motion";
-import type { Job, JobStatus } from "../store";
-import { progressOf, stageOf } from "../store";
+import type { Job, JobPhase } from "../store";
+import { isInFlight, isWorking, progressOf, stageOf } from "../store";
 
 import { DetectionReview } from "./detection-review";
 import { GlossaryText } from "./glossary-text";
 
-const STATUS_KEYS = {
-  done: "status.done",
-  error: "status.error",
-  queued: "status.queued",
-  reviewing: "status.reviewing",
-  running: "status.running",
-} as const satisfies Record<JobStatus, MessageKey>;
+const PHASES = {
+  analysing: { attachment: "processing", label: "status.running", tone: "text-foreground" },
+  applying: { attachment: "processing", label: "status.running", tone: "text-foreground" },
+  done: { attachment: "done", label: "status.done", tone: "text-success" },
+  error: { attachment: "error", label: "status.error", tone: "text-destructive" },
+  queued: { attachment: "idle", label: "status.queued", tone: "text-muted-foreground" },
+  reviewing: { attachment: "processing", label: "status.reviewing", tone: "text-foreground" },
+} as const satisfies Record<JobPhase, { attachment: string; label: MessageKey; tone: string }>;
 
-const ATTACHMENT_STATES = {
-  done: "done",
-  error: "error",
-  queued: "idle",
-  reviewing: "processing",
-  running: "processing",
-} as const;
-
-const STATUS_TONES = {
-  done: "text-success",
-  error: "text-destructive",
-  queued: "text-muted-foreground",
-  reviewing: "text-foreground",
-  running: "text-foreground",
-} as const satisfies Record<JobStatus, string>;
-
-const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
+const JobStatusSummary = ({ job, modelLoading }: { job: Job; modelLoading: boolean }) => {
   const { t } = useTranslations();
-  const { status } = job;
-  const busy = status === "running";
-  const inFlight = status === "queued" || busy;
+  const { label, tone } = PHASES[job.phase];
   const describeResult = () => {
-    if (job.status !== "done") {
+    if (job.phase !== "done") {
       return undefined;
     }
 
@@ -74,20 +57,20 @@ const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
       : t("files.redactions", { count: job.result.redactionCount });
   };
 
-  const stage = stageOf(job);
-  const detail = inFlight && stage !== undefined ? t(stage) : describeResult();
+  const stage = stageOf(job, modelLoading);
+  const detail = stage === undefined ? describeResult() : t(stage);
 
   return (
     <>
       <AttachmentDescription>
-        <span className={cn("flex items-center gap-1.5", STATUS_TONES[status])}>
-          {busy ? (
+        <span className={cn("flex items-center gap-1.5", tone)}>
+          {isWorking(job) ? (
             <LoaderCircleIcon aria-hidden className="size-3 shrink-0 motion-safe:animate-spin" />
           ) : (
             <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
           )}
 
-          <span>{t(STATUS_KEYS[status])}</span>
+          <span>{t(label)}</span>
 
           {detail === undefined ? null : (
             <>
@@ -99,8 +82,8 @@ const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
         </span>
       </AttachmentDescription>
 
-      {inFlight ? (
-        <FractionProgress className="mt-1.5" label={name} value={progressOf(job)} />
+      {isInFlight(job) ? (
+        <FractionProgress className="mt-1.5" label={job.path} value={progressOf(job)} />
       ) : null}
     </>
   );
@@ -109,7 +92,8 @@ const JobStatusSummary = ({ job, name }: { job: Job; name: string }) => {
 type JobRowProps = {
   index: number;
   job: Job;
-  onApply: (id: string) => void;
+  modelLoading: boolean;
+  onApply: (id: string, covered: ReadonlyArray<string>) => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
   onRemove: (id: string) => void;
   onSelect: (id: string, selected: boolean) => void;
@@ -119,6 +103,7 @@ type JobRowProps = {
 const JobRow = ({
   index,
   job,
+  modelLoading,
   onApply,
   onCoveredChange,
   onRemove,
@@ -126,12 +111,11 @@ const JobRow = ({
   selected,
 }: JobRowProps) => {
   const { t } = useTranslations();
-  const { file, id, path, status } = job;
-  const name = path ?? file.name;
+  const { id, path: name } = job;
 
-  const warnings = job.status === "done" ? job.result.warnings : [];
-  const failure = job.status === "error";
-  const reviewing = job.status === "reviewing";
+  const warnings = job.phase === "done" ? job.result.warnings : [];
+  const failure = job.phase === "error";
+  const reviewing = job.phase === "reviewing";
 
   const hasDetails = failure || reviewing || warnings.length > 0;
 
@@ -155,7 +139,11 @@ const JobRow = ({
       transition={APPEAR}
     >
       <Collapsible onOpenChange={setChosen} open={open}>
-        <Attachment className="w-full" orientation="horizontal" state={ATTACHMENT_STATES[status]}>
+        <Attachment
+          className="w-full"
+          orientation="horizontal"
+          state={PHASES[job.phase].attachment}
+        >
           <div className="w-full">
             <div className="flex w-full gap-3">
               <span className="flex h-lh items-center text-base sm:text-sm">
@@ -173,7 +161,7 @@ const JobRow = ({
               <AttachmentContent>
                 <AttachmentTitle title={name}>{name}</AttachmentTitle>
 
-                <JobStatusSummary job={job} name={name} />
+                <JobStatusSummary job={job} modelLoading={modelLoading} />
               </AttachmentContent>
 
               <AttachmentActions>
@@ -199,12 +187,12 @@ const JobRow = ({
             <CollapsibleContent className="w-full">
               <div className="pt-3">
                 <div className="border-foreground/10 flex flex-col gap-3 border-t pt-3 pl-8">
-                  {job.status === "reviewing" ? (
+                  {job.phase === "reviewing" ? (
                     <DetectionReview
                       covered={job.covered}
                       detections={job.analysis.detections}
-                      onApply={() => {
-                        onApply(id);
+                      onApply={(covered) => {
+                        onApply(id, covered);
                       }}
                       onCoveredChange={(next) => {
                         onCoveredChange(id, next);
@@ -212,7 +200,7 @@ const JobRow = ({
                     />
                   ) : null}
 
-                  {job.status === "error" ? (
+                  {job.phase === "error" ? (
                     <p className="text-destructive text-sm text-pretty">{job.error}</p>
                   ) : null}
 

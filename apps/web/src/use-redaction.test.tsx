@@ -1,188 +1,45 @@
-import type * as ModelCatalog from "@repo/pii-detect/models";
-import { downloadModel } from "@repo/pii-detect/models";
-/* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
-import type * as RedactCore from "@repo/redact-core";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { I18nProvider } from "@repo/i18n";
+import { UnsupportedFileError } from "@repo/redact-core";
+import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createMemoryPool } from "./memory-pool";
 import { useModelLibrary } from "./model-library";
-import { progressOf, stageOf, useJobStore } from "./store";
-import { renderWithI18n } from "./test-utils";
+import { useJobStore } from "./store";
 import { useRedaction } from "./use-redaction";
-import type { RedactionPoolOptions } from "./worker-pool";
 
-const archives = vi.hoisted(() => [] as Array<Array<{ blob: Blob; name: string }>>);
+let memory = createMemoryPool();
 
-vi.mock("@repo/pii-detect/models", async (importOriginal) => ({
-  ...(await importOriginal<typeof ModelCatalog>()),
-  downloadModel: vi.fn(),
-  inspectModel: vi.fn(() => Promise.resolve({ state: "absent" })),
-}));
+const render = () => renderHook(() => useRedaction(memory.create), { wrapper: I18nProvider });
 
-vi.mock("@repo/redact-core", async (importOriginal) => {
-  const original = await importOriginal<typeof RedactCore>();
+const submitted = (name: string) => {
+  const { result } = render();
 
-  return {
-    ...original,
-    buildZip: vi.fn((entries: Array<{ blob: Blob; name: string }>) => {
-      archives.push(entries);
+  act(() => {
+    result.current.submit([new File(["x"], name, { type: "text/plain" })]);
+  });
 
-      return Promise.resolve(new Blob(["zip"]));
-    }),
-  };
-});
+  const [job] = useJobStore.getState().jobs;
 
-const cancelled: Array<string> = [];
-const switched: Array<string> = [];
-const submitted: Array<{ file: File; id: string }> = [];
+  assert.isDefined(job);
 
-let destroyed = 0;
-let pools = 0;
-let options: RedactionPoolOptions | undefined;
-
-vi.mock("./worker-pool", () => ({
-  createRedactionPool: (given: RedactionPoolOptions) => {
-    options = given;
-    pools += 1;
-
-    return {
-      cancel: (id: string) => {
-        cancelled.push(id);
-      },
-      destroy: () => {
-        destroyed += 1;
-      },
-      setModel: (model: string) => {
-        switched.push(model);
-      },
-      submit: (job: { file: File; id: string }) => {
-        submitted.push(job);
-      },
-    };
-  },
-}));
-
-const pool = () => {
-  if (options === undefined) {
-    throw new Error("The hook never built a pool");
-  }
-
-  return options;
+  return { id: job.id, result };
 };
 
-const idsNow = () => useJobStore.getState().jobs.map((job) => job.id);
-
-const Harness = () => {
-  const { clear, downloadZip, remove, removeMany, submit } = useRedaction();
-
-  const handleClick = () => {
-    submit([
-      new File(["one"], "one.txt", { type: "text/plain" }),
-      new File(["two"], "two.txt", { type: "text/plain" }),
-    ]);
-  };
-
-  const handleClickFolder = () => {
-    submit([
-      {
-        file: new File(["report"], "report.txt", { type: "text/plain" }),
-        path: "cases/august/report.txt",
-      },
-    ]);
-  };
-
-  const handleRemoveAll = () => {
-    removeMany(idsNow());
-  };
-
-  const handleRemoveFirst = () => {
-    const first = useJobStore.getState().jobs.at(0);
-
-    if (first !== undefined) {
-      remove(first.id);
-    }
-  };
-
-  return (
-    <>
-      <button onClick={handleClick} type="button">
-        submit
-      </button>
-
-      <button onClick={handleClickFolder} type="button">
-        submit-folder
-      </button>
-
-      <button onClick={handleRemoveFirst} type="button">
-        remove
-      </button>
-
-      <button onClick={handleRemoveAll} type="button">
-        remove-all
-      </button>
-
-      <button onClick={clear} type="button">
-        clear
-      </button>
-
-      <button
-        onClick={() => {
-          void downloadZip();
-        }}
-        type="button"
-      >
-        download
-      </button>
-    </>
-  );
-};
-
-const jobsNow = () => useJobStore.getState().jobs;
-
-const jobAt = (at: number) => {
-  const job = jobsNow()[at];
-
-  assert.isDefined(job, `no job at ${String(at)}`);
-
-  return job;
-};
-
-const nthCall = <Call,>(calls: ReadonlyArray<Call>, at: number) => {
-  const call = calls[at];
-
-  assert.isDefined(call, `no call ${String(at)}`);
-
-  return call;
-};
-
-const MODEL_FAILED = "The detection model could not be loaded. Reload the page to try again.";
-
-const submitTwo = () => {
-  renderWithI18n(<Harness />);
-  fireEvent.click(screen.getByRole("button", { name: "submit" }));
+const play = (step: () => void) => {
+  act(step);
 };
 
 beforeEach(() => {
-  cancelled.length = 0;
-  switched.length = 0;
+  memory = createMemoryPool();
+  useJobStore.setState({ jobs: [], modelLoading: false });
   useModelLibrary.setState({ entries: {}, selected: "gliner-multi-pii" });
   vi.spyOn(useModelLibrary.getState(), "refresh").mockResolvedValue();
-  archives.length = 0;
-  submitted.length = 0;
-  destroyed = 0;
-  pools = 0;
-  options = undefined;
-  useJobStore.getState().reset();
-  vi.spyOn(toast, "error").mockImplementation(() => "");
-  vi.spyOn(toast, "warning").mockImplementation(() => "");
 
-  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:localveil");
-  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
-  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-
-  vi.spyOn(toast, "loading").mockImplementation(() => "");
-  vi.spyOn(toast, "success").mockImplementation(() => "");
+  for (const kind of ["dismiss", "error", "loading", "success", "warning"] as const) {
+    vi.spyOn(toast, kind).mockImplementation(() => "");
+  }
 });
 
 afterEach(() => {
@@ -190,380 +47,130 @@ afterEach(() => {
 });
 
 describe("useRedaction", () => {
-  it("hands every dropped file to the pool", () => {
-    submitTwo();
+  it("runs one runner while the page is up, over the pool it is handed", () => {
+    const { rerender, unmount } = render();
 
-    expect(submitted.map((job) => job.file.name)).toEqual(["one.txt", "two.txt"]);
-  });
+    rerender();
 
-  it("builds one pool for the page, not one per file", () => {
-    submitTwo();
-    fireEvent.click(screen.getByRole("button", { name: "submit" }));
-
-    expect(pools).toBe(1);
-  });
-
-  it("sizes the pool from what the device reports", () => {
-    submitTwo();
-
-    expect(pool().maxWorkers).toBeGreaterThanOrEqual(1);
-  });
-
-  it("retains a folder path in the output archive", async () => {
-    renderWithI18n(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "submit-folder" }));
-
-    act(() => {
-      pool().onDone(jobAt(0).id, {
-        blob: new Blob(["redacted"]),
-        redactionCount: 1,
-        warnings: [],
-      });
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "download" }));
-
-    await vi.waitFor(() => {
-      expect(archives[0]?.[0]?.name).toBe("cases/august/report.txt");
-    });
-  });
-
-  it("says the model is loading before the worker says anything", () => {
-    submitTwo();
-
-    expect(stageOf(jobAt(0))).toBe("stage.loadingModel");
-  });
-
-  it("tears the pool down when the page goes", () => {
-    const { unmount } = renderWithI18n(<Harness />);
+    expect(memory.created).toBe(1);
 
     unmount();
 
-    expect(destroyed).toBe(1);
+    expect(memory.destroyed).toBe(1);
+  });
+
+  it("passes each action through to the runner", () => {
+    const { id, result } = submitted("a.txt");
+
+    play(() => {
+      memory.workers().onAnalysed(id, { detections: [], handle: undefined, warnings: [] });
+      result.current.apply(id, ["a"]);
+    });
+
+    expect(memory.applied[0]?.decisions).toEqual({ covered: ["a"] });
+
+    play(() => {
+      result.current.remove(id);
+    });
+
+    expect(memory.cancelled).toEqual([id]);
+    expect(useJobStore.getState().jobs).toEqual([]);
+  });
+
+  it("moves the model when the picker asks", () => {
+    const { result } = render();
+
+    play(() => {
+      result.current.selectModel("gliner-pii-base");
+    });
+
+    expect(useModelLibrary.getState().selected).toBe("gliner-pii-base");
+    expect(memory.models).toEqual(["gliner-multi-pii", "gliner-pii-base"]);
   });
 });
 
-describe("what the pool reports", () => {
-  it("puts progress on the row it belongs to", () => {
-    submitTwo();
+describe("what the runner reports", () => {
+  it("says which file could not be redacted", () => {
+    const { id } = submitted("a.txt");
 
-    act(() => {
-      pool().onProgress(jobAt(0).id, 0.5, "stage.detecting");
+    play(() => {
+      memory.workers().onFailed(id, new Error("out of memory"));
     });
 
-    expect(jobAt(0)).toMatchObject({
-      progress: 0.5,
-      stage: "stage.detecting",
-      status: "running",
-    });
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith("Could not redact a.txt.");
   });
 
-  it("finishes a row with the file it got back", () => {
-    submitTwo();
+  it("says which file is not supported", () => {
+    const { id } = submitted("archive.zip");
 
-    const blob = new Blob(["x"]);
-
-    act(() => {
-      pool().onDone(jobAt(0).id, { blob, redactionCount: 3, warnings: ["warning.noText"] });
+    play(() => {
+      memory.workers().onFailed(id, new UnsupportedFileError("archive.zip", "application/zip"));
     });
 
-    expect(jobAt(0)).toMatchObject({
-      result: { blob, redactionCount: 3, warnings: ["warning.noText"] },
-      status: "done",
-    });
-    expect(progressOf(jobAt(0))).toBe(1);
-  });
-
-  it("fails a row and says so", () => {
-    submitTwo();
-
-    act(() => {
-      pool().onError(jobAt(0).id, "out of memory", false);
-    });
-
-    expect(jobAt(0)).toMatchObject({ error: "out of memory", status: "error" });
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("one.txt"));
-  });
-
-  it("tells an unsupported file apart from a broken one", () => {
-    submitTwo();
-
-    act(() => {
-      pool().onError(jobAt(0).id, "nope", true);
-    });
-
-    const [unsupported] = nthCall(vi.mocked(toast.error).mock.calls, 0);
-
-    act(() => {
-      pool().onError(jobAt(1).id, "nope", false);
-    });
-
-    const [failed] = nthCall(vi.mocked(toast.error).mock.calls, 1);
-
-    expect(unsupported).not.toEqual(failed);
-  });
-
-  it("warns once about a device without GPU acceleration", () => {
-    renderWithI18n(<Harness />);
-
-    act(() => {
-      pool().onModelLoad({ kind: "slow-device" });
-    });
-
-    expect(vi.mocked(toast.warning)).toHaveBeenCalledWith(
-      "Running without GPU acceleration, this will be slow.",
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      "archive.zip is not a supported file type.",
     );
   });
 
-  it("does not warn twice", () => {
-    renderWithI18n(<Harness />);
+  it("carries a download from its announcement to ready under one toast", () => {
+    render();
 
-    act(() => {
-      pool().onModelLoad({ kind: "slow-device" });
-      pool().onModelLoad({ kind: "slow-device" });
+    play(() => {
+      memory.workers().onModelLoad({ downloaded: 0.4, kind: "loading" });
+      memory.workers().onModelLoad({ kind: "ready" });
     });
 
-    expect(vi.mocked(toast.warning)).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not take that warning for a download", () => {
-    renderWithI18n(<Harness />);
-
-    act(() => {
-      pool().onModelLoad({ kind: "slow-device" });
+    expect(toast.loading).toHaveBeenCalledExactlyOnceWith("Downloading the detection model", {
+      id: "model-load",
     });
-
-    expect(vi.mocked(toast.loading)).not.toHaveBeenCalled();
-  });
-});
-
-describe("the model download", () => {
-  it("is announced once, however many times the weights report in", () => {
-    renderWithI18n(<Harness />);
-
-    act(() => {
-      pool().onModelLoad({ kind: "loading" });
-      pool().onModelLoad({ downloaded: 0.1, kind: "loading" });
-      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
-      pool().onModelLoad({ downloaded: 0.9, kind: "loading" });
-    });
-
-    expect(vi.mocked(toast.loading).mock.calls).toEqual([
-      ["Downloading the detection model", { id: "model-load" }],
-    ]);
-  });
-
-  it("settles when the model is ready", () => {
-    renderWithI18n(<Harness />);
-
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
-      pool().onModelLoad({ kind: "ready" });
-    });
-
-    expect(vi.mocked(toast.success)).toHaveBeenCalledExactlyOnceWith("Detection model ready", {
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith("Detection model ready", {
       id: "model-load",
     });
   });
 
-  it("turns into the failure, and clears the picker's progress, when the load fails", () => {
-    submitTwo();
+  it("turns that toast into the failure when the load fails", () => {
+    render();
 
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
+    play(() => {
+      memory.workers().onModelLoad({ kind: "failed", reason: "no wasm" });
     });
 
-    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBe(0.4);
-
-    act(() => {
-      pool().onModelLoad({ kind: "failed", reason: "network down" });
-    });
-
-    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
-      id: "model-load",
-    });
-    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
-    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBeUndefined();
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+      "The detection model could not be loaded. Reload the page to try again.",
+      { id: "model-load" },
+    );
   });
 
-  it("says a load failed even when nothing was downloading", () => {
-    renderWithI18n(<Harness />);
+  it("dismisses that toast when the model changes under it", () => {
+    const { result } = render();
 
-    act(() => {
-      pool().onModelLoad({ kind: "loading" });
-      pool().onModelLoad({ kind: "failed", reason: "no wasm" });
+    play(() => {
+      memory.workers().onModelLoad({ downloaded: 0.1, kind: "loading" });
+      result.current.selectModel("gliner-pii-base");
     });
 
-    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
-      id: "model-load",
-    });
+    expect(toast.dismiss).toHaveBeenCalledWith("model-load");
   });
 
-  it("fails when the model is beyond recovery", () => {
-    renderWithI18n(<Harness />);
+  it("says why the model is gone for good", () => {
+    render();
 
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
-      pool().onModelLost("The detection model stopped answering");
+    play(() => {
+      memory.workers().onModelLost("The detection model stopped answering", true);
     });
 
-    expect(vi.mocked(toast.error)).toHaveBeenCalledExactlyOnceWith(MODEL_FAILED, {
-      id: "model-load",
-    });
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith("The detection model stopped answering");
   });
 
-  it("is announced again when the weights are fetched a second time", () => {
-    renderWithI18n(<Harness />);
+  it("warns about a device without GPU acceleration", () => {
+    render();
 
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.4, kind: "loading" });
-      pool().onModelLoad({ kind: "ready" });
-      pool().onModelLoad({ downloaded: 0.2, kind: "loading" });
+    play(() => {
+      memory.workers().onModelLoad({ kind: "slow-device" });
     });
 
-    expect(vi.mocked(toast.loading)).toHaveBeenCalledTimes(2);
-  });
-
-  it("says nothing for a model that was kept before anyone asked", () => {
-    renderWithI18n(<Harness />);
-
-    act(() => {
-      pool().onModelLoad({ kind: "loading" });
-      pool().onModelLoad({ kind: "ready" });
-    });
-
-    expect(vi.mocked(toast.loading)).not.toHaveBeenCalled();
-    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
-  });
-});
-
-describe("removing a file", () => {
-  it("tells the pool to stop as well as the page", () => {
-    submitTwo();
-
-    const id = jobAt(0).id;
-
-    fireEvent.click(screen.getByRole("button", { name: "remove" }));
-
-    expect(cancelled).toEqual([id]);
-    expect(jobsNow().map((job) => job.file.name)).toEqual(["two.txt"]);
-  });
-});
-
-describe("removing several files at once", () => {
-  it("stops each one and drops them all", () => {
-    submitTwo();
-
-    const ids = idsNow();
-
-    fireEvent.click(screen.getByRole("button", { name: "remove-all" }));
-
-    expect(cancelled).toEqual(ids);
-    expect(jobsNow()).toEqual([]);
-  });
-});
-
-describe("clearing the list", () => {
-  it("empties the page and stops every file on it", () => {
-    submitTwo();
-
-    const ids = jobsNow().map((job) => job.id);
-
-    fireEvent.click(screen.getByRole("button", { name: "clear" }));
-
-    expect(cancelled).toEqual(ids);
-    expect(jobsNow()).toEqual([]);
-  });
-
-  it("shrugs off a clear with nothing to clear", () => {
-    renderWithI18n(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "clear" }));
-
-    expect(jobsNow()).toEqual([]);
-  });
-});
-
-describe("the chosen model", () => {
-  it("preserves a picker download and its Stop button when selection changes", async () => {
-    const finishDownload = vi.fn<() => void>();
-    const pending = new Promise<void>((resolve) => {
-      finishDownload.mockImplementation(resolve);
-    });
-
-    vi.mocked(downloadModel).mockImplementation((_model, onProgress) => {
-      onProgress(0.3);
-
-      return pending;
-    });
-    renderWithI18n(<Harness />);
-
-    let finished: Promise<void>;
-
-    await act(async () => {
-      finished = useModelLibrary.getState().download("gliner-multi-pii");
-      await Promise.resolve();
-    });
-    act(() => {
-      useModelLibrary.getState().select("gliner-pii-edge");
-    });
-
-    expect(useModelLibrary.getState().entries["gliner-multi-pii"]).toMatchObject({
-      progress: 0.3,
-      stoppable: true,
-    });
-
-    await act(async () => {
-      finishDownload();
-      await finished;
-    });
-  });
-
-  it("builds the pool for the model the picker has chosen", () => {
-    submitTwo();
-
-    expect(pool().model).toBe("gliner-multi-pii");
-  });
-
-  it("moves the pool to a newly chosen model", () => {
-    submitTwo();
-
-    act(() => {
-      useModelLibrary.getState().select("gliner-pii-base");
-    });
-
-    expect(switched).toEqual(["gliner-pii-base"]);
-    expect(pools).toBe(1);
-  });
-
-  it("dismisses the old model's loading notice when the model changes under it", () => {
-    const dismiss = vi.spyOn(toast, "dismiss").mockImplementation(() => "");
-
-    submitTwo();
-
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.1, kind: "loading" });
-    });
-
-    act(() => {
-      useModelLibrary.getState().select("gliner-pii-base");
-    });
-
-    expect(dismiss).toHaveBeenCalledWith("model-load");
-  });
-
-  it("shows the worker's download on the chosen model and clears it once ready", () => {
-    submitTwo();
-
-    act(() => {
-      pool().onModelLoad({ downloaded: 0.3, kind: "loading" });
-    });
-
-    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBe(0.3);
-
-    act(() => {
-      pool().onModelLoad({ kind: "ready" });
-    });
-
-    expect(useModelLibrary.getState().entries["gliner-multi-pii"]?.progress).toBeUndefined();
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+      "Running without GPU acceleration, this will be slow.",
+    );
   });
 });

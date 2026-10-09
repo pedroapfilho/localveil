@@ -17,7 +17,7 @@ const detection = (patch: Partial<Detection> = {}): Detection => ({
 });
 
 const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) => {
-  const onApply = vi.fn<() => void>();
+  const onApply = vi.fn<(covered: ReadonlyArray<string>) => void>();
   const onCoveredChange = vi.fn<(next: ReadonlyArray<string>) => void>();
 
   renderWithI18n(
@@ -114,21 +114,23 @@ describe("DetectionReview", () => {
     expect(screen.getByText("1 of 1 will be covered")).toHaveAttribute("aria-live", "polite");
   });
 
-  it("applies when the apply button is pressed", () => {
-    const { onApply } = setup([detection()]);
+  it("applies what it shows as covered when the apply button is pressed", () => {
+    const { onApply } = setup([detection(), detection({ id: "b", preview: "Joao Reis" })], ["b"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Apply redactions" }));
 
-    expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledExactlyOnceWith(["b"]);
   });
 
-  it("covers every certain detection again when told to cover everything", () => {
-    const { onApply, onCoveredChange } = setup([detection()], []);
+  it("applies every certain detection when told to cover everything", () => {
+    const { onApply } = setup(
+      [detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })],
+      ["b"],
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Cover everything" }));
 
-    expect(onCoveredChange).toHaveBeenCalledWith(["a"]);
-    expect(onApply).toHaveBeenCalledTimes(1);
+    expect(onApply).toHaveBeenCalledExactlyOnceWith(["b", "a"]);
   });
 
   it("names a page when the detection carries one", () => {
@@ -138,10 +140,13 @@ describe("DetectionReview", () => {
   });
 
   it("offers to move on when there is nothing to review", () => {
-    setup([]);
+    const { onApply } = setup([]);
 
     expect(screen.getByText("Nothing was found in this file.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Apply redactions" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply redactions" }));
+
+    expect(onApply).toHaveBeenCalledExactlyOnceWith([]);
   });
 
   it("keeps suggestions out of the main list and behind a summary", () => {

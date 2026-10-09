@@ -8,6 +8,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./app";
+import { createRedactionPool } from "./worker-pool";
 
 const container = document.querySelector("#root");
 
@@ -26,7 +27,7 @@ createRoot(container).render(
           storageKey="localveil-theme"
         >
           <I18nProvider>
-            <App />
+            <App createPool={createRedactionPool} />
 
             <Toaster />
           </I18nProvider>

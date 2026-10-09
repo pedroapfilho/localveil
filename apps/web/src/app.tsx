@@ -10,8 +10,10 @@ import { JobList } from "./components/job-list";
 import { LanguagePicker } from "./components/language-picker";
 import { ModelPicker } from "./components/model-picker";
 import { SiteFooter } from "./components/site-footer";
+import { downloadZip } from "./download-zip";
+import type { CreatePool } from "./job-runner";
 import { APPEAR, SLIDE } from "./motion";
-import { useJobStore } from "./store";
+import { completedJobs, useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
 import { useModelPicker } from "./use-model-picker";
 import { useRedaction } from "./use-redaction";
@@ -34,18 +36,21 @@ const BrandMark = () => (
   </svg>
 );
 
-const App = () => {
+type AppProps = { createPool: CreatePool };
+
+const App = ({ createPool }: AppProps) => {
   const { t } = useTranslations();
   const jobs = useJobStore((state) => state.jobs);
-  const { applyDecisions, clear, downloadZip, remove, removeMany, setCovered, submit } =
-    useRedaction();
-  const modelPicker = useModelPicker();
+  const modelLoading = useJobStore((state) => state.modelLoading);
+  const setCovered = useJobStore((state) => state.setCovered);
+  const { apply, clear, remove, removeMany, selectModel, submit } = useRedaction(createPool);
+  const modelPicker = useModelPicker(selectModel);
 
   useDocumentLocale();
 
   const runDownload = async () => {
     try {
-      await downloadZip();
+      await downloadZip(completedJobs(jobs));
       toast.success(t("toast.downloaded"));
     } catch {
       toast.error(t("error.unknown"));
@@ -115,7 +120,8 @@ const App = () => {
               <m.div className="flex flex-col gap-8" key="queue" transition={APPEAR} {...SLIDE}>
                 <JobList
                   jobs={jobs}
-                  onApply={applyDecisions}
+                  modelLoading={modelLoading}
+                  onApply={apply}
                   onClear={clear}
                   onCoveredChange={setCovered}
                   onRemove={remove}

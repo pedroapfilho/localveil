@@ -21,7 +21,6 @@ type FileStageKey =
   | "stage.detecting"
   | "stage.extracting"
   | "stage.finished"
-  | "stage.loadingModel"
   | "stage.reading"
   | "stage.recognising"
   | "stage.redacting"
