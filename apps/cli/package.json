@@ -21,6 +21,7 @@
     "@repo/i18n": "workspace:*",
     "@repo/pii-detect": "workspace:*",
     "@repo/redact-core": "workspace:*",
+    "@repo/redact-formats": "workspace:*",
     "@repo/redact-node": "workspace:*",
     "ink": "^7.1.1",
     "react": "^19.3.0",

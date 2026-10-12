@@ -6,14 +6,14 @@ import type {
   ModelStageKey,
   RedactionResult,
 } from "@repo/redact-core";
-import { describeError, isUnsupportedFile } from "@repo/redact-core";
+import { describeError, isProgressEvent, isUnsupportedFile } from "@repo/redact-core";
 import workerpool from "workerpool";
 
 import type { ModelHost } from "./model-host";
 import { createModelHost } from "./model-host";
 // oxlint-disable-next-line import/default -- Vite's ?worker&url query resolves to a default-exported URL the resolver cannot see
 import redactWorkerUrl from "./redact-worker.ts?worker&url";
-import type { AnalyseTask, ApplyTask, ProgressEvent } from "./worker-protocol";
+import type { AnalyseTask, ApplyTask } from "./worker-protocol";
 
 const SILENCE_LIMIT = 120_000;
 
@@ -62,12 +62,6 @@ const isAnalysis = (value: unknown): value is Analysis =>
 
 const isResult = (value: unknown): value is RedactionResult =>
   typeof value === "object" && value !== null && "blob" in value && value.blob instanceof Blob;
-
-const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
-  typeof payload === "object" &&
-  payload !== null &&
-  "type" in payload &&
-  payload.type === "progress";
 
 type WorkerTask = {
   cancel: () => void;

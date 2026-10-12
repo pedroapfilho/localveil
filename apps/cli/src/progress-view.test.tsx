@@ -54,9 +54,9 @@ describe("ProgressView", () => {
     expect(lastFrame()).not.toContain("Downloading the detection model");
   });
 
-  it("says it heard the first Ctrl+C while it finishes the file in hand", () => {
+  it("says a stop is immediate and leaves no archive", () => {
     const { lastFrame } = render(<ProgressView {...defaults} stopping />);
 
-    expect(lastFrame()).toContain("Stopping after this file");
+    expect(lastFrame()).toContain("Stopping now, so no archive will be written.");
   });
 });

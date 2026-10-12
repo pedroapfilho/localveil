@@ -62,10 +62,6 @@ const noProgress = () => undefined;
 describe.each(FIXTURES)("$name", (entry) => {
   const file = fixture(entry);
 
-  it("is accepted", () => {
-    expect(textRedactor.accepts(file)).toBe(true);
-  });
-
   it("holds the personal data the fixture was written around", async () => {
     const source = await file.text();
 
@@ -101,17 +97,5 @@ describe.each(FIXTURES)("$name", (entry) => {
     expect(redacted).toContain("█");
     expect(redacted.length).toBeGreaterThan(0);
     expect(result.warnings).toEqual([]);
-  });
-});
-
-describe("textRedactor", () => {
-  it("leaves a PDF to the PDF redactor", () => {
-    expect(textRedactor.accepts(fixture({ name: "sample.pdf", type: "application/pdf" }))).toBe(
-      false,
-    );
-  });
-
-  it("leaves an image to the image redactor", () => {
-    expect(textRedactor.accepts(fixture({ name: "sample.png", type: "image/png" }))).toBe(false);
   });
 });

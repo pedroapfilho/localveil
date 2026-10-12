@@ -3,7 +3,7 @@ import { dirname, extname, resolve } from "node:path";
 
 import type { ModelId } from "@repo/pii-detect/models";
 import { isModelId, MODELS } from "@repo/pii-detect/models";
-import { SUPPORTED_EXTENSIONS } from "@repo/redact-node";
+import { NODE_FORMATS } from "@repo/redact-formats";
 
 const PARENT_NAME = "..";
 
@@ -75,8 +75,7 @@ const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   return { jobs, model, paths };
 };
 
-const isSupported = (name: string): boolean =>
-  SUPPORTED_EXTENSIONS.includes(extname(name).toLowerCase());
+const isSupported = (name: string): boolean => NODE_FORMATS.has(extname(name).toLowerCase());
 
 const byKind = (left: DirectoryEntry, right: DirectoryEntry): number => {
   if (left.isDirectory !== right.isDirectory) {

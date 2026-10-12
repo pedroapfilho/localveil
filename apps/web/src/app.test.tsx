@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
+import { BROWSER_ACCEPT } from "@repo/redact-formats";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,10 +48,7 @@ describe("App", () => {
 
     const input = screen.getByLabelText(/choose files/iv);
 
-    expect(input).toHaveAttribute(
-      "accept",
-      ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*",
-    );
+    expect(input).toHaveAttribute("accept", BROWSER_ACCEPT);
     expect(
       screen.getByText("Text, Markdown, CSV, JSON, log, PDF and image files"),
     ).toBeInTheDocument();

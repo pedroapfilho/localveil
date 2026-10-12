@@ -5,6 +5,8 @@ const pt: Messages = {
   "app.name": "localveil",
   "app.skipToContent": "Ir para o conteúdo",
   "app.tagline": "Oculte dados pessoais dos seus arquivos. Nada sai do seu dispositivo.",
+  "cli.stopHint": "Pressione Ctrl+C para parar. Nada sai desta máquina.",
+  "cli.stopping": "Parando agora, então nenhum ZIP será gravado.",
   "download.button": "Baixar ZIP ({count})",
   "download.excluded": "{count} arquivos ficaram de fora porque falharam.",
   "dropzone.files": "Escolher arquivos",

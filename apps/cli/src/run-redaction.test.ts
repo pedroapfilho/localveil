@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { FileStageKey, ProgressEvent } from "@repo/redact-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runRedaction } from "./run-redaction";
@@ -12,10 +13,7 @@ const { createNodeDetector, redactFile } = vi.hoisted(() => ({
   redactFile: vi.fn(),
 }));
 
-vi.mock("@repo/redact-node", () => ({
-  createNodeDetector,
-  SUPPORTED_EXTENSIONS: [".txt", ".md"],
-}));
+vi.mock("@repo/redact-node", () => ({ createNodeDetector }));
 
 vi.mock("workerpool", () => ({
   default: {
@@ -23,10 +21,10 @@ vi.mock("workerpool", () => ({
       exec: (
         _method: string,
         [path]: [string],
-        options: { on: (payload: { fraction: number; stage: string }) => void },
+        options: { on: (payload: ProgressEvent) => void },
       ) =>
-        redactFile(path, (fraction: number, stage: string) => {
-          options.on({ fraction, stage });
+        redactFile(path, (fraction: number, stage: FileStageKey) => {
+          options.on({ fraction, stage, type: "progress" });
         }),
       terminate: () => Promise.resolve(),
     }),
@@ -180,6 +178,49 @@ describe("runRedaction", () => {
     const left = await readdir(directory);
 
     expect(left.filter((name) => name.startsWith("localveil"))).toStrictEqual([]);
+  });
+
+  it("stops during the model load at once, without waiting for the load", async () => {
+    const { directory, first, second } = await makeWorkspace();
+    const controller = new AbortController();
+    const options = runOptions(directory, [first, second], controller.signal);
+
+    createNodeDetector.mockReturnValue(new Promise(() => {}));
+
+    const running = runRedaction(options);
+
+    controller.abort();
+
+    const result = await running;
+
+    expect(result.cancelled).toBe(true);
+    expect(result.zipPath).toBeNull();
+    expect(redactFile).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toStrictEqual(["one.txt", "two.txt"]);
+  });
+
+  it("redacts nothing when the load finishes in the same moment the run is stopped", async () => {
+    const { directory, first, second } = await makeWorkspace();
+    const controller = new AbortController();
+    const options = runOptions(directory, [first, second], controller.signal);
+
+    createNodeDetector.mockReturnValue(
+      new Promise((resolve) => {
+        controller.signal.addEventListener("abort", () => {
+          resolve(() => Promise.resolve([]));
+        });
+      }),
+    );
+
+    const running = runRedaction(options);
+
+    controller.abort();
+
+    const result = await running;
+
+    expect(result.cancelled).toBe(true);
+    expect(redactFile).not.toHaveBeenCalled();
+    expect(await readdir(directory)).toStrictEqual(["one.txt", "two.txt"]);
   });
 
   it("writes nothing at all when every file failed", async () => {

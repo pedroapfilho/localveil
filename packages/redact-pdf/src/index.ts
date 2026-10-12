@@ -369,7 +369,6 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 };
 
 const pdfRedactor: Redactor = {
-  accepts: (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"),
   analyse: analysePdf,
   apply: applyPdf,
 };

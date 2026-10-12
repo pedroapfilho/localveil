@@ -1,8 +1,6 @@
 import type { Detect, FileStageKey, WarningKey } from "@repo/redact-core";
-import { createRedactorRegistry, redactFile } from "@repo/redact-core";
-import { imageRedactor } from "@repo/redact-image";
-import { pdfRedactor } from "@repo/redact-pdf";
-import { textRedactor } from "@repo/redact-text";
+import { redactFile } from "@repo/redact-core";
+import { resolveRedactor } from "@repo/redact-formats/redactors";
 
 import { installCanvas } from "./canvas";
 import { readFileAsFile } from "./read-file";
@@ -15,8 +13,6 @@ type NodeRedactionOutput = {
   warnings: Array<WarningKey>;
 };
 
-const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
-
 const redactPath = async (
   path: string,
   detect: Detect,
@@ -25,7 +21,7 @@ const redactPath = async (
   installCanvas();
 
   const file = await readFileAsFile(path);
-  const redactor = registry.resolve(file);
+  const redactor = resolveRedactor(file);
   const { blob, redactionCount, warnings } = await redactFile({
     detect,
     file,

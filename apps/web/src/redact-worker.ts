@@ -1,13 +1,13 @@
-import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
-import { createDetectClient, createRedactorRegistry } from "@repo/redact-core";
-import { imageRedactor } from "@repo/redact-image";
-import { pdfRedactor } from "@repo/redact-pdf";
-import { textRedactor } from "@repo/redact-text";
+import type {
+  Analysis,
+  Decisions,
+  FileStageKey,
+  ProgressEvent,
+  RedactionResult,
+} from "@repo/redact-core";
+import { createDetectClient } from "@repo/redact-core";
+import { resolveRedactor } from "@repo/redact-formats/redactors";
 import workerpool from "workerpool";
-
-import type { ProgressEvent } from "./worker-protocol";
-
-const registry = createRedactorRegistry([textRedactor, pdfRedactor, imageRedactor]);
 
 const ABORT_LIMIT = 45_000;
 
@@ -64,7 +64,7 @@ async function analyse(
   port: MessagePort,
 ): Promise<Analysis> {
   const analysis = await guarded(this.worker, port, (report) =>
-    registry.resolve(file).analyse(file, createDetectClient(port), report),
+    resolveRedactor(file).analyse(file, createDetectClient(port), report),
   );
 
   return analysis;
@@ -77,7 +77,7 @@ async function apply(
   port: MessagePort,
 ): Promise<RedactionResult> {
   const result = await guarded(this.worker, port, (report) =>
-    registry.resolve(file).apply({
+    resolveRedactor(file).apply({
       analysis: work.analysis,
       decisions: work.decisions,
       detect: createDetectClient(port),

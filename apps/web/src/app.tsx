@@ -1,4 +1,5 @@
 import { useTranslations } from "@repo/i18n";
+import { BROWSER_ACCEPT } from "@repo/redact-formats";
 import { FileDropzone } from "@repo/ui/compositions/file-dropzone";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
 import { AnimatePresence, m } from "motion/react";
@@ -14,8 +15,6 @@ import { useJobStore } from "./store";
 import { useDocumentLocale } from "./use-document-locale";
 import { useModelPicker } from "./use-model-picker";
 import { useRedaction } from "./use-redaction";
-
-const ACCEPTED_FILES = ".txt,.md,.csv,.json,.log,.pdf,text/*,application/pdf,image/*";
 
 const BrandMark = () => (
   <svg aria-hidden className="size-12 shrink-0" viewBox="0 0 32 32">
@@ -96,7 +95,7 @@ const App = () => {
 
         <main className="flex flex-col gap-8" id="main">
           <FileDropzone
-            accept={ACCEPTED_FILES}
+            accept={BROWSER_ACCEPT}
             filesLabel={t("dropzone.files")}
             folderLabel={t("dropzone.folder")}
             formats={t("dropzone.formats")}

@@ -249,12 +249,6 @@ beforeEach(() => {
 });
 
 describe("pdfRedactor", () => {
-  it("takes a PDF by type and by name", () => {
-    expect(pdfRedactor.accepts(new File([], "a.pdf", { type: "application/pdf" }))).toBe(true);
-    expect(pdfRedactor.accepts(new File([], "SCAN.PDF"))).toBe(true);
-    expect(pdfRedactor.accepts(new File([], "notes.txt", { type: "text/plain" }))).toBe(false);
-  });
-
   it("hands back a PDF", async () => {
     const { blob } = await run();
 

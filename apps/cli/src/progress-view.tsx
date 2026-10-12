@@ -53,11 +53,7 @@ const ProgressView = ({
         <ProgressBar fraction={fraction} width={barWidth} />
       </Box>
 
-      <Text dimColor>
-        {stopping
-          ? "Stopping after this file. Press Ctrl+C again to quit now."
-          : "Press Ctrl+C to stop. Nothing leaves this machine."}
-      </Text>
+      <Text dimColor>{describeKey(stopping ? "cli.stopping" : "cli.stopHint")}</Text>
     </Box>
   );
 };

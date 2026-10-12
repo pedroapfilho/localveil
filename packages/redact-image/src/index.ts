@@ -15,28 +15,9 @@ import { betterReading, binarizeForOcr, shouldRetryOcr } from "./ocr-retry";
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-const IMAGE_EXTENSIONS = new Set([
-  ".avif",
-  ".bmp",
-  ".gif",
-  ".heic",
-  ".jpeg",
-  ".jpg",
-  ".png",
-  ".tif",
-  ".tiff",
-  ".webp",
-]);
-
 type Reading = AnalysedUnit & { words: Array<PositionedWord> };
 
 type ImageHandle = { best: number; readings: Array<Reading> };
-
-const hasImageExtension = (name: string) => {
-  const dot = name.lastIndexOf(".");
-
-  return dot > 0 && IMAGE_EXTENSIONS.has(name.slice(dot).toLowerCase());
-};
 
 const paint = (canvas: OffscreenCanvas, bitmap: ImageBitmap, rects: Array<Rect>) => {
   const context = canvas.getContext("2d");
@@ -73,7 +54,6 @@ const isHandle = (value: unknown): value is ImageHandle =>
   typeof value.best === "number";
 
 const imageRedactor: Redactor = {
-  accepts: (file) => file.type.startsWith("image/") || hasImageExtension(file.name),
   analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
     onProgress(0.1, "stage.recognising");

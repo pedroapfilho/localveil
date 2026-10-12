@@ -19,6 +19,7 @@ packages/
   redact-text/         plain text, Markdown, CSV, JSON, logs
   redact-pdf/          PDF page rendering and overlay
   redact-image/        raster images
+  redact-formats/      supported formats, and the redactor each file resolves to
   redact-node/         filesystem entry points for the CLI
   ocr/                 Tesseract wrapper for scanned input
   pii-detect/          model loading, inference, resumable weight cache

@@ -1,0 +1,30 @@
+{
+  "name": "@repo/redact-formats",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./redactors": "./src/redactors.ts"
+  },
+  "scripts": {
+    "clean": "rm -rf node_modules coverage",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/redact-core": "workspace:*",
+    "@repo/redact-image": "workspace:*",
+    "@repo/redact-pdf": "workspace:*",
+    "@repo/redact-text": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/config-vitest": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  }
+}

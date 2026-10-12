@@ -27,26 +27,6 @@ const noProgress = () => undefined;
 const file = (name: string, type: string, content = "Hi Ana!") =>
   new File([content], name, { type });
 
-describe("textRedactor.accepts", () => {
-  it("accepts the supported extensions", () => {
-    for (const name of ["a.txt", "b.md", "c.csv", "d.json", "e.log"]) {
-      expect(textRedactor.accepts(file(name, ""))).toBe(true);
-    }
-  });
-
-  it("accepts any text/* MIME type", () => {
-    expect(textRedactor.accepts(file("notes", "text/plain"))).toBe(true);
-  });
-
-  it("rejects an image", () => {
-    expect(textRedactor.accepts(file("scan.png", "image/png"))).toBe(false);
-  });
-
-  it("ignores extension case", () => {
-    expect(textRedactor.accepts(file("REPORT.TXT", ""))).toBe(true);
-  });
-});
-
 describe("textRedactor", () => {
   it("masks the detected spans and counts them", async () => {
     const result = await redactFile({
