@@ -13,7 +13,6 @@ const createNodeDetector = (options: NodeRedactorOptions = {}): Promise<Detect> 
     onProgress: (fraction) => {
       options.onModelProgress?.(fraction);
     },
-    resumableCache: false,
   });
 
 export { createNodeDetector };

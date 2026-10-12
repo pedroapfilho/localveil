@@ -1,72 +1,62 @@
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { withCacheLock } from "./cache-lock";
+import type { ModelSpec } from "./catalog";
 import { modelById, revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
-import { memoryStore } from "./chunk-store-fixture";
-import { downloadModel, inspectModel, removeModel } from "./model-store-browser";
+import { createBrowserModelStore } from "./model-store-browser";
+import {
+  memoryCaches,
+  memoryChunks,
+  serveFiles,
+  TOKENIZER_BODY,
+  urlOf,
+  WEIGHTS_BODY,
+} from "./model-store-fixture";
 
 const MODEL = modelById("gliner-pii-base");
 const OTHER = modelById("gliner-multi-pii");
 const [TOKENIZER, TOKENIZER_CONFIG] = tokenizerUrls(MODEL);
 const WEIGHTS = weightsUrl(MODEL);
+const EVERYTHING = [TOKENIZER, TOKENIZER_CONFIG, WEIGHTS];
+const TOKENIZER_JSON = { model: {} };
 
-const memoryCaches = (held: Array<string> = []) => {
-  // The resumable cache writes content-length on every entry it keeps; the size comes from there.
-  const entries = new Map(
-    held.map((url) => [url, new Response("x", { headers: { "content-length": "1234" } })]),
-  );
+const ignore = () => undefined;
 
-  vi.stubGlobal("caches", {
-    open: () =>
-      Promise.resolve({
-        delete: (request: { url: string }) => Promise.resolve(entries.delete(request.url)),
-        keys: () => Promise.resolve([...entries.keys()].map((url) => ({ url }))),
-        match: (url: string) => Promise.resolve(entries.get(url)),
-        put: (url: string, response: Response) => {
-          entries.set(url, response);
+const superseded = (model: ModelSpec): ModelSpec => ({ ...model, revision: "0".repeat(40) });
 
-          return Promise.resolve();
-        },
-      }),
+const keepModel = (caches: ReturnType<typeof memoryCaches>, model: ModelSpec) => {
+  caches.keep(tokenizerUrls(model), TOKENIZER_BODY);
+  caches.keep([weightsUrl(model)], WEIGHTS_BODY);
+};
+
+// Holds the requests for one URL back until the test lets them through.
+const holdFetch = (held: string) => {
+  const serve = fetch;
+  const started = Promise.withResolvers<undefined>();
+  const resume = Promise.withResolvers<undefined>();
+
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (urlOf(input) === held) {
+      started.resolve(undefined);
+      await resume.promise;
+    }
+
+    return serve(input, init);
   });
 
-  return entries;
+  return {
+    release: () => {
+      resume.resolve(undefined);
+    },
+    started: started.promise,
+  };
 };
 
-const BODY = new Uint8Array(40);
+const queuedFor = (url: string) =>
+  vi.waitUntil(async () => {
+    const { pending = [] } = await navigator.locks.query();
 
-const serveRanges = () => {
-  const asked: Array<string> = [];
-
-  vi.stubGlobal(
-    "fetch",
-    vi.fn<typeof fetch>((input, init) => {
-      const url = input instanceof Request ? input.url : input.toString();
-      const [start, end] = (new Headers(init?.headers).get("Range") ?? "")
-        .replace("bytes=", "")
-        .split("-")
-        .map(Number);
-
-      assert.isDefined(start);
-      assert.isDefined(end);
-
-      asked.push(url);
-
-      return Promise.resolve(
-        new Response(BODY.slice(start, end + 1), {
-          headers: { "content-range": `bytes ${String(start)}-${String(end)}/40`, etag: url },
-          status: 206,
-        }),
-      );
-    }),
-  );
-
-  return asked;
-};
-
-beforeEach(() => {
-  vi.unstubAllGlobals();
-});
+    return pending.some(({ name }) => name?.endsWith(url) === true);
+  });
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -75,9 +65,9 @@ afterEach(() => {
 
 describe("inspectModel in the browser", () => {
   it("calls a model ready once its weights and tokenizer are all cached", async () => {
-    memoryCaches([TOKENIZER, TOKENIZER_CONFIG, WEIGHTS]);
+    memoryCaches().keep(EVERYTHING);
 
-    await expect(inspectModel(MODEL, memoryStore())).resolves.toEqual({
+    await expect(createBrowserModelStore(memoryChunks()).inspectModel(MODEL)).resolves.toEqual({
       bytes: 1234,
       state: "ready",
     });
@@ -86,13 +76,13 @@ describe("inspectModel in the browser", () => {
   it("counts the chunks an interrupted download banked", async () => {
     memoryCaches();
 
-    const store = memoryStore();
+    const chunks = memoryChunks();
 
-    await store.writeManifest(WEIGHTS, { chunkSize: 10, etag: "e", total: 25 });
-    await store.append(WEIGHTS, 0, new ArrayBuffer(10));
-    await store.append(WEIGHTS, 20, new ArrayBuffer(5));
+    await chunks.writeManifest(WEIGHTS, { chunkSize: 10, etag: "e", total: 25 });
+    await chunks.append(WEIGHTS, 0, new ArrayBuffer(10));
+    await chunks.append(WEIGHTS, 20, new ArrayBuffer(5));
 
-    await expect(inspectModel(MODEL, store)).resolves.toEqual({
+    await expect(createBrowserModelStore(chunks).inspectModel(MODEL)).resolves.toEqual({
       loaded: 15,
       state: "partial",
       total: MODEL.bytes,
@@ -100,195 +90,380 @@ describe("inspectModel in the browser", () => {
   });
 
   it("does not call weights without their tokenizer ready, since they cannot load offline", async () => {
-    memoryCaches([WEIGHTS]);
+    memoryCaches().keep([WEIGHTS]);
 
-    await expect(inspectModel(MODEL, memoryStore())).resolves.toMatchObject({
+    await expect(createBrowserModelStore(memoryChunks()).inspectModel(MODEL)).resolves.toEqual({
+      loaded: 1234,
       state: "partial",
+      total: MODEL.bytes,
     });
   });
 
   it("reports a model with nothing kept as absent", async () => {
-    memoryCaches([weightsUrl(OTHER)]);
+    memoryCaches().keep([weightsUrl(OTHER)]);
 
-    await expect(inspectModel(MODEL, memoryStore())).resolves.toEqual({ state: "absent" });
-  });
-
-  it("reports absent where the browser has no Cache Storage", async () => {
-    await expect(inspectModel(MODEL, memoryStore())).resolves.toEqual({ state: "absent" });
+    await expect(createBrowserModelStore(memoryChunks()).inspectModel(MODEL)).resolves.toEqual({
+      state: "absent",
+    });
   });
 });
 
 describe("downloadModel in the browser", () => {
   it("can cancel while queued behind a model removal without starting a fetch", async () => {
     memoryCaches();
-    const asked = serveRanges();
+    const asked = serveFiles();
+    const listing = Promise.withResolvers<Array<string>>();
+    const chunks = memoryChunks();
+    const store = createBrowserModelStore({ ...chunks, listUrls: () => listing.promise });
     const controller = new AbortController();
-    const started = Promise.withResolvers<undefined>();
-    const resume = Promise.withResolvers<undefined>();
-    const holding = withCacheLock(revisionUrl(MODEL), "exclusive", () => {
-      started.resolve(undefined);
 
-      return resume.promise;
+    const removing = store.removeModel(MODEL);
+
+    await vi.waitUntil(async () => {
+      const { held = [] } = await navigator.locks.query();
+
+      return held.length > 0;
     });
-
-    await started.promise;
-    const downloading = downloadModel(MODEL, () => undefined, controller.signal, memoryStore());
+    const downloading = store.downloadModel(MODEL, ignore, controller.signal);
 
     controller.abort();
     await expect(downloading).rejects.toThrow(/abort/iv);
-    resume.resolve(undefined);
-    await holding;
+    listing.resolve([]);
+    await removing;
     expect(asked).toEqual([]);
   });
 
-  it("rejects a failed durable write instead of reporting the model downloaded", async () => {
-    memoryCaches();
-    serveRanges();
-    const cache = await caches.open("transformers-cache");
+  it("rejects a failed durable write, then resumes without fetching the banked chunks again", async () => {
+    const caches = memoryCaches();
+    const asked = serveFiles();
+    const chunks = memoryChunks();
+    const store = createBrowserModelStore(chunks);
+    const weightsAsked = () => asked.filter((url) => url === WEIGHTS).length;
 
-    vi.spyOn(caches, "open").mockResolvedValue(cache);
-    vi.spyOn(cache, "put").mockRejectedValue(new DOMException("full", "QuotaExceededError"));
+    caches.refuse(WEIGHTS);
+    await expect(store.downloadModel(MODEL, ignore)).rejects.toThrow("full");
+    await expect(chunks.readOffsets(WEIGHTS)).resolves.toEqual([0]);
+    const fetched = weightsAsked();
 
-    await expect(downloadModel(MODEL, () => undefined, undefined, memoryStore())).rejects.toThrow(
-      "full",
-    );
+    caches.allow(WEIGHTS);
+    await store.downloadModel(MODEL, ignore);
+
+    expect(weightsAsked()).toBe(fetched + 1);
+    await expect(store.inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
+    await expect(chunks.listUrls()).resolves.toEqual([]);
   });
 
   it("fetches the tokenizer before the weights and reports only the weights' progress", async () => {
-    const entries = memoryCaches();
-    const asked = serveRanges();
-    const reported: Array<number> = [];
+    const caches = memoryCaches();
+    const asked = serveFiles();
+    const reported: Array<{ fraction: number; weightsAsked: boolean }> = [];
 
-    await downloadModel(
-      MODEL,
-      (fraction) => {
-        reported.push(fraction);
-      },
-      undefined,
-      memoryStore(),
-    );
+    await createBrowserModelStore(memoryChunks()).downloadModel(MODEL, (fraction) => {
+      reported.push({ fraction, weightsAsked: asked.includes(WEIGHTS) });
+    });
 
-    expect([...new Set(asked)]).toEqual([TOKENIZER, TOKENIZER_CONFIG, WEIGHTS]);
-    expect([...entries.keys()]).toEqual([TOKENIZER, TOKENIZER_CONFIG, WEIGHTS]);
-    expect(reported.at(-1)).toBe(1);
-    expect(reported.every((fraction) => fraction >= 0 && fraction <= 1)).toBe(true);
+    const order = [...new Set(asked)];
+
+    expect(order.toSorted()).toEqual(EVERYTHING.toSorted());
+    expect(order.at(-1)).toBe(WEIGHTS);
+    expect([...caches.entries.keys()].at(-1)).toBe(WEIGHTS);
+    expect(reported.every(({ weightsAsked }) => weightsAsked)).toBe(true);
+    expect(reported.every(({ fraction }) => fraction >= 0 && fraction <= 1)).toBe(true);
+    expect(reported.at(-1)?.fraction).toBe(1);
   });
 
   it("stops before fetching anything when it is already told to stop", async () => {
-    const entries = memoryCaches();
-    const asked = serveRanges();
+    const caches = memoryCaches();
+    const asked = serveFiles();
     const controller = new AbortController();
 
     controller.abort();
 
     await expect(
-      downloadModel(MODEL, () => undefined, controller.signal, memoryStore()),
+      createBrowserModelStore(memoryChunks()).downloadModel(MODEL, ignore, controller.signal),
     ).rejects.toThrow(/abort/iv);
     expect(asked).toEqual([]);
-    expect(entries.size).toBe(0);
+    expect(caches.entries.size).toBe(0);
   });
 
   it("fetches nothing for a model that is already kept", async () => {
-    memoryCaches([TOKENIZER, TOKENIZER_CONFIG, WEIGHTS]);
+    memoryCaches().keep(EVERYTHING);
 
-    const asked = serveRanges();
+    const asked = serveFiles();
 
-    await downloadModel(MODEL, () => undefined, undefined, memoryStore());
+    await createBrowserModelStore(memoryChunks()).downloadModel(MODEL, ignore);
 
     expect(asked).toEqual([]);
   });
 
-  it("refuses where the browser has no Cache Storage to keep it in", async () => {
-    await expect(downloadModel(MODEL, () => undefined, undefined, memoryStore())).rejects.toThrow(
-      /Cache Storage/v,
+  it("refuses to keep or open a model where the browser has no Cache Storage", async () => {
+    const store = createBrowserModelStore(memoryChunks());
+
+    await expect(store.downloadModel(MODEL, ignore)).rejects.toThrow(/Cache Storage/v);
+    await expect(store.openModel(MODEL, ignore)).rejects.toThrow(/Cache Storage/v);
+  });
+});
+
+describe("openModel in the browser", () => {
+  it("downloads what is missing and hands back the tokenizer pair and the weights", async () => {
+    const caches = memoryCaches();
+
+    serveFiles();
+
+    const store = createBrowserModelStore(memoryChunks());
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toEqual({
+      tokenizer: TOKENIZER_JSON,
+      tokenizerConfig: TOKENIZER_JSON,
+      weights: WEIGHTS_BODY,
+    });
+    expect([...caches.entries.keys()].toSorted()).toEqual(EVERYTHING.toSorted());
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({
+      bytes: WEIGHTS_BODY.length,
+      state: "ready",
+    });
+  });
+
+  it("opens a model it already keeps again without the network", async () => {
+    memoryCaches();
+    serveFiles();
+
+    const store = createBrowserModelStore(memoryChunks());
+    const first = await store.openModel(MODEL, ignore);
+    const offline = vi.fn<typeof fetch>(() => Promise.reject(new TypeError("offline")));
+
+    vi.stubGlobal("fetch", offline);
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toEqual(first);
+    expect(offline).not.toHaveBeenCalled();
+  });
+
+  it("asks for nothing outside the model's pinned revision", async () => {
+    memoryCaches();
+    const asked = serveFiles();
+
+    await createBrowserModelStore(memoryChunks()).openModel(MODEL, ignore);
+
+    expect(asked.every((url) => url.startsWith(revisionUrl(MODEL)))).toBe(true);
+  });
+
+  it("reads the tokenizer before fetching the weights, so a broken one costs no download", async () => {
+    memoryCaches().keep(tokenizerUrls(MODEL), new TextEncoder().encode("<html>"));
+    const asked = serveFiles();
+
+    await expect(createBrowserModelStore(memoryChunks()).openModel(MODEL, ignore)).rejects.toThrow(
+      SyntaxError,
     );
+    expect(asked).toEqual([]);
+  });
+
+  it("reports only the weights' progress", async () => {
+    memoryCaches();
+    const asked = serveFiles();
+    const reported: Array<boolean> = [];
+
+    await createBrowserModelStore(memoryChunks()).openModel(MODEL, () => {
+      reported.push(asked.includes(WEIGHTS));
+    });
+
+    expect(reported.length).toBeGreaterThan(0);
+    expect(reported.every(Boolean)).toBe(true);
+  });
+
+  it("still hands back the weights when the browser refuses to keep them, and says so", async () => {
+    const caches = memoryCaches();
+
+    serveFiles();
+    caches.refuse(WEIGHTS);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const files = await createBrowserModelStore(memoryChunks()).openModel(MODEL, ignore);
+
+    expect(files.weights).toEqual(WEIGHTS_BODY);
+    expect(caches.entries.has(WEIGHTS)).toBe(false);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("lets a second tab take the weights the first is fetching instead of fetching them again", async () => {
+    memoryCaches();
+    const asked = serveFiles();
+    const chunks = memoryChunks();
+    const { release, started } = holdFetch(WEIGHTS);
+
+    const first = createBrowserModelStore(chunks).openModel(MODEL, ignore);
+
+    await started;
+    const second = createBrowserModelStore(chunks).openModel(MODEL, ignore);
+
+    await queuedFor(WEIGHTS);
+    release();
+
+    const [firstFiles, secondFiles] = await Promise.all([first, second]);
+
+    expect(secondFiles).toEqual(firstFiles);
+    // One size probe and one range, both from the first tab.
+    expect(asked.filter((url) => url === WEIGHTS)).toHaveLength(2);
+  });
+
+  it("holds a removal back until the model has finished loading", async () => {
+    memoryCaches();
+    serveFiles();
+    const { release, started } = holdFetch(WEIGHTS);
+    const store = createBrowserModelStore(memoryChunks());
+    let removed = false;
+
+    const opening = store.openModel(MODEL, ignore);
+
+    await started;
+    const remove = async () => {
+      await store.removeModel(MODEL);
+      removed = true;
+    };
+    const removing = remove();
+
+    // Another model's removal is not held back, so this waits only on the lock under test.
+    await store.removeModel(OTHER);
+    const removedWhileLoading = removed;
+
+    release();
+    await Promise.all([opening, removing]);
+
+    expect(removedWhileLoading).toBe(false);
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+  });
+
+  it("clears superseded revisions and dropped exports, and keeps every catalogued model", async () => {
+    const caches = memoryCaches();
+
+    serveFiles();
+    const chunks = memoryChunks();
+    const droppedExport = `${revisionUrl(MODEL)}onnx/model_fp16.onnx`;
+    const elsewhere = "https://example.com/other-thing.json";
+
+    caches.keep([
+      weightsUrl(superseded(MODEL)),
+      tokenizerUrls(superseded(OTHER))[0],
+      droppedExport,
+      weightsUrl(OTHER),
+      elsewhere,
+    ]);
+    await chunks.writeManifest(weightsUrl(superseded(OTHER)), {
+      chunkSize: 10,
+      etag: "e",
+      total: 25,
+    });
+    await chunks.writeManifest(weightsUrl(OTHER), { chunkSize: 10, etag: "e", total: 25 });
+
+    await createBrowserModelStore(chunks).openModel(MODEL, ignore);
+
+    expect([...caches.entries.keys()].toSorted()).toEqual(
+      [...EVERYTHING, weightsUrl(OTHER), elsewhere].toSorted(),
+    );
+    await expect(chunks.listUrls()).resolves.toEqual([weightsUrl(OTHER)]);
+  });
+
+  it("still opens the model when clearing superseded files fails", async () => {
+    keepModel(memoryCaches(), MODEL);
+    const chunks = memoryChunks();
+    const stale = weightsUrl(superseded(MODEL));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await chunks.writeManifest(stale, { chunkSize: 10, etag: "e", total: 25 });
+
+    const store = createBrowserModelStore({
+      ...chunks,
+      clear: (url) => (url === stale ? Promise.reject(new Error("locked")) : chunks.clear(url)),
+    });
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toMatchObject({ weights: WEIGHTS_BODY });
+    expect(warn).toHaveBeenCalledOnce();
   });
 });
 
 describe("removeModel in the browser", () => {
   it("waits for an active download before deleting every file", async () => {
-    const entries = memoryCaches();
-    serveRanges();
-    const fetchRange = fetch;
-    const started = Promise.withResolvers<undefined>();
-    const resume = Promise.withResolvers<undefined>();
-    const store = memoryStore();
+    const caches = memoryCaches();
 
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if ((input instanceof Request ? input.url : input.toString()) === WEIGHTS) {
-        started.resolve(undefined);
-        await resume.promise;
-      }
+    serveFiles();
+    const { release, started } = holdFetch(WEIGHTS);
+    const store = createBrowserModelStore(memoryChunks());
 
-      return fetchRange(input, init);
-    });
+    const downloading = store.downloadModel(MODEL, ignore);
 
-    const downloading = downloadModel(MODEL, () => undefined, undefined, store);
-
-    await started.promise;
-    const removing = removeModel(MODEL, store);
+    await started;
+    const removing = store.removeModel(MODEL);
 
     // The independent model can still finish while removal waits for this model's reader.
-    await downloadModel(OTHER, () => undefined, undefined, store);
-    const keptWhileDownloading = entries.has(TOKENIZER);
-    resume.resolve(undefined);
+    await store.downloadModel(OTHER, ignore);
+    const keptWhileDownloading = caches.entries.has(TOKENIZER);
+
+    release();
     await Promise.all([downloading, removing]);
 
     expect(keptWhileDownloading).toBe(true);
-    await expect(inspectModel(MODEL, store)).resolves.toEqual({ state: "absent" });
-    expect(entries.has(WEIGHTS)).toBe(false);
-    expect(entries.has(TOKENIZER)).toBe(false);
-    expect(entries.has(TOKENIZER_CONFIG)).toBe(false);
-    await expect(inspectModel(OTHER, store)).resolves.toMatchObject({ state: "ready" });
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+    for (const url of EVERYTHING) {
+      expect(caches.entries.has(url)).toBe(false);
+    }
+    await expect(store.inspectModel(OTHER)).resolves.toMatchObject({ state: "ready" });
   });
 
   it("waits for the sibling tokenizer write even if the other tokenizer failed", async () => {
-    const entries = memoryCaches();
-    serveRanges();
-    const fetchRange = fetch;
-    const started = Promise.withResolvers<undefined>();
-    const resume = Promise.withResolvers<undefined>();
-    const store = memoryStore();
+    const caches = memoryCaches();
 
-    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if ((input instanceof Request ? input.url : input.toString()) === TOKENIZER) {
-        throw new Error("offline");
-      }
-      if ((input instanceof Request ? input.url : input.toString()) === TOKENIZER_CONFIG) {
-        started.resolve(undefined);
-        await resume.promise;
-      }
+    serveFiles();
+    const { release, started } = holdFetch(TOKENIZER_CONFIG);
+    const held = fetch;
+    const chunks = memoryChunks();
+    const store = createBrowserModelStore(chunks);
 
-      return fetchRange(input, init);
-    });
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+      urlOf(input) === TOKENIZER ? Promise.reject(new Error("offline")) : held(input, init),
+    );
 
     const removeMidDownload = async () => {
-      await started.promise;
-      const removing = removeModel(MODEL, store);
+      await started;
+      const removing = store.removeModel(MODEL);
 
-      resume.resolve(undefined);
+      release();
       await removing;
     };
 
     await Promise.all([
-      expect(downloadModel(MODEL, () => undefined, undefined, store)).rejects.toThrow("offline"),
+      expect(store.downloadModel(MODEL, ignore)).rejects.toThrow("offline"),
       removeMidDownload(),
     ]);
 
-    expect(entries.size).toBe(0);
-    await expect(store.listUrls()).resolves.toEqual([]);
+    expect(caches.entries.size).toBe(0);
+    await expect(chunks.listUrls()).resolves.toEqual([]);
   });
 
   it("clears one model's cached files and banked chunks and leaves the other model alone", async () => {
-    const entries = memoryCaches([TOKENIZER, WEIGHTS, weightsUrl(OTHER)]);
-    const store = memoryStore();
+    const caches = memoryCaches();
+    const chunks = memoryChunks();
 
-    await store.writeManifest(WEIGHTS, { chunkSize: 10, etag: "e", total: 25 });
-    await store.writeManifest(weightsUrl(OTHER), { chunkSize: 10, etag: "e", total: 25 });
+    caches.keep([TOKENIZER, WEIGHTS, weightsUrl(OTHER)]);
+    await chunks.writeManifest(WEIGHTS, { chunkSize: 10, etag: "e", total: 25 });
+    await chunks.writeManifest(weightsUrl(OTHER), { chunkSize: 10, etag: "e", total: 25 });
 
-    await removeModel(MODEL, store);
+    await createBrowserModelStore(chunks).removeModel(MODEL);
 
-    expect([...entries.keys()]).toEqual([weightsUrl(OTHER)]);
-    await expect(store.listUrls()).resolves.toEqual([weightsUrl(OTHER)]);
+    expect([...caches.entries.keys()]).toEqual([weightsUrl(OTHER)]);
+    await expect(chunks.listUrls()).resolves.toEqual([weightsUrl(OTHER)]);
+  });
+});
+
+describe("seedModelFile", () => {
+  it("keeps the given bytes as the model's file, so opening the model loads them", async () => {
+    memoryCaches();
+    const asked = serveFiles();
+    const store = createBrowserModelStore(memoryChunks());
+    const candidate = Uint8Array.from({ length: 7 }, () => 9);
+
+    await store.seedModelFile(WEIGHTS, candidate.buffer);
+
+    await expect(store.openModel(MODEL, ignore)).resolves.toMatchObject({ weights: candidate });
+    expect(asked).not.toContain(WEIGHTS);
+    await expect(store.inspectModel(MODEL)).resolves.toEqual({ bytes: 7, state: "ready" });
   });
 });

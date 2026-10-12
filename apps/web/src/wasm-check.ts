@@ -1,7 +1,6 @@
 import { createDetector, DEFAULT_MODEL_ID, isModelId, modelById } from "@repo/pii-detect";
-import { tokenizerUrls, weightsUrl } from "@repo/pii-detect/models";
-
-const CACHE_KEY = "transformers-cache";
+import { seedModelFile } from "@repo/pii-detect/browser";
+import { removeModel, tokenizerUrls, weightsUrl } from "@repo/pii-detect/models";
 
 const asked = new URLSearchParams(location.search).get("model") ?? DEFAULT_MODEL_ID;
 const MODEL = isModelId(asked) ? asked : DEFAULT_MODEL_ID;
@@ -25,15 +24,6 @@ const say = (line: string) => {
 };
 
 const seedFrom = async (local: string, url: string, label: string) => {
-  const cache = await caches.open(CACHE_KEY);
-  const already = await cache.match(url);
-
-  if (already !== undefined) {
-    say(`${label} already seeded`);
-
-    return;
-  }
-
   const response = await fetch(local);
   const type = response.headers.get("content-type") ?? "";
 
@@ -50,7 +40,7 @@ const seedFrom = async (local: string, url: string, label: string) => {
     `${label} ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB in ${(performance.now() - started).toFixed(0)} ms`,
   );
 
-  await cache.put(url, new Response(bytes));
+  await seedModelFile(url, bytes);
 };
 
 const seed = async () => {
@@ -60,8 +50,8 @@ const seed = async () => {
 
 const run = async () => {
   if (new URLSearchParams(location.search).get("reset") === "1") {
-    await caches.delete(CACHE_KEY);
-    say("cleared CacheStorage, so nothing stale is reused");
+    await removeModel(modelById(MODEL));
+    say(`removed the kept ${MODEL}, so nothing stale is reused`);
   }
 
   if (new URLSearchParams(location.search).get("device") === "wasm") {

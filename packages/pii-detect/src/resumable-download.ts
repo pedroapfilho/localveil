@@ -2,6 +2,8 @@ import type { ChunkStore } from "./chunk-store";
 
 type Probe = { etag: string; total: number };
 
+type Layout = { chunkSize: number; total: number };
+
 type Resume = { chunkSize: number; etag: string; store: ChunkStore; total: number; url: string };
 
 type DownloadOptions = {
@@ -48,6 +50,17 @@ const isRejected = (outcome: PromiseSettledResult<void>): outcome is PromiseReje
 const chunkStarts = (total: number, chunkSize: number) =>
   Array.from({ length: Math.ceil(total / chunkSize) }, (_entry, index) => index * chunkSize);
 
+const spanOf = ({ chunkSize, total }: Layout, start: number) => Math.min(chunkSize, total - start);
+
+const sumSpans = (layout: Layout, starts: Iterable<number>) =>
+  [...starts].reduce((sum, start) => sum + spanOf(layout, start), 0);
+
+const bankedBytes = async (store: ChunkStore, url: string) => {
+  const manifest = await store.readManifest(url);
+
+  return manifest === undefined ? 0 : sumSpans(manifest, await store.readOffsets(url));
+};
+
 const storedOffsets = async ({ chunkSize, etag, store, total, url }: Resume) => {
   const manifest = await store.readManifest(url);
 
@@ -75,10 +88,10 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   } = options;
   const { etag, total } = await probe(url, fetchRange, signal);
   const held = await storedOffsets({ chunkSize, etag, store, total, url });
-  const spanOf = (start: number) => Math.min(chunkSize, total - start);
+  const layout = { chunkSize, total };
   const queue = chunkStarts(total, chunkSize).filter((start) => !held.has(start));
 
-  let loaded = [...held].reduce((sum, start) => sum + spanOf(start), 0);
+  let loaded = sumSpans(layout, held);
   let stopped = false;
 
   await store.writeManifest(url, { chunkSize, etag, total });
@@ -87,7 +100,7 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
 
   const bank = async (start: number) => {
     const response = await fetchRange(url, {
-      headers: rangeHeader(start, start + spanOf(start) - 1),
+      headers: rangeHeader(start, start + spanOf(layout, start) - 1),
       signal,
     });
 
@@ -157,5 +170,5 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
   return blob;
 };
 
-export { downloadResumable };
+export { bankedBytes, downloadResumable };
 export type { DownloadOptions };
