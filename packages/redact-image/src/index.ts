@@ -1,9 +1,9 @@
 import type { ReadText, TextReading } from "@repo/ocr";
-import type { AnalysedUnit, PageSurface, Redactor, WarningKey } from "@repo/redact-core";
+import type { AnalysedReading, PageSurface, Redactor, WarningKey } from "@repo/redact-core";
 import {
   analyseUnits,
   contextOf,
-  isAnalysedUnit,
+  isAnalysedReading,
   isPageSurface,
   keptSpans,
   paint,
@@ -16,7 +16,7 @@ import {
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-type Reading = AnalysedUnit & PageSurface;
+type Reading = AnalysedReading & PageSurface;
 
 /* The first reading is the one the reader chose; the rest are the passes it passed over. */
 type ImageHandle = { readings: Array<Reading> };
@@ -48,7 +48,7 @@ const isHandle = (value: unknown): value is ImageHandle =>
   value !== null &&
   "readings" in value &&
   Array.isArray(value.readings) &&
-  value.readings.every((reading) => isAnalysedUnit(reading) && isPageSurface(reading));
+  value.readings.every((reading) => isAnalysedReading(reading) && isPageSurface(reading));
 
 const createImageRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
@@ -62,17 +62,20 @@ const createImageRedactor = (read: ReadText): Redactor => ({
 
     onProgress(0.6, "stage.detecting");
 
-    const { detections, units } = await analyseUnits({
+    const {
+      detections,
+      units: [readings = []],
+    } = await analyseUnits({
       detect,
-      kind: "readings",
-      units: [reading.words, ...reading.alternatives].map(surfaceOf),
+      kind: "file",
+      units: [{ readings: [reading.words, ...reading.alternatives].map(surfaceOf) }],
     });
 
     onProgress(1, "stage.finished");
 
     return {
       detections,
-      handle: { readings: units } satisfies ImageHandle,
+      handle: { readings } satisfies ImageHandle,
       warnings: warningsFor(reading),
     };
   },
@@ -102,7 +105,7 @@ const createImageRedactor = (read: ReadText): Redactor => ({
 
     onProgress(1, "stage.finished");
 
-    return { blob, redactionCount: redactionCount("readings", readings, decisions), warnings };
+    return { blob, redactionCount: redactionCount([readings], decisions), warnings };
   },
 });
 

@@ -1,5 +1,5 @@
-export { analyseUnits, isAnalysedUnit, keptSpans, redactionCount } from "./analysis";
-export type { AnalysedUnit } from "./analysis";
+export { analyseUnits, isAnalysedReading, keptSpans, redactionCount } from "./analysis";
+export type { AnalysedReading } from "./analysis";
 export { describeError } from "./describe-error";
 export { APPLY_SCORE, defaultDecisions } from "./detections";
 export { createDetectClient, serialiseDetect, serveDetect } from "./detect-rpc";

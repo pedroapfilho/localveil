@@ -10,6 +10,7 @@ type FakePage = {
   layer: string;
   layout?: Array<[x: number, y: number]>;
   legibility?: TextReading["legibility"];
+  passedOver?: Array<string>;
   readsAs?: OcrLanguage;
   scanned: Array<string>;
 };
@@ -152,17 +153,20 @@ const { createPdfRedactor } = await import("./index");
 
 const boxOf = (index: number) => ({ x0: index * 40, x1: index * 40 + 40, y0: 0, y1: 20 });
 
-/* A fixed-words reader: it hands back the words scanned onto whichever page pdf.js rendered. */
+const placed = (texts: Array<string>) => texts.map((text, index) => ({ bbox: boxOf(index), text }));
+
+/* A fixed-words reader: it hands back the words scanned onto whichever page pdf.js rendered, and
+   the words of any pass it passed over. */
 const fixedWords = vi.fn<ReadText>((canvas) => {
   const page = rendered.get(canvas);
 
   assert.isDefined(page, "the reader was handed a canvas pdf.js never rendered");
 
   return Promise.resolve({
-    alternatives: [],
+    alternatives: page.passedOver === undefined ? [] : [placed(page.passedOver)],
     language: page.readsAs ?? "en",
     legibility: page.legibility ?? (page.scanned.length === 0 ? "blank" : "legible"),
-    words: page.scanned.map((text, index) => ({ bbox: boxOf(index), text })),
+    words: placed(page.scanned),
   });
 });
 
@@ -443,6 +447,52 @@ describe("a scanned page", () => {
     expect(warnings).toEqual(["warning.scannedPages"]);
   });
 
+  it("is covered where only a pass the reader passed over read a name", async () => {
+    state.pages = [
+      scan(["Signed", "by"], {
+        legibility: "unreadable",
+        passedOver: ["Signed", "by", "Ana", "Lima"],
+      }),
+    ];
+
+    const detect = naming("Ana Lima");
+    const redactor = createPdfRedactor(fixedWords);
+    const analysis = await redactor.analyse(file(), detect, () => undefined);
+    const { redactionCount } = await redactor.apply({
+      analysis,
+      decisions: { covered: analysis.detections.map(({ id }) => id) },
+      detect,
+      file: file(),
+      onProgress: () => undefined,
+    });
+
+    expect(analysis.detections.map((detection) => [detection.page, detection.preview])).toEqual([
+      [0, "Ana Lima"],
+    ]);
+    expect(state.painted).toEqual(["80,0,80,20"]);
+    expect(state.drawn).toEqual([["Signed", "by"]]);
+    expect(detect).toHaveBeenLastCalledWith("Signed by");
+    expect(redactionCount).toBe(1);
+  });
+
+  it("is copied untouched once a name only a passed-over pass read is dismissed", async () => {
+    state.pages = [scan(["Signed", "by"], { passedOver: ["Signed", "by", "Ana", "Lima"] })];
+
+    const redactor = createPdfRedactor(fixedWords);
+    const analysis = await redactor.analyse(file(), naming("Ana Lima"), () => undefined);
+    const { redactionCount } = await redactor.apply({
+      analysis,
+      decisions: { covered: [] },
+      detect: naming(),
+      file: file(),
+      onProgress: () => undefined,
+    });
+
+    expect(state.painted).toEqual([]);
+    expect(state.copied).toEqual([0]);
+    expect(redactionCount).toBe(0);
+  });
+
   it("is painted with nothing over it when the reader could make none of it out", async () => {
     state.pages = [scan([], { legibility: "unreadable" })];
 
@@ -565,9 +615,10 @@ describe("the pdf.js resources it holds", () => {
 });
 
 describe("the handle analysis hands to apply", () => {
-  it("keeps only each analysed page and its word geometry", async () => {
+  it("keeps only the readings of each analysed page and their word geometry", async () => {
     const analysis = await analyse(naming("Ana"));
-    const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
+    const [[first] = []] = (analysis.handle as { pages: Array<Array<Record<string, unknown>>> })
+      .pages;
 
     assert.isDefined(first);
 
@@ -579,7 +630,7 @@ describe("the handle analysis hands to apply", () => {
 
     await expect(
       createPdfRedactor(fixedWords).apply({
-        analysis: { ...analysis, handle: { pages: [{ marks: [], text: "Ana" }] } },
+        analysis: { ...analysis, handle: { pages: [[{ marks: [], text: "Ana" }]] } },
         decisions: { covered: [] },
         detect: naming(),
         file: file(),

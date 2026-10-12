@@ -1,7 +1,7 @@
 import type { OcrLanguage, ReadText } from "@repo/ocr";
 import { languageOf } from "@repo/ocr";
 import type {
-  AnalysedUnit,
+  AnalysedReading,
   Detect,
   FileProgress,
   PageSurface,
@@ -13,7 +13,7 @@ import {
   analyseUnits,
   contextOf,
   inReadingOrder,
-  isAnalysedUnit,
+  isAnalysedReading,
   isPageSurface,
   keptSpans,
   paint,
@@ -38,7 +38,9 @@ const READ_SHARE = 0.45;
 
 const DETECT_SHARE = 0.45;
 
-type PdfHandle = { pages: Array<AnalysedUnit & PageSurface> };
+/* Each page holds its readings: a typed page its text layer, a scanned page the pass the reader
+   chose first and then any it passed over. */
+type PdfHandle = { pages: Array<Array<AnalysedReading & PageSurface>> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -131,17 +133,22 @@ const isHandle = (value: unknown): value is PdfHandle =>
   value !== null &&
   "pages" in value &&
   Array.isArray(value.pages) &&
-  value.pages.every((page) => isAnalysedUnit(page) && isPageSurface(page));
+  value.pages.every(
+    (page) =>
+      Array.isArray(page) &&
+      page.every((reading) => isAnalysedReading(reading) && isPageSurface(reading)),
+  );
 
 const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
   withPdf(file, async (pdf) => {
     onProgress(0, "stage.reading");
 
     const warnings = new Set<WarningKey>();
-    const pages: Array<PageSurface> = [];
+    const pages: Array<PageSurface | { readings: Array<PageSurface> }> = [];
 
     let language: OcrLanguage | undefined;
     let anyText = false;
+    let readings = 0;
 
     for (let number = 1; number <= pdf.numPages; number += 1) {
       const progress = ((number - 1) / pdf.numPages) * READ_SHARE;
@@ -149,7 +156,7 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
       onProgress(progress, "stage.extracting");
 
       // oxlint-disable-next-line eslint/no-loop-func -- the callback runs to completion inside this iteration's await
-      const { found, words } = await withPage(pdf, number, async (proxy, viewport) => {
+      const { found, page } = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
         const layerText = content.items
           .map((item) => ("str" in item ? item.str : ""))
@@ -165,7 +172,9 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
         const typed = inReadingOrder(textLayerWords({ items: content.items, viewport }));
 
         if (typed.length >= MIN_LAYER_WORDS) {
-          return { found: true, words: typed };
+          readings += 1;
+
+          return { found: true, page: surfaceOf(typed) };
         }
 
         onProgress(progress, "stage.rendering");
@@ -182,21 +191,25 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
           warnings.add("warning.lowConfidence");
         }
 
-        return { found: reading.legibility !== "blank", words: reading.words };
+        const passes = [reading.words, ...reading.alternatives].map(surfaceOf);
+
+        readings += passes.length;
+
+        return { found: reading.legibility !== "blank", page: { readings: passes } };
       });
 
       anyText ||= found;
-      pages.push(surfaceOf(words));
+      pages.push(page);
     }
 
     if (!anyText) {
       warnings.add("warning.noText");
     }
 
-    return { pages, warnings };
+    return { pages, readings, warnings };
   });
 
-const detectingPages = (detect: Detect, count: number, onProgress: FileProgress): Detect => {
+const detectingReadings = (detect: Detect, count: number, onProgress: FileProgress): Detect => {
   let detected = 0;
 
   return (text) => {
@@ -247,14 +260,15 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       }
     };
 
-    for (const [index, page] of pages.entries()) {
+    for (const [index, readings] of pages.entries()) {
       const number = index + 1;
       const progress = (index / pages.length) * 0.9;
 
       onProgress(progress, "stage.redacting");
 
-      const rects = rectsFor(page, keptSpans(page, decisions));
-      const showing = uncovered(page, rects).words;
+      const rects = readings.flatMap((reading) => rectsFor(reading, keptSpans(reading, decisions)));
+      const [chosen] = readings;
+      const showing = chosen === undefined ? [] : uncovered(chosen, rects).words;
 
       survived.push(...showing);
 
@@ -303,7 +317,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
     return {
       blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
-      redactionCount: redactionCount("pages", pages, decisions),
+      redactionCount: redactionCount(pages, decisions),
       warnings: verified,
     };
   });
@@ -313,9 +327,9 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
 const createPdfRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
-    const { pages, warnings } = await readPages(file, read, onProgress);
+    const { pages, readings, warnings } = await readPages(file, read, onProgress);
     const { detections, units } = await analyseUnits({
-      detect: detectingPages(detect, pages.length, onProgress),
+      detect: detectingReadings(detect, readings, onProgress),
       kind: "pages",
       units: pages,
     });
