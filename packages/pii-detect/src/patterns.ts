@@ -1,5 +1,5 @@
-import { absorbNested } from "./merge-spans";
-import type { PiiLabel, Span } from "./types";
+import type { PiiLabel, Span } from "@repo/redact-core";
+import { absorbNested } from "@repo/redact-core";
 
 type Pattern = {
   label: PiiLabel;

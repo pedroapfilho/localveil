@@ -2,9 +2,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { createDetector, DEFAULT_MODEL_ID, isModelId, MODELS } from "@repo/pii-detect";
+import {
+  createDetector,
+  DEFAULT_MODEL_ID,
+  isModelId,
+  MODELS,
+  patternSpans,
+} from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
-import { analyseUnits, APPLY_SCORE, patternSpans } from "@repo/redact-core";
+import { analyseUnits, APPLY_SCORE } from "@repo/redact-core";
 import { structuralSpans } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus";

@@ -1,5 +1,4 @@
-import type { Logits } from "./gliner-decode";
-import type { GlinerInput } from "./gliner-encode";
+import type { GlinerInput, Logits } from "./gliner-codec";
 
 type ModelDevice = "wasm" | "webgpu";
 

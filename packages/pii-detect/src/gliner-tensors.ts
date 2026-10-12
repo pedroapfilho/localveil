@@ -1,4 +1,4 @@
-import type { GlinerInput } from "./gliner-encode";
+import type { GlinerInput, Logits } from "./gliner-codec";
 
 type MakeTensor<T> = (
   type: "bool" | "int64",
@@ -58,5 +58,31 @@ const toFeeds = <T>(
   );
 };
 
-export { toFeeds };
+const isNumberArray = (value: unknown): value is ArrayLike<number> => {
+  if (typeof value !== "object" || value === null || !("length" in value)) {
+    return false;
+  }
+
+  const { length } = value;
+
+  if (typeof length !== "number") {
+    return false;
+  }
+
+  return length === 0 || ("0" in value && typeof value[0] === "number");
+};
+
+const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> } | undefined): Logits => {
+  if (tensor === undefined) {
+    throw new TypeError("The model returned no logits");
+  }
+
+  if (!isNumberArray(tensor.data)) {
+    throw new TypeError("The model returned logits that are not numbers");
+  }
+
+  return { data: tensor.data, dims: [...tensor.dims] };
+};
+
+export { toFeeds, toLogits };
 export type { MakeTensor };

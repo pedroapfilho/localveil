@@ -1,7 +1,6 @@
 import * as ort from "onnxruntime-node";
 
-import { toLogits } from "./gliner-decode";
-import { toFeeds } from "./gliner-feeds";
+import { toFeeds, toLogits } from "./gliner-tensors";
 import type { ModelDevice, RunModel } from "./model-runtime";
 
 const pickDevice = (): Promise<ModelDevice> => Promise.resolve("wasm");

@@ -32,8 +32,6 @@ import {
 
 import type { ModelEntry } from "../model-library";
 
-type PickerModel = ModelSpec & { id: ModelId };
-
 const SUMMARY_KEYS = {
   "gliner-multi-pii": "models.summary.gliner-multi-pii",
   "gliner-pii-base": "models.summary.gliner-pii-base",
@@ -56,7 +54,7 @@ const percentOf = (loaded: number, total: number) =>
 type ModelRowProps = {
   busy: boolean;
   entry: ModelEntry | undefined;
-  model: PickerModel;
+  model: ModelSpec;
   onDownload: (id: ModelId) => void;
   onRemove: (id: ModelId) => void;
   onSelect: (id: ModelId) => void;
@@ -196,7 +194,7 @@ const ModelRow = ({
 type ModelPickerProps = {
   busy: boolean;
   entries: Partial<Record<ModelId, ModelEntry>>;
-  models: ReadonlyArray<PickerModel>;
+  models: ReadonlyArray<ModelSpec>;
   onDownload: (id: ModelId) => void;
   onOpen: () => void;
   onRemove: (id: ModelId) => void;
@@ -275,4 +273,4 @@ const ModelPicker = ({
 };
 
 export { ModelPicker };
-export type { ModelPickerProps, PickerModel };
+export type { ModelPickerProps };

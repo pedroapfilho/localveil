@@ -1,4 +1,4 @@
-export { createDetector, MIN_SCORE } from "./detector";
+export { createDetector } from "./detector";
 export type { DetectorOptions } from "./detector";
 export { isPiiLabel, PII_LABELS } from "./labels";
 export {
@@ -11,3 +11,4 @@ export {
   removeModel,
 } from "./models";
 export type { ModelId, ModelLanguage, ModelSpec, ModelStatus, ModelStore } from "./models";
+export { patternSpans } from "./patterns";

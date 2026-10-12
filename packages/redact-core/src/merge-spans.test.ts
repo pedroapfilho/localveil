@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeChunkSpans, mergeOverlappingRanges } from "./merge-spans";
+import { mergeOverlappingRanges } from "./merge-spans";
 import type { Span } from "./types";
 
 const span = (start: number, end: number, score = 0.9): Span => ({
@@ -8,39 +8,6 @@ const span = (start: number, end: number, score = 0.9): Span => ({
   label: "private_person",
   score,
   start,
-});
-
-describe("mergeChunkSpans", () => {
-  it("shifts each chunk's spans by its offset", () => {
-    const merged = mergeChunkSpans([
-      { offset: 0, spans: [span(0, 4)] },
-      { offset: 100, spans: [span(2, 6)] },
-    ]);
-
-    expect(merged).toEqual([span(0, 4), span(102, 106)]);
-  });
-
-  it("returns spans sorted by start", () => {
-    const merged = mergeChunkSpans([
-      { offset: 50, spans: [span(0, 3)] },
-      { offset: 0, spans: [span(10, 12)] },
-    ]);
-
-    expect(merged.map((s) => s.start)).toEqual([10, 50]);
-  });
-
-  it("deduplicates identical spans produced by the overlap region", () => {
-    const merged = mergeChunkSpans([
-      { offset: 0, spans: [span(90, 95)] },
-      { offset: 80, spans: [span(10, 15)] },
-    ]);
-
-    expect(merged).toEqual([span(90, 95)]);
-  });
-
-  it("returns an empty array when no chunk found anything", () => {
-    expect(mergeChunkSpans([{ offset: 0, spans: [] }])).toEqual([]);
-  });
 });
 
 describe("mergeOverlappingRanges", () => {
