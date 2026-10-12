@@ -1,12 +1,20 @@
 import { readFileSync } from "node:fs";
 
+import type { FileStageKey } from "@repo/redact-core";
 import { UnsupportedFileError } from "@repo/redact-core";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { redactorFor } from "./formats";
 import { resolveRedactor } from "./redactors";
 
 import { BROWSER_ACCEPT, NODE_FORMATS } from "./index";
+
+/* What each redactor does once it has the file in hand: text goes straight to the detector, a PDF
+   is taken apart page by page, an image goes to the recogniser. */
+const NEXT_STAGE = {
+  image: "stage.recognising",
+  pdf: "stage.extracting",
+  text: "stage.detecting",
+} as const satisfies Record<string, FileStageKey>;
 
 const SAMPLES = [
   { handler: "text", name: "sample.txt", type: "text/plain" },
@@ -27,25 +35,74 @@ const named = (name: string, type = "") => new File([], name, { type });
 const fixture = (name: string, type: string) =>
   new File([readFileSync(new URL(`../../../fixtures/${name}`, import.meta.url))], name, { type });
 
+const STOPPED = new Error("stopped at the second stage");
+
+/* The run stops at the second stage, before any model or recogniser is needed. */
+const stagesOf = async (file: File) => {
+  const stages: Array<FileStageKey> = [];
+  const run = resolveRedactor(file).analyse(
+    file,
+    () => Promise.resolve([]),
+    (_fraction, stage) => {
+      stages.push(stage);
+
+      if (stages.length === 2) {
+        throw STOPPED;
+      }
+    },
+  );
+
+  await expect(run).rejects.toBe(STOPPED);
+
+  return stages;
+};
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "createImageBitmap",
+    vi.fn(() => Promise.resolve({ close: vi.fn(), height: 1, width: 1 })),
+  );
+  vi.stubGlobal(
+    "OffscreenCanvas",
+    class {
+      getContext() {
+        return { drawImage: vi.fn() };
+      }
+    },
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("resolveRedactor", () => {
-  it.each(SAMPLES)("sends $name to the $handler redactor", ({ handler, name, type }) => {
-    expect(redactorFor(fixture(name, type))).toBe(handler);
+  it.each(SAMPLES)("sends $name to the $handler redactor", async ({ handler, name, type }) => {
+    expect(await stagesOf(fixture(name, type))).toEqual(["stage.reading", NEXT_STAGE[handler]]);
   });
 
-  it.each(SAMPLES)("resolves $name from its name alone", ({ handler, name }) => {
-    expect(redactorFor(fixture(name, ""))).toBe(handler);
+  it.each(SAMPLES)("resolves $name from its name alone", ({ name, type }) => {
+    expect(resolveRedactor(named(name))).toBe(resolveRedactor(named(name, type)));
   });
 
   it("goes by the type when the name has no extension", () => {
-    expect(redactorFor(named("notes", "text/x-python"))).toBe("text");
-    expect(redactorFor(named("export", "application/json"))).toBe("text");
-    expect(redactorFor(named("download", "application/pdf"))).toBe("pdf");
-    expect(redactorFor(named("photo", "image/heic"))).toBe("image");
+    expect(resolveRedactor(named("notes", "text/x-python"))).toBe(
+      resolveRedactor(named("sample.txt")),
+    );
+    expect(resolveRedactor(named("export", "application/json"))).toBe(
+      resolveRedactor(named("sample.txt")),
+    );
+    expect(resolveRedactor(named("download", "application/pdf"))).toBe(
+      resolveRedactor(named("sample.pdf")),
+    );
+    expect(resolveRedactor(named("photo", "image/heic"))).toBe(
+      resolveRedactor(named("sample.png")),
+    );
   });
 
   it("ignores the case of an extension", () => {
-    expect(redactorFor(named("SCAN.PDF"))).toBe("pdf");
-    expect(redactorFor(named("REPORT.TXT"))).toBe("text");
+    expect(resolveRedactor(named("SCAN.PDF"))).toBe(resolveRedactor(named("scan.pdf")));
+    expect(resolveRedactor(named("REPORT.TXT"))).toBe(resolveRedactor(named("report.txt")));
   });
 
   it("refuses a format nothing handles", () => {
