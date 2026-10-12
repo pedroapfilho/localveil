@@ -1,7 +1,7 @@
 import { assert, describe, expect, it, vi } from "vitest";
 
-import type { AnalysedUnit } from "./analysis";
-import { analyseUnits, isAnalysedUnit, keptSpans, redactionCount } from "./analysis";
+import type { AnalysedReading } from "./analysis";
+import { analyseUnits, isAnalysedReading, keptSpans, redactionCount } from "./analysis";
 import type { Decisions, Detect, Detection, PiiLabel, Span } from "./types";
 
 type Tag = { from?: number; label?: PiiLabel; score?: number };
@@ -55,11 +55,18 @@ const answering = (...replies: Array<Array<Span>>): Detect => {
 const inFile = (text: string, detect: Detect) =>
   analyseUnits({ detect, kind: "file", units: [{ text }] });
 
-const inPages = (texts: Array<string>, detect: Detect) =>
-  analyseUnits({ detect, kind: "pages", units: texts.map((text) => ({ text })) });
+const scanOf = (passes: Array<string>) => ({ readings: passes.map((text) => ({ text })) });
 
-const inReadings = (texts: Array<string>, detect: Detect) =>
-  analyseUnits({ detect, kind: "readings", units: texts.map((text) => ({ text })) });
+/* A string is a typed page; a list of strings is a scanned page, read once per pass. */
+const inPages = (pages: Array<string | Array<string>>, detect: Detect) =>
+  analyseUnits({
+    detect,
+    kind: "pages",
+    units: pages.map((page) => (typeof page === "string" ? { text: page } : scanOf(page))),
+  });
+
+const inReadings = (passes: Array<string>, detect: Detect) =>
+  analyseUnits({ detect, kind: "file", units: [scanOf(passes)] });
 
 const previews = ({ detections }: { detections: Array<Detection> }) =>
   detections.map((detection) => detection.preview);
@@ -70,8 +77,13 @@ const everything = ({ detections }: { detections: Array<Detection> }): Decisions
   covered: detections.map((detection) => detection.id),
 });
 
-const coveredText = (unit: AnalysedUnit, decisions: Decisions) =>
-  new Set(keptSpans(unit, decisions).map(({ end, start }) => unit.text.slice(start, end)));
+const coveredText = (reading: AnalysedReading, decisions: Decisions) =>
+  new Set(keptSpans(reading, decisions).map(({ end, start }) => reading.text.slice(start, end)));
+
+const coveredPerReading = (
+  units: ReadonlyArray<ReadonlyArray<AnalysedReading>>,
+  decisions: Decisions,
+) => units.flat().map((reading) => coveredText(reading, decisions));
 
 const accountNumber: Detect = (text) => {
   const start = text.indexOf("108");
@@ -195,9 +207,21 @@ describe("analyseUnits repeats", () => {
     );
 
     expect(analysed.detections).toHaveLength(1);
-    expect(analysed.units.map((unit) => coveredText(unit, everything(analysed)))).toEqual([
+    expect(coveredPerReading(analysed.units, everything(analysed))).toEqual([
       new Set(["108.467.036-45"]),
       new Set(["108.467.036-45"]),
+    ]);
+  });
+
+  it("covers a name on a typed page that only a passed-over pass of a scanned page tagged", async () => {
+    const { detections } = await inPages(
+      ["Invoice for Ana Lima", ["Signed by", "Signed by Ana Lima"]],
+      onlyIn("Signed by Ana", "Ana Lima"),
+    );
+
+    expect(detections.map(({ page, preview }) => [page, preview])).toEqual([
+      [0, "Ana Lima"],
+      [1, "Ana Lima"],
     ]);
   });
 
@@ -225,6 +249,15 @@ describe("analyseUnits defined terms", () => {
     );
 
     expect(previews(analysed)).toEqual(["Ana Lima", "Ana Lima"]);
+  });
+
+  it("drops a role a passed-over pass of a scanned page defined from every page", async () => {
+    const analysed = await inPages(
+      ["Client will pay Ana Lima", ["Zora Labs engages", 'Zora Labs, Inc. ("Client") engages']],
+      taggingEvery("Client", "Ana Lima"),
+    );
+
+    expect(previews(analysed)).toEqual(["Ana Lima"]);
   });
 
   it("reads the curly quotes and articles a word processor writes", async () => {
@@ -388,6 +421,72 @@ describe("analyseUnits identity", () => {
   });
 });
 
+describe("analyseUnits scanned pages", () => {
+  const passes = ["Signed by Ana Lima", "Signed by Ana Lima, CPF 108.467.036-45"];
+
+  it("reports a value the passes share once, and a value only a later pass read", async () => {
+    const analysed = await inPages([passes], tagging("Ana Lima", "108.467.036-45"));
+
+    expect(analysed.detections.map(({ page, preview }) => [page, preview])).toEqual([
+      [0, "Ana Lima"],
+      [0, "108.467.036-45"],
+    ]);
+    expect(coveredPerReading(analysed.units, everything(analysed))).toEqual([
+      new Set(["Ana Lima"]),
+      new Set(["Ana Lima", "108.467.036-45"]),
+    ]);
+  });
+
+  it("uncovers a dismissed value on every pass", async () => {
+    const analysed = await inPages([passes], tagging("Ana Lima", "108.467.036-45"));
+    const decisions = everything({
+      detections: analysed.detections.filter(({ preview }) => preview !== "Ana Lima"),
+    });
+
+    expect(coveredPerReading(analysed.units, decisions)).toEqual([
+      new Set(),
+      new Set(["108.467.036-45"]),
+    ]);
+  });
+
+  it("marks each place a value sits once, though a repeat finds it there again", async () => {
+    const analysed = await inPages([passes], tagging("Ana Lima"));
+
+    expect(
+      analysed.units.flat().map((reading) => keptSpans(reading, everything(analysed)).length),
+    ).toEqual([1, 1]);
+  });
+
+  it("keeps a value on two scanned pages as one detection per page", async () => {
+    const { detections } = await inPages(
+      [
+        ["Ana Lima", "Ana Lima"],
+        ["Ana Lima", "Ana Lima"],
+      ],
+      tagging("Ana Lima"),
+    );
+
+    expect(detections.map(({ page, preview }) => [page, preview])).toEqual([
+      [0, "Ana Lima"],
+      [1, "Ana Lima"],
+    ]);
+    expect(new Set(detections.map(({ id }) => id)).size).toBe(2);
+  });
+
+  it("leaves a typed page beside them addressing each mention by where it sits", async () => {
+    const { detections } = await inPages(
+      ["Ana Lima met Ana Lima", ["Ana Lima signed", "Ana Lima signed"]],
+      tagging("Ana Lima"),
+    );
+
+    expect(detections.map(({ page, start }) => [page, start])).toEqual([
+      [0, 0],
+      [0, 13],
+      [1, 0],
+    ]);
+  });
+});
+
 describe("keptSpans", () => {
   it("keeps the spans of the detections the decisions cover, unit by unit", async () => {
     const { detections, units } = await inPages(
@@ -396,7 +495,7 @@ describe("keptSpans", () => {
     );
     const decisions = everything({ detections: detections.filter((entry) => entry.page === 1) });
 
-    expect(units.map((unit) => keptSpans(unit, decisions))).toEqual([
+    expect(units.flat().map((reading) => keptSpans(reading, decisions))).toEqual([
       [],
       [expect.objectContaining({ end: 19, start: 10 })],
     ]);
@@ -408,11 +507,11 @@ describe("keptSpans", () => {
       text,
       answering([spanOver(text, "Ana Lima Souza"), spanOver(text, "Lima Souza")]),
     );
-    const [unit] = analysed.units;
+    const [reading] = analysed.units.flat();
 
-    assert.isDefined(unit);
+    assert.isDefined(reading);
 
-    expect(keptSpans(unit, everything(analysed)).map(({ end, start }) => [start, end])).toEqual([
+    expect(keptSpans(reading, everything(analysed)).map(({ end, start }) => [start, end])).toEqual([
       [10, 24],
     ]);
   });
@@ -423,23 +522,20 @@ describe("keptSpans", () => {
       accountNumber,
     );
 
-    expect(analysed.units.map((unit) => coveredText(unit, everything(analysed)))).toEqual([
+    expect(coveredPerReading(analysed.units, everything(analysed))).toEqual([
       new Set(["108.467.036-45"]),
       new Set(["10846703645"]),
     ]);
-    expect(analysed.units.map((unit) => coveredText(unit, { covered: [] }))).toEqual([
-      new Set(),
-      new Set(),
-    ]);
+    expect(coveredPerReading(analysed.units, { covered: [] })).toEqual([new Set(), new Set()]);
   });
 
   it("ignores an id that names no detection", async () => {
     const { units } = await inFile("Hi Ana!", tagging("Ana"));
-    const [unit] = units;
+    const [reading] = units.flat();
 
-    assert.isDefined(unit);
+    assert.isDefined(reading);
 
-    expect(keptSpans(unit, { covered: ["nothing"] })).toEqual([]);
+    expect(keptSpans(reading, { covered: ["nothing"] })).toEqual([]);
   });
 });
 
@@ -448,7 +544,7 @@ describe("redactionCount", () => {
     const analysed = await inFile("Hi Ana Silva!", tagging("Ana", "na Silva"));
 
     expect(analysed.detections).toHaveLength(2);
-    expect(redactionCount("file", analysed.units, everything(analysed))).toBe(1);
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(1);
   });
 
   it("counts what it covered on every page", async () => {
@@ -457,7 +553,7 @@ describe("redactionCount", () => {
       tagging("Ana Lima"),
     );
 
-    expect(redactionCount("pages", analysed.units, everything(analysed))).toBe(2);
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(2);
   });
 
   it("counts a value every reading shows once", async () => {
@@ -466,36 +562,45 @@ describe("redactionCount", () => {
       accountNumber,
     );
 
-    expect(redactionCount("readings", analysed.units, everything(analysed))).toBe(1);
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(1);
   });
 
   it("counts a value as often as the reading that shows it most", async () => {
     const analysed = await inReadings(["Ana met Ana", "Ana left"], tagging("Ana"));
 
-    expect(redactionCount("readings", analysed.units, everything(analysed))).toBe(2);
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(2);
   });
 
   it("counts the distinct values of different readings apart", async () => {
     const analysed = await inReadings(["Ana", "Jose Silva"], tagging("Ana", "Jose Silva"));
 
-    expect(redactionCount("readings", analysed.units, everything(analysed))).toBe(2);
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(2);
+  });
+
+  it("counts each page apart, a scanned one as often as its pass that shows a value most", async () => {
+    const analysed = await inPages(
+      ["Ana Lima and Ana Lima", ["Ana Lima", "Ana Lima, Ana Lima"]],
+      tagging("Ana Lima"),
+    );
+
+    expect(redactionCount(analysed.units, everything(analysed))).toBe(4);
   });
 
   it("counts nothing once every detection is dismissed", async () => {
     const analysed = await inPages(["Ana Lima", "Ana Lima"], tagging("Ana Lima"));
 
-    expect(redactionCount("pages", analysed.units, { covered: [] })).toBe(0);
+    expect(redactionCount(analysed.units, { covered: [] })).toBe(0);
   });
 });
 
-describe("isAnalysedUnit", () => {
-  it("recognises the unit an analysis hands out and nothing less", async () => {
+describe("isAnalysedReading", () => {
+  it("recognises the reading an analysis hands out and nothing less", async () => {
     const { units } = await inFile("Hi Ana!", tagging("Ana"));
 
-    expect(isAnalysedUnit(structuredClone(units[0]))).toBe(true);
+    expect(isAnalysedReading(structuredClone(units[0]?.[0]))).toBe(true);
 
     for (const partial of [undefined, "Hi Ana!", { text: "Hi Ana!" }, { marks: [] }]) {
-      expect(isAnalysedUnit(partial)).toBe(false);
+      expect(isAnalysedReading(partial)).toBe(false);
     }
   });
 });

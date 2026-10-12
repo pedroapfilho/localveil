@@ -1,7 +1,7 @@
-import type { AnalysedUnit, Detect, Redactor } from "@repo/redact-core";
+import type { AnalysedReading, Detect, Redactor } from "@repo/redact-core";
 import {
   analyseUnits,
-  isAnalysedUnit,
+  isAnalysedReading,
   keptSpans,
   mergeOverlappingRanges,
   redactionCount,
@@ -43,8 +43,8 @@ const withStructure =
   async (text) => [...(await detect(text)), ...structuralSpans(name, text)];
 
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
-const analysedText = (handle: unknown): AnalysedUnit => {
-  if (!isAnalysedUnit(handle)) {
+const analysedText = (handle: unknown): AnalysedReading => {
+  if (!isAnalysedReading(handle)) {
     throw new TypeError("The text analysis carried no source text to mask");
   }
 
@@ -61,7 +61,7 @@ const textRedactor: Redactor = {
 
     const {
       detections,
-      units: [unit],
+      units: [[handle] = []],
     } = await analyseUnits({
       detect: withStructure(file.name, detect),
       kind: "file",
@@ -70,13 +70,13 @@ const textRedactor: Redactor = {
 
     onProgress(1, "stage.finished");
 
-    return { detections, handle: unit, warnings: text.length === 0 ? ["warning.noText"] : [] };
+    return { detections, handle, warnings: text.length === 0 ? ["warning.noText"] : [] };
   },
   apply: async ({ analysis, decisions, detect, file, onProgress }) => {
     onProgress(0.8, "stage.redacting");
 
-    const unit = analysedText(analysis.handle);
-    const masked = maskRanges(unit.text, mergeOverlappingRanges(keptSpans(unit, decisions)));
+    const reading = analysedText(analysis.handle);
+    const masked = maskRanges(reading.text, mergeOverlappingRanges(keptSpans(reading, decisions)));
     const warnings = await verifyOutput(
       verifiable(file.name, masked),
       ignoringMasks(detect),
@@ -87,7 +87,7 @@ const textRedactor: Redactor = {
 
     return {
       blob: new Blob([masked], { type: file.type }),
-      redactionCount: redactionCount("file", [unit], decisions),
+      redactionCount: redactionCount([[reading]], decisions),
       warnings,
     };
   },
