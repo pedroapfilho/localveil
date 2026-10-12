@@ -1,11 +1,5 @@
-import type { ModelId } from "@repo/pii-detect/models";
-import type {
-  Analysis,
-  Decisions,
-  FileStageKey,
-  ModelStageKey,
-  RedactionResult,
-} from "@repo/redact-core";
+import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
+import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
 import { describeError, isProgressEvent, isUnsupportedFile } from "@repo/redact-core";
 import workerpool from "workerpool";
 
@@ -27,8 +21,8 @@ type RedactionPoolOptions = {
   onAnalysed: (id: string, analysis: Analysis) => void;
   onDone: (id: string, result: RedactionResult) => void;
   onError: (id: string, message: string, unsupported: boolean) => void;
+  onModelLoad: (event: ModelLoadEvent) => void;
   onModelLost: (reason: string) => void;
-  onModelProgress: (fraction: number, stage: ModelStageKey) => void;
   onProgress: (id: string, fraction: number, stage: FileStageKey) => void;
 };
 
@@ -104,8 +98,7 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
 };
 
 const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
-  const { maxWorkers, onAnalysed, onDone, onError, onModelLost, onModelProgress, onProgress } =
-    options;
+  const { maxWorkers, onAnalysed, onDone, onError, onModelLoad, onModelLost, onProgress } = options;
 
   let { model } = options;
 
@@ -146,6 +139,16 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
   const hostFor = (chosen: ModelId) =>
     createModelHost({
       model: chosen,
+      // A file waits in detect while the model loads, so every step of the load keeps it alive.
+      onLoad: (event) => {
+        for (const job of jobs.values()) {
+          if (job.watchdog !== undefined) {
+            arm(job);
+          }
+        }
+
+        onModelLoad(event);
+      },
       onLost: (reason, fatal) => {
         const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
 
@@ -167,15 +170,6 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
           job.task.cancel();
           job.restart();
         }
-      },
-      onProgress: (fraction, stage) => {
-        for (const job of jobs.values()) {
-          if (job.watchdog !== undefined) {
-            arm(job);
-          }
-        }
-
-        onModelProgress(fraction, stage);
       },
     });
 

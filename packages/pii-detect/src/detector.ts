@@ -1,5 +1,5 @@
 import { PreTrainedTokenizer } from "@huggingface/transformers";
-import type { Detect, ModelProgress, Span } from "@repo/redact-core";
+import type { Detect, Span } from "@repo/redact-core";
 import { absorbNested, describeError, serialiseDetect } from "@repo/redact-core";
 
 import { openModel } from "#model-store";
@@ -11,6 +11,7 @@ import { DEFAULT_MODEL_ID, modelById } from "./catalog";
 import { chunkWords } from "./chunk-words";
 import type { GlinerInput } from "./gliner-codec";
 import { createGlinerCodec } from "./gliner-codec";
+import type { ModelLoadEvent } from "./model-lifecycle";
 import type { ModelDevice } from "./model-runtime";
 import type { ModelFiles } from "./model-status";
 import { patternSpans } from "./patterns";
@@ -38,13 +39,16 @@ const mergeChunkSpans = (spans: Array<Span>) =>
     (span, score) => ({ ...span, score }),
   ).toSorted((left, right) => left.start - right.start || left.end - right.end);
 
+type ReportLoad = (event: ModelLoadEvent) => void;
+
 type DetectorOptions = {
   batchSize?: number;
   maxWords?: number;
   minScore?: number;
   model?: ModelId;
-  onProgress?: ModelProgress;
+  onLoad?: ReportLoad;
   overlapWords?: number;
+  signal?: AbortSignal;
 };
 
 /* transformers.js checks whether tokenizer_config.json exists at `main` before it loads a tokenizer,
@@ -59,7 +63,7 @@ const loadRunner = async (
   bytes: Uint8Array,
   device: ModelDevice,
   repo: string,
-  report: ModelProgress,
+  report: ReportLoad,
 ) => {
   try {
     return await createModelRunner(bytes, device);
@@ -70,7 +74,7 @@ const loadRunner = async (
 
     // oxlint-disable-next-line eslint/no-console -- the wasm fallback is recoverable, so it is surfaced in the console instead of thrown
     console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
-    report(0, "model.slowDevice");
+    report({ kind: "slow-device" });
 
     try {
       return await createModelRunner(bytes, "wasm");
@@ -83,36 +87,37 @@ const loadRunner = async (
   }
 };
 
-const createDetector = async (options: DetectorOptions = {}): Promise<Detect> => {
+const buildDetector = async (options: DetectorOptions, report: ReportLoad): Promise<Detect> => {
   const {
     batchSize,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
     model = DEFAULT_MODEL_ID,
-    onProgress,
     overlapWords = OVERLAP_WORDS,
+    signal,
   } = options;
 
-  const report: ModelProgress = (fraction, stage) => {
-    onProgress?.(fraction, stage);
-  };
-
   const spec = modelById(model);
-  const files = await openModel(spec, (fraction) => {
-    report(fraction, "model.downloading");
-  });
+  const files = await openModel(
+    spec,
+    (downloaded) => {
+      report({ downloaded, kind: "loading" });
+    },
+    signal,
+  );
   const codec = createGlinerCodec(spec, loadTokenizer(files));
 
   const device = await pickDevice();
   const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
   if (device !== "webgpu") {
-    report(0, "model.slowDevice");
+    report({ kind: "slow-device" });
   }
 
-  const run = await loadRunner(files.weights, device, spec.repo, report);
+  // Building the session takes no signal, so a stop that lands before it is the last one honoured.
+  signal?.throwIfAborted();
 
-  report(1, "model.ready");
+  const run = await loadRunner(files.weights, device, spec.repo, report);
 
   const jobsFor = (text: string): Array<GlinerInput> => {
     const jobs: Array<GlinerInput> = [];
@@ -151,6 +156,27 @@ const createDetector = async (options: DetectorOptions = {}): Promise<Detect> =>
 
     return tightenToVerified(mergeChunkSpans(found), patternSpans(text), text);
   });
+};
+
+const ignore = () => undefined;
+
+const createDetector = async ({
+  onLoad = ignore,
+  ...options
+}: DetectorOptions = {}): Promise<Detect> => {
+  onLoad({ kind: "loading" });
+
+  try {
+    const detect = await buildDetector(options, onLoad);
+
+    onLoad({ kind: "ready" });
+
+    return detect;
+  } catch (error) {
+    onLoad({ kind: "failed", reason: describeError(error) });
+
+    throw error;
+  }
 };
 
 export { createDetector };

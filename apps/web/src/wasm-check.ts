@@ -71,9 +71,9 @@ const run = async () => {
     batchSize,
     minScore: 0.05,
     model: MODEL,
-    onProgress: (fraction, stage) => {
-      if (stage !== "model.downloading") {
-        say(`stage ${stage}`);
+    onLoad: (event) => {
+      if (event.kind !== "loading") {
+        say(`model ${event.kind}`);
       }
     },
   });

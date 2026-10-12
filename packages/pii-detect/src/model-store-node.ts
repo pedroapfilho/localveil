@@ -123,8 +123,6 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
 
     // Inspecting the file avoids reading nearly a gigabyte just to confirm it is already kept.
     if ((await sizeOnDisk(url)) !== undefined) {
-      onProgress(1);
-
       return undefined;
     }
 
@@ -143,14 +141,14 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
     return bytes;
   };
 
-  const readFromDisk = async (url: string, onProgress: FileProgress) => {
-    const fetched = await ensureOnDisk(url, "best-effort", onProgress);
+  const readFromDisk = async (url: string, onProgress: FileProgress, signal?: AbortSignal) => {
+    const fetched = await ensureOnDisk(url, "best-effort", onProgress, signal);
 
     if (fetched !== undefined) {
       return fetched;
     }
 
-    const kept = await readFile(pathFor(url));
+    const kept = await readFile(pathFor(url), { signal });
 
     return new Uint8Array(kept.buffer, kept.byteOffset, kept.byteLength);
   };
@@ -179,17 +177,25 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
       : { loaded: weights, state: "partial", total: model.bytes };
   };
 
-  const downloadModel = (
+  const downloadModel = async (
     model: ModelSpec,
     onProgress: FileProgress,
     signal?: AbortSignal,
-  ): Promise<void> =>
-    downloadInOrder(model, onProgress, (url, progress) =>
+  ): Promise<void> => {
+    await downloadInOrder(model, onProgress, (url, progress) =>
       ensureOnDisk(url, "required", progress, signal),
     );
 
-  const openModel: OpenModel = (model, onProgress) =>
-    openInOrder(model, onProgress, readFromDisk, sweepStale);
+    onProgress(1);
+  };
+
+  const openModel: OpenModel = (model, onProgress, signal) =>
+    openInOrder(
+      model,
+      onProgress,
+      (url, progress) => readFromDisk(url, progress, signal),
+      sweepStale,
+    );
 
   const removeModel = async (model: ModelSpec): Promise<void> => {
     await Promise.all(fileUrls(model).map((url) => rm(pathFor(url), { force: true })));

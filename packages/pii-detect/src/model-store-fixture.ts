@@ -117,4 +117,20 @@ const serveFiles = () => {
   return asked;
 };
 
-export { memoryCaches, memoryChunks, serveFiles, TOKENIZER_BODY, urlOf, WEIGHTS_BODY };
+// Stops the load as it asks for the URL, and fails that request the way fetch does once its signal aborts.
+const stopAt = (url: string, controller: AbortController) => {
+  const serve = fetch;
+
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (urlOf(input) !== url) {
+      return serve(input, init);
+    }
+
+    controller.abort();
+    init?.signal?.throwIfAborted();
+
+    throw new Error(`${url} was fetched without a signal`);
+  });
+};
+
+export { memoryCaches, memoryChunks, serveFiles, stopAt, TOKENIZER_BODY, urlOf, WEIGHTS_BODY };

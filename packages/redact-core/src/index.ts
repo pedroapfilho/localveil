@@ -21,15 +21,12 @@ export type {
   DocumentLanguage,
   FileProgress,
   FileStageKey,
-  ModelProgress,
-  ModelStageKey,
   PiiLabel,
   PositionedWord,
   Rect,
   RedactionResult,
   Redactor,
   Span,
-  StageKey,
   WarningKey,
 } from "./types";
 export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error";

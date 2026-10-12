@@ -7,6 +7,7 @@ import {
   memoryCaches,
   memoryChunks,
   serveFiles,
+  stopAt,
   TOKENIZER_BODY,
   urlOf,
   WEIGHTS_BODY,
@@ -255,6 +256,30 @@ describe("openModel in the browser", () => {
       SyntaxError,
     );
     expect(asked).toEqual([]);
+  });
+
+  it("reports no download for a model it already keeps", async () => {
+    keepModel(memoryCaches(), MODEL);
+    const reported: Array<number> = [];
+
+    await createBrowserModelStore(memoryChunks()).openModel(MODEL, (fraction) => {
+      reported.push(fraction);
+    });
+
+    expect(reported).toEqual([]);
+  });
+
+  it("stops downloading the weights when the load is stopped", async () => {
+    const caches = memoryCaches();
+    const controller = new AbortController();
+
+    serveFiles();
+    stopAt(WEIGHTS, controller);
+
+    await expect(
+      createBrowserModelStore(memoryChunks()).openModel(MODEL, ignore, controller.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(caches.entries.has(WEIGHTS)).toBe(false);
   });
 
   it("reports only the weights' progress", async () => {

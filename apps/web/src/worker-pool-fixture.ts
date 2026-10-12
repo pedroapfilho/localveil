@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-unknown-parameters -- this fixture mirrors workerpool's untyped task wire, so its params are unknown by contract */
+import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import type { Analysis, ProgressEvent, RedactionResult } from "@repo/redact-core";
 import { vi } from "vitest";
 
@@ -73,7 +74,7 @@ type Reported = {
   analysed: Array<string>;
   done: Array<string>;
   errors: Array<{ id: string; message: string; unsupported: boolean }>;
-  model: Array<string>;
+  model: Array<ModelLoadEvent>;
   modelLost: Array<string>;
   progress: Array<{ fraction: number; id: string }>;
 };
@@ -147,11 +148,11 @@ const poolOptions = (maxWorkers: number) => ({
   onError: (id: string, message: string, unsupported: boolean) => {
     reported.errors.push({ id, message, unsupported });
   },
+  onModelLoad: (event: ModelLoadEvent) => {
+    reported.model.push(event);
+  },
   onModelLost: (reason: string) => {
     reported.modelLost.push(reason);
-  },
-  onModelProgress: (_fraction: number, stage: string) => {
-    reported.model.push(stage);
   },
   onProgress: (id: string, fraction: number) => {
     reported.progress.push({ fraction, id });

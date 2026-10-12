@@ -1,5 +1,4 @@
-import type { ModelId } from "@repo/pii-detect/models";
-import type { ModelStageKey } from "@repo/redact-core";
+import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 
 import type { ConnectRequest, DisconnectRequest, ModelResponse } from "./worker-protocol";
 
@@ -7,8 +6,8 @@ const MAX_RESPAWNS = 3;
 
 type ModelHostOptions = {
   model: ModelId;
+  onLoad: (event: ModelLoadEvent) => void;
   onLost: (reason: string, fatal: boolean) => void;
-  onProgress: (fraction: number, stage: ModelStageKey) => void;
 };
 
 type ModelHost = {
@@ -27,11 +26,14 @@ const post = (worker: Worker, message: ConnectRequest | DisconnectRequest) => {
   worker.postMessage(message, transfer);
 };
 
-const createModelHost = ({ model, onLost, onProgress }: ModelHostOptions): ModelHost => {
+const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost => {
   let state: HostState = { kind: "gone" };
 
   const spawn = (respawns: number): HostState => {
-    const worker = new Worker(new URL("model-worker.ts", import.meta.url), { type: "module" });
+    const worker = new Worker(new URL("model-worker.ts", import.meta.url), {
+      name: model,
+      type: "module",
+    });
     const listeners = new AbortController();
     const { signal } = listeners;
 
@@ -53,7 +55,7 @@ const createModelHost = ({ model, onLost, onProgress }: ModelHostOptions): Model
     worker.addEventListener(
       "message",
       (event: MessageEvent<ModelResponse>) => {
-        onProgress(event.data.fraction, event.data.stage);
+        onLoad(event.data.event);
       },
       { signal },
     );
@@ -85,7 +87,7 @@ const createModelHost = ({ model, onLost, onProgress }: ModelHostOptions): Model
         return false;
       }
 
-      post(state.worker, { channel, model, port, type: "connect" });
+      post(state.worker, { channel, port, type: "connect" });
 
       return true;
     },

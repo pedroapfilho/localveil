@@ -20,6 +20,10 @@ type ModelStore = {
   removeModel: (model: ModelSpec) => Promise<void>;
 };
 
-type OpenModel = (model: ModelSpec, onProgress: (fraction: number) => void) => Promise<ModelFiles>;
+type OpenModel = (
+  model: ModelSpec,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+) => Promise<ModelFiles>;
 
 export type { ModelFiles, ModelStatus, ModelStore, OpenModel };
