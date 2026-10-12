@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-module-mocking -- workerpool and the model host wrap real Worker threads; the module seam is the only practical hermetic substitute */
+import { describeError } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createRedactionPool } from "./worker-pool";
@@ -25,7 +26,10 @@ vi.mock("workerpool", async () => {
   return fixture.workerpoolDouble;
 });
 
-const build = (maxWorkers = 2) => createRedactionPool(poolOptions(maxWorkers));
+const build = () => createRedactionPool(poolOptions());
+
+const failures = () =>
+  reported.failed.map(({ cause, id }) => ({ id, message: describeError(cause) }));
 
 const waitOutTheSilence = () => {
   vi.advanceTimersByTime(121_000);
@@ -36,6 +40,12 @@ beforeEach(resetFixture);
 afterEach(resetFixture);
 
 describe("createRedactionPool", () => {
+  it("sizes itself to what the device reports", () => {
+    build();
+
+    expect(pooled.maxWorkers).toBeGreaterThanOrEqual(1);
+  });
+
   it("starts every file at once rather than one after another", () => {
     const pool = build();
 
@@ -101,7 +111,7 @@ describe("createRedactionPool", () => {
     taskAt(0).finish(redacted);
 
     expect(reported.analysed).toEqual([]);
-    expect(reported.errors[0]?.message).toMatch(/not an analysis/v);
+    expect(failures()[0]?.message).toMatch(/not an analysis/v);
   });
 
   it("finishes the file once its decisions are applied, on a channel of its own", () => {
@@ -131,12 +141,10 @@ describe("createRedactionPool", () => {
     pool.submit(job("b"));
     taskAt(0).crash(new Error("Workerpool Worker terminated Unexpectedly"));
 
-    expect(reported.errors).toEqual([
-      { id: "a", message: "Workerpool Worker terminated Unexpectedly", unsupported: false },
-    ]);
+    expect(failures()).toEqual([{ id: "a", message: "Workerpool Worker terminated Unexpectedly" }]);
   });
 
-  it("marks a file the registry refused as unsupported", () => {
+  it("hands over what a refused file threw, for the runner to classify", () => {
     const pool = build();
     const refused = new Error("archive.zip is not a supported file type");
 
@@ -144,7 +152,7 @@ describe("createRedactionPool", () => {
     pool.submit(job("a"));
     taskAt(0).crash(refused);
 
-    expect(reported.errors[0]?.unsupported).toBe(true);
+    expect(reported.failed).toEqual([{ cause: refused, id: "a" }]);
   });
 
   it("reports a full queue rather than throwing at the caller, and hangs up", () => {
@@ -156,7 +164,7 @@ describe("createRedactionPool", () => {
     expect(() => {
       pool.submit(job("b"));
     }).not.toThrow();
-    expect(reported.errors[0]).toMatchObject({ id: "b", unsupported: false });
+    expect(failures().map((entry) => entry.id)).toEqual(["b"]);
     expect(pooled.disconnected.length).toBe(1);
   });
 });
@@ -169,7 +177,7 @@ describe("cancelling a file", () => {
     pool.cancel("a");
 
     expect(taskAt(0).cancelled).toBe(true);
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
     expect(pooled.disconnected.length).toBe(1);
   });
 
@@ -198,7 +206,7 @@ describe("cancelling a file", () => {
     pool.cancel("a");
     taskAt(0).crash(new Error("promise cancelled"));
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
   });
 });
 
@@ -212,12 +220,12 @@ describe("when a worker goes quiet", () => {
   });
 
   it("leaves a file still waiting for a worker alone", () => {
-    const pool = build(1);
+    const pool = build();
 
     pool.submit(job("a"));
     waitOutTheSilence();
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
   });
 
   it("gives up on a worker that stops mid-file", () => {
@@ -227,7 +235,7 @@ describe("when a worker goes quiet", () => {
     taskAt(0).progress();
     waitOutTheSilence();
 
-    expect(reported.errors[0]).toMatchObject({ id: "a" });
+    expect(failures()[0]).toMatchObject({ id: "a" });
     expect(taskAt(0).cancelled).toBe(true);
   });
 
@@ -241,7 +249,7 @@ describe("when a worker goes quiet", () => {
       vi.advanceTimersByTime(90_000);
     }
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
   });
 
   it("counts each step of the model load as a sign of life", () => {
@@ -259,7 +267,7 @@ describe("when a worker goes quiet", () => {
       modelHost().onLoad(event);
     }
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
   });
 
   it("passes the model load on, failure included", () => {
@@ -280,7 +288,7 @@ describe("when a worker goes quiet", () => {
     taskAt(0).progress();
     waitOutTheSilence();
 
-    expect(reported.errors.length).toBe(1);
+    expect(reported.failed.length).toBe(1);
   });
 
   it("stops watching a file that has finished", () => {
@@ -291,7 +299,7 @@ describe("when a worker goes quiet", () => {
     taskAt(0).finish({ detections: [], handle: undefined, warnings: [] });
     waitOutTheSilence();
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
   });
 });
 
@@ -303,7 +311,7 @@ describe("when the model is lost", () => {
     taskAt(0).progress();
     modelHost().onLost("The detection model stopped answering", false);
 
-    expect(reported.errors.map((entry) => entry.id)).toEqual(["a"]);
+    expect(failures().map((entry) => entry.id)).toEqual(["a"]);
   });
 
   it("hands a file that never started back with a new channel", () => {
@@ -312,7 +320,7 @@ describe("when the model is lost", () => {
     pool.submit(job("a"));
     modelHost().onLost("The detection model stopped answering", false);
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
     expect(pooled.tasks.length).toBe(2);
     expect(new Set(pooled.connected).size).toBe(2);
   });
@@ -324,7 +332,7 @@ describe("when the model is lost", () => {
     pool.submit(job("b"));
     modelHost().onLost("The detection model stopped answering", true);
 
-    expect(reported.errors.map((entry) => entry.id)).toEqual(["a", "b"]);
+    expect(failures().map((entry) => entry.id)).toEqual(["a", "b"]);
     expect(pooled.tasks.length).toBe(2);
   });
 
@@ -334,16 +342,23 @@ describe("when the model is lost", () => {
     pool.submit(job("a"));
     modelHost().onLost("The detection model stopped answering", true);
 
-    expect(reported.modelLost).toEqual(["The detection model stopped answering"]);
+    expect(reported.modelLost).toEqual([
+      { failedBefore: 1, fatal: true, reason: "The detection model stopped answering" },
+    ]);
   });
 
-  it("stays quiet about a loss it recovers from", () => {
+  it("reports a loss it recovers from only once every file is failed or restarted", () => {
     const pool = build();
 
     pool.submit(job("a"));
+    pool.submit(job("b"));
+    taskAt(0).progress();
     modelHost().onLost("The detection model stopped answering", false);
 
-    expect(reported.modelLost).toEqual([]);
+    expect(reported.modelLost).toEqual([
+      { failedBefore: 1, fatal: false, reason: "The detection model stopped answering" },
+    ]);
+    expect(pooled.tasks).toHaveLength(3);
   });
 });
 
@@ -357,7 +372,7 @@ describe("destroying the pool", () => {
     taskAt(0).crash(new Error("Worker terminated"));
     taskAt(1).crash(new Error("Pool terminated"));
 
-    expect(reported.errors).toEqual([]);
+    expect(reported.failed).toEqual([]);
     expect(pooled.terminated).toBe(1);
   });
 
@@ -367,7 +382,7 @@ describe("destroying the pool", () => {
     pooled.modelGone = true;
     pool.submit(job("z"));
 
-    expect(reported.errors.map((entry) => entry.id)).toEqual(["z"]);
+    expect(failures().map((entry) => entry.id)).toEqual(["z"]);
     expect(pooled.tasks).toHaveLength(0);
   });
 
@@ -382,7 +397,7 @@ describe("destroying the pool", () => {
       pool.submit(job("a"));
       waitOutTheSilence();
 
-      expect(reported.errors).toEqual([]);
+      expect(reported.failed).toEqual([]);
       expect(taskAt(0).cancelled).toBe(true);
     } finally {
       vi.useRealTimers();
@@ -397,30 +412,12 @@ describe("switching the model", () => {
     expect(pooled.models).toEqual(["gliner-multi-pii"]);
   });
 
-  it("replaces the model host and starts in-flight files over on the new model", () => {
+  it("replaces the model host with one for the new model", () => {
     const pool = build();
-
-    pool.submit(job("a"));
-    pool.submit(job("b"));
-
-    const before = [...pooled.connected];
 
     pool.setModel("gliner-pii-base");
 
     expect(pooled.destroyedHosts).toBe(1);
     expect(pooled.models).toEqual(["gliner-multi-pii", "gliner-pii-base"]);
-    expect([taskAt(0).cancelled, taskAt(1).cancelled]).toEqual([true, true]);
-    expect(pooled.disconnected).toEqual(before);
-    expect(pooled.tasks).toHaveLength(4);
-    expect(reported.errors).toEqual([]);
-  });
-
-  it("keeps the host it has when asked for the model it already runs", () => {
-    const pool = build();
-
-    pool.setModel("gliner-multi-pii");
-
-    expect(pooled.destroyedHosts).toBe(0);
-    expect(pooled.models).toEqual(["gliner-multi-pii"]);
   });
 });

@@ -1,4 +1,5 @@
 import { I18nProvider } from "@repo/i18n";
+import type { ModelId } from "@repo/pii-detect/models";
 import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,13 +8,16 @@ import { useModelLibrary } from "./model-library";
 import { useJobStore } from "./store";
 import { useModelPicker } from "./use-model-picker";
 
-const render = () => renderHook(useModelPicker, { wrapper: I18nProvider });
+const onSelect = vi.fn<(id: ModelId) => void>();
+
+const render = () => renderHook(() => useModelPicker(onSelect), { wrapper: I18nProvider });
 
 const download = (outcome: Promise<void>) => {
   vi.spyOn(useModelLibrary.getState(), "download").mockReturnValue(outcome);
 };
 
 beforeEach(() => {
+  onSelect.mockClear();
   localStorage.clear();
   useJobStore.getState().reset();
   useModelLibrary.setState({ entries: {}, selected: "gliner-multi-pii" });
@@ -56,16 +60,21 @@ describe("useModelPicker", () => {
     expect(toast.error).toHaveBeenCalledWith("Could not download GLiNER PII base.");
   });
 
-  it("does not switch models while a file is still reaching the model", () => {
+  it("reads as busy while a file is still reaching the model", () => {
     useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
 
+    const { result } = render();
+
+    expect(result.current.busy).toBe(true);
+  });
+
+  it("hands a chosen model to whoever switches it", () => {
     const { result } = render();
 
     act(() => {
       result.current.onSelect("gliner-pii-edge");
     });
 
-    expect(result.current.busy).toBe(true);
-    expect(useModelLibrary.getState().selected).toBe("gliner-multi-pii");
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith("gliner-pii-edge");
   });
 });

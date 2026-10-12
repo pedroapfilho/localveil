@@ -1,14 +1,16 @@
 import { assert, beforeEach, describe, expect, it } from "vitest";
 
-import type { Job, JobSource, JobState } from "./store";
+import type { JobState } from "./store";
 import {
   completedJobs,
   failedJobs,
   hasCompletedJobs,
+  holdsModel,
   progressOf,
   stageOf,
   useJobStore,
 } from "./store";
+import { jobOf } from "./test-utils";
 
 const textFile = (name: string) => new File(["hello"], name, { type: "text/plain" });
 
@@ -17,6 +19,17 @@ const doneResult = { blob: new Blob(["hello"]), redactionCount: 1, warnings: [] 
 const jobsOf = () => useJobStore.getState().jobs;
 
 const found = (id: string) => useJobStore.getState().jobs.find((entry) => entry.id === id);
+
+const withState = (state: JobState, id = "id") => jobOf(state, { id });
+
+const analysing: JobState = { phase: "analysing", progress: 0.2, stage: "stage.reading" };
+
+const reviewing: JobState = {
+  analysis: { detections: [], handle: undefined, warnings: [] },
+  covered: [],
+  phase: "reviewing",
+  progress: 0.5,
+};
 
 describe("useJobStore review state", () => {
   beforeEach(() => {
@@ -28,7 +41,7 @@ describe("useJobStore review state", () => {
 
     assert.isDefined(job);
 
-    expect(job.status).toBe("queued");
+    expect(job.phase).toBe("queued");
     expect(progressOf(job)).toBe(0);
   });
 
@@ -41,12 +54,12 @@ describe("useJobStore review state", () => {
 
     useJobStore
       .getState()
-      .setState(job.id, { analysis, covered: ["a"], progress: 0.5, status: "reviewing" });
+      .setState(job.id, { analysis, covered: ["a"], phase: "reviewing", progress: 0.5 });
 
     const updated = found(job.id);
 
-    expect(updated?.status).toBe("reviewing");
-    expect(updated?.status === "reviewing" ? updated.covered : undefined).toEqual(["a"]);
+    expect(updated?.phase).toBe("reviewing");
+    expect(updated?.phase === "reviewing" ? updated.covered : undefined).toEqual(["a"]);
   });
 
   it("changes the covered ids only while the job is under review", () => {
@@ -55,19 +68,19 @@ describe("useJobStore review state", () => {
     assert.isDefined(job);
 
     useJobStore.getState().setCovered(job.id, ["a"]);
-    expect(found(job.id)?.status).toBe("queued");
+    expect(found(job.id)?.phase).toBe("queued");
 
     useJobStore.getState().setState(job.id, {
       analysis: { detections: [], handle: undefined, warnings: [] },
       covered: [],
+      phase: "reviewing",
       progress: 0.5,
-      status: "reviewing",
     });
     useJobStore.getState().setCovered(job.id, ["a"]);
 
     const updated = found(job.id);
 
-    expect(updated?.status === "reviewing" ? updated.covered : undefined).toEqual(["a"]);
+    expect(updated?.phase === "reviewing" ? updated.covered : undefined).toEqual(["a"]);
   });
 
   it("forgets the analysis and the decisions when a job moves on", () => {
@@ -78,15 +91,21 @@ describe("useJobStore review state", () => {
     useJobStore.getState().setState(job.id, {
       analysis: { detections: [], handle: undefined, warnings: [] },
       covered: ["a"],
+      phase: "reviewing",
       progress: 0.5,
-      status: "reviewing",
     });
-    useJobStore.getState().setState(job.id, { status: "queued" });
+    useJobStore.getState().setState(job.id, { phase: "applying", progress: 0.5 });
 
-    const requeued = found(job.id);
+    const applying = found(job.id);
 
-    expect(requeued?.status).toBe("queued");
-    expect(Object.keys(requeued ?? {}).toSorted()).toEqual(["file", "id", "path", "status"]);
+    expect(applying?.phase).toBe("applying");
+    expect(Object.keys(applying ?? {}).toSorted()).toEqual([
+      "file",
+      "id",
+      "path",
+      "phase",
+      "progress",
+    ]);
   });
 });
 
@@ -99,7 +118,13 @@ describe("useJobStore", () => {
     useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
 
     expect(jobsOf().map((job) => job.file.name)).toEqual(["a.txt", "b.txt"]);
-    expect(jobsOf().every((job) => job.status === "queued" && progressOf(job) === 0)).toBe(true);
+    expect(jobsOf().every((job) => job.phase === "queued" && progressOf(job) === 0)).toBe(true);
+  });
+
+  it("names a loose file by its own name", () => {
+    useJobStore.getState().addFiles([textFile("a.txt")]);
+
+    expect(jobsOf()[0]?.path).toBe("a.txt");
   });
 
   it("retains a selected folder path for the list and output archive", () => {
@@ -129,29 +154,20 @@ describe("useJobStore", () => {
     assert.isDefined(first);
     assert.isDefined(second);
 
-    useJobStore.getState().setState(first.id, { progress: 0.5, status: "running" });
+    useJobStore
+      .getState()
+      .setState(first.id, { phase: "analysing", progress: 0.2, stage: "stage.reading" });
 
-    expect(found(first.id)?.status).toBe("running");
-    expect(found(second.id)?.status).toBe("queued");
+    expect(found(first.id)?.phase).toBe("analysing");
+    expect(found(second.id)?.phase).toBe("queued");
   });
 
   it("ignores a transition for an id it does not know", () => {
     useJobStore.getState().addFiles([textFile("a.txt")]);
 
-    useJobStore.getState().setState("missing", { result: doneResult, status: "done" });
+    useJobStore.getState().setState("missing", { phase: "done", result: doneResult });
 
-    expect(jobsOf().map((job) => job.status)).toEqual(["queued"]);
-  });
-
-  it("removes a single job", () => {
-    const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
-
-    assert.isDefined(first);
-    assert.isDefined(second);
-
-    useJobStore.getState().removeJob(first.id);
-
-    expect(jobsOf().map((job) => job.id)).toEqual([second.id]);
+    expect(jobsOf().map((job) => job.phase)).toEqual(["queued"]);
   });
 
   it("clears everything on reset", () => {
@@ -186,27 +202,23 @@ describe("useJobStore", () => {
 });
 
 describe("job selectors", () => {
-  const source: JobSource = { file: textFile("a.txt"), id: "id" };
-
-  const job = (state: JobState, id = "id"): Job => ({ ...source, id, ...state });
-
   it("reports nothing completed while a job is still queued", () => {
-    const jobs = [job({ result: doneResult, status: "done" }, "1"), job({ status: "queued" }, "2")];
-
-    expect(hasCompletedJobs(jobs)).toBe(false);
-  });
-
-  it("reports nothing completed while a job is still running", () => {
     const jobs = [
-      job({ result: doneResult, status: "done" }, "1"),
-      job({ progress: 0.3, status: "running" }, "2"),
+      withState({ phase: "done", result: doneResult }, "1"),
+      withState({ phase: "queued" }, "2"),
     ];
 
     expect(hasCompletedJobs(jobs)).toBe(false);
   });
 
+  it("reports nothing completed while a job is still being worked on", () => {
+    const jobs = [withState({ phase: "done", result: doneResult }, "1"), withState(analysing, "2")];
+
+    expect(hasCompletedJobs(jobs)).toBe(false);
+  });
+
   it("reports nothing completed when every job failed", () => {
-    expect(hasCompletedJobs([job({ error: "boom", status: "error" })])).toBe(false);
+    expect(hasCompletedJobs([withState({ error: "boom", phase: "error" })])).toBe(false);
   });
 
   it("reports nothing completed with no jobs at all", () => {
@@ -215,8 +227,8 @@ describe("job selectors", () => {
 
   it("reports completed once every job settled and one succeeded", () => {
     const jobs = [
-      job({ result: doneResult, status: "done" }, "1"),
-      job({ error: "boom", status: "error" }, "2"),
+      withState({ phase: "done", result: doneResult }, "1"),
+      withState({ error: "boom", phase: "error" }, "2"),
     ];
 
     expect(hasCompletedJobs(jobs)).toBe(true);
@@ -224,20 +236,35 @@ describe("job selectors", () => {
 
   it("leaves failed jobs out of the completed set", () => {
     const jobs = [
-      job({ result: doneResult, status: "done" }, "1"),
-      job({ error: "boom", status: "error" }, "2"),
+      withState({ phase: "done", result: doneResult }, "1"),
+      withState({ error: "boom", phase: "error" }, "2"),
     ];
 
     expect(completedJobs(jobs).map((entry) => entry.id)).toEqual(["1"]);
     expect(failedJobs(jobs).map((entry) => entry.id)).toEqual(["2"]);
   });
 
-  it("reads progress and stage off whichever status carries them", () => {
-    expect(progressOf(job({ result: doneResult, status: "done" }))).toBe(1);
-    expect(progressOf(job({ progress: 0.4, stage: "stage.reading", status: "running" }))).toBe(0.4);
-    expect(stageOf(job({ progress: 0.4, stage: "stage.reading", status: "running" }))).toBe(
-      "stage.reading",
-    );
-    expect(stageOf(job({ error: "boom", status: "error" }))).toBeUndefined();
+  it("reads progress off whichever phase carries it", () => {
+    expect(progressOf(withState({ phase: "queued" }))).toBe(0);
+    expect(progressOf(withState(analysing))).toBe(0.2);
+    expect(progressOf(withState(reviewing))).toBe(0.5);
+    expect(progressOf(withState({ phase: "done", result: doneResult }))).toBe(1);
+    expect(progressOf(withState({ error: "boom", phase: "error" }))).toBe(0);
+  });
+
+  it("names the stage a worker reported, and the model load only while it loads", () => {
+    expect(stageOf(withState(analysing), true)).toBe("stage.reading");
+    expect(stageOf(withState({ phase: "queued" }), true)).toBe("stage.loadingModel");
+    expect(stageOf(withState({ phase: "queued" }), false)).toBeUndefined();
+    expect(stageOf(withState({ error: "boom", phase: "error" }), true)).toBeUndefined();
+  });
+
+  it("holds the model while a file is still reaching it, not while it is in review", () => {
+    expect(holdsModel([withState({ phase: "queued" })])).toBe(true);
+    expect(holdsModel([withState(analysing)])).toBe(true);
+    expect(holdsModel([withState({ phase: "applying", progress: 0.5 })])).toBe(true);
+    expect(
+      holdsModel([withState(reviewing), withState({ phase: "done", result: doneResult })]),
+    ).toBe(false);
   });
 });

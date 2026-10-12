@@ -1,19 +1,35 @@
-/* oxlint-disable anti-slop/no-module-mocking -- the redaction pool wraps real Worker threads; the module seam is the only practical hermetic substitute */
 import { BROWSER_ACCEPT } from "@repo/redact-formats";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./app";
+import { createMemoryPool } from "./memory-pool";
+import { useModelLibrary } from "./model-library";
 import { useJobStore } from "./store";
 import { renderWithI18n } from "./test-utils";
 
-vi.mock("./worker-pool", () => ({
-  createRedactionPool: () => ({ cancel: vi.fn(), destroy: vi.fn(), submit: vi.fn() }),
-}));
+let memory = createMemoryPool();
+
+const renderApp = () => renderWithI18n(<App createPool={memory.create} />);
+
+const drop = (name: string) => {
+  fireEvent.change(screen.getByLabelText(/choose files/iv), {
+    target: { files: [new File(["hello"], name, { type: "text/plain" })] },
+  });
+
+  const [job] = useJobStore.getState().jobs;
+
+  assert.isDefined(job);
+
+  return job.id;
+};
 
 describe("App", () => {
   beforeEach(() => {
-    useJobStore.getState().reset();
+    memory = createMemoryPool();
+    useJobStore.setState({ jobs: [], modelLoading: false });
+    useModelLibrary.setState({ entries: {}, selected: "gliner-multi-pii" });
+    vi.spyOn(useModelLibrary.getState(), "refresh").mockResolvedValue();
 
     localStorage.clear();
   });
@@ -23,7 +39,7 @@ describe("App", () => {
   });
 
   it("renders the shell with nothing queued", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     expect(screen.getByRole("heading", { level: 1, name: "localveil" })).toBeInTheDocument();
     expect(screen.getByLabelText(/choose files/iv)).toBeInTheDocument();
@@ -33,7 +49,7 @@ describe("App", () => {
   });
 
   it("brings out the list and the download once a file is queued", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     fireEvent.change(screen.getByLabelText(/choose files/iv), {
       target: { files: [new File(["hello"], "notes.txt", { type: "text/plain" })] },
@@ -44,7 +60,7 @@ describe("App", () => {
   });
 
   it("accepts only the formats it advertises", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     const input = screen.getByLabelText(/choose files/iv);
 
@@ -55,7 +71,7 @@ describe("App", () => {
   });
 
   it("hands a dropped file to the worker and lists it", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     const input = screen.getByLabelText(/choose files/iv);
     const file = new File(["hello"], "notes.txt", { type: "text/plain" });
@@ -69,14 +85,61 @@ describe("App", () => {
     expect(within(files).getByText("Queued")).toBeInTheDocument();
   });
 
+  it("applies what the reader left covered in review, then offers the result", () => {
+    renderApp();
+
+    const id = drop("notes.txt");
+    const detection = {
+      confidence: 0.9,
+      end: 8,
+      label: "private_person" as const,
+      preview: "Ana Lima",
+      start: 0,
+    };
+
+    act(() => {
+      memory.workers().onAnalysed(id, {
+        detections: [
+          { ...detection, id: "a" },
+          { ...detection, id: "b", preview: "Joao Reis" },
+        ],
+        handle: undefined,
+        warnings: [],
+      });
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Cover Joao Reis" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply redactions" }));
+
+    expect(memory.applied.map((request) => request.decisions)).toEqual([{ covered: ["a"] }]);
+
+    act(() => {
+      memory.workers().onDone(id, { blob: new Blob(["x"]), redactionCount: 1, warnings: [] });
+    });
+
+    expect(screen.getByRole("button", { name: /download zip/iv })).toBeEnabled();
+  });
+
+  it("says the model is loading on a waiting file only while it loads", () => {
+    renderApp();
+    drop("notes.txt");
+
+    expect(screen.queryByText("Loading the detection model")).toBeNull();
+
+    act(() => {
+      memory.workers().onModelLoad({ kind: "loading" });
+    });
+
+    expect(screen.getByText("Loading the detection model")).toBeInTheDocument();
+  });
+
   it("shows no progress bar before anything has happened", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
   it("drops a file from the list when it is removed", async () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     const input = screen.getByLabelText(/choose files/iv);
 
@@ -95,20 +158,20 @@ describe("App", () => {
   it("renders in the language the browser asked for", () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["pt-BR", "en-US"]);
 
-    renderWithI18n(<App />);
+    renderApp();
 
     expect(screen.getByText("Adicionar arquivos ou pastas")).toBeInTheDocument();
     expect(screen.getByText("Sobre o localveil")).toBeInTheDocument();
   });
 
   it("starts in the language the browser asked for, with the picker showing it", () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     expect(screen.getByRole("combobox", { name: "Language" })).toHaveTextContent("English");
   });
 
   it("names every language in its own language", async () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
 
@@ -118,7 +181,7 @@ describe("App", () => {
   });
 
   it("switches the interface when another language is picked", async () => {
-    renderWithI18n(<App />);
+    renderApp();
 
     fireEvent.click(screen.getByRole("combobox", { name: "Language" }));
 

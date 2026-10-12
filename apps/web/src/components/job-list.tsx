@@ -21,7 +21,8 @@ const scrollStyle: CSSProperties & { "--job-list-height": string } = {
 
 type JobListProps = {
   jobs: Array<Job>;
-  onApply: (id: string) => void;
+  modelLoading: boolean;
+  onApply: (id: string, covered: ReadonlyArray<string>) => void;
   onClear: () => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
   onRemove: (id: string) => void;
@@ -30,6 +31,7 @@ type JobListProps = {
 
 const JobList = ({
   jobs,
+  modelLoading,
   onApply,
   onClear,
   onCoveredChange,
@@ -115,6 +117,7 @@ const JobList = ({
                 index={index}
                 job={job}
                 key={job.id}
+                modelLoading={modelLoading}
                 onApply={onApply}
                 onCoveredChange={onCoveredChange}
                 onRemove={onRemove}

@@ -1,38 +1,17 @@
-import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
-import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
-import { describeError, isProgressEvent, isUnsupportedFile } from "@repo/redact-core";
+import type { ModelId } from "@repo/pii-detect/models";
+import type { Analysis, RedactionResult } from "@repo/redact-core";
+import { isProgressEvent } from "@repo/redact-core";
 import workerpool from "workerpool";
 
+import type { ApplyRequest, CreatePool, JobRequest } from "./job-runner";
 import type { ModelHost } from "./model-host";
 import { createModelHost } from "./model-host";
+import { probeCapacity } from "./probe-capacity";
 // oxlint-disable-next-line import/default -- Vite's ?worker&url query resolves to a default-exported URL the resolver cannot see
 import redactWorkerUrl from "./redact-worker.ts?worker&url";
 import type { AnalyseTask, ApplyTask } from "./worker-protocol";
 
 const SILENCE_LIMIT = 120_000;
-
-type JobRequest = { file: File; id: string };
-
-type ApplyRequest = { analysis: Analysis; decisions: Decisions; file: File; id: string };
-
-type RedactionPoolOptions = {
-  maxWorkers: number;
-  model: ModelId;
-  onAnalysed: (id: string, analysis: Analysis) => void;
-  onDone: (id: string, result: RedactionResult) => void;
-  onError: (id: string, message: string, unsupported: boolean) => void;
-  onModelLoad: (event: ModelLoadEvent) => void;
-  onModelLost: (reason: string) => void;
-  onProgress: (id: string, fraction: number, stage: FileStageKey) => void;
-};
-
-type RedactionPool = {
-  apply: (request: ApplyRequest) => void;
-  cancel: (id: string) => void;
-  destroy: () => void;
-  setModel: (model: ModelId) => void;
-  submit: (job: JobRequest) => void;
-};
 
 type PooledTask = {
   cancel: () => void;
@@ -40,10 +19,12 @@ type PooledTask = {
   settle: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
 };
 
+// A file has started once its worker first reports progress; until then it is waiting for a worker.
 type LiveJob = {
   channel: string;
   id: string;
   restart: () => void;
+  started: boolean;
   task: PooledTask;
   watchdog?: ReturnType<typeof setTimeout>;
 };
@@ -97,10 +78,8 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
   }
 };
 
-const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
-  const { maxWorkers, onAnalysed, onDone, onError, onModelLoad, onModelLost, onProgress } = options;
-
-  let { model } = options;
+const createRedactionPool: CreatePool = (options) => {
+  const { onAnalysed, onDone, onFailed, onModelLoad, onModelLost, onProgress } = options;
 
   const jobs = new Map<string, LiveJob>();
 
@@ -133,7 +112,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     }
 
     job.task.cancel();
-    onError(job.id, reason, false);
+    onFailed(job.id, new Error(reason));
   };
 
   const hostFor = (chosen: ModelId) =>
@@ -142,41 +121,40 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       // A file waits in detect while the model loads, so every step of the load keeps it alive.
       onLoad: (event) => {
         for (const job of jobs.values()) {
-          if (job.watchdog !== undefined) {
+          if (job.started) {
             arm(job);
           }
         }
 
         onModelLoad(event);
       },
+      // Every file is failed or restarted before the loss is reported, since the runner reads what is left.
       onLost: (reason, fatal) => {
-        const waiting = [...jobs.values()].filter((job) => job.watchdog === undefined);
+        const waiting = [...jobs.values()].filter((job) => !job.started);
 
         // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
         for (const job of [...jobs.values()]) {
-          if (job.watchdog !== undefined || fatal) {
+          if (job.started || fatal) {
             give(job, reason);
           }
         }
 
-        if (fatal) {
-          onModelLost(reason);
-
-          return;
+        if (!fatal) {
+          for (const job of waiting) {
+            release(job);
+            job.task.cancel();
+            job.restart();
+          }
         }
 
-        for (const job of waiting) {
-          release(job);
-          job.task.cancel();
-          job.restart();
-        }
+        onModelLost(reason, fatal);
       },
     });
 
-  host = hostFor(model);
+  host = hostFor(options.model);
 
   const pool = workerpool.pool(redactWorkerUrl, {
-    maxWorkers,
+    maxWorkers: probeCapacity().maxWorkers,
     minWorkers: "max",
     workerOpts: { type: "module" },
     workerType: "web",
@@ -190,6 +168,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       return;
     }
 
+    live.started = true;
     arm(live);
     onProgress(id, payload.fraction, payload.stage);
   };
@@ -205,14 +184,14 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
     const wire = new MessageChannel();
 
     if (!host.connect(channel, wire.port1)) {
-      onError(id, "The detection model is gone, so nothing can be redacted", false);
+      onFailed(id, new Error("The detection model is gone, so nothing can be redacted"));
 
       return;
     }
 
     try {
       const task = asPooledTask(run(wire.port2));
-      const live: LiveJob = { channel, id, restart, task };
+      const live: LiveJob = { channel, id, restart, started: false, task };
 
       release(jobs.get(id))?.task.cancel();
       jobs.set(id, live);
@@ -225,13 +204,13 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
         },
         (error) => {
           if (release(live) !== undefined) {
-            onError(id, describeError(error), isUnsupportedFile(error));
+            onFailed(id, error);
           }
         },
       );
     } catch (error) {
       host.disconnect(channel);
-      onError(id, describeError(error), false);
+      onFailed(id, error);
     }
   };
 
@@ -253,7 +232,7 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
           return;
         }
 
-        onError(job.id, "The worker returned something that is not an analysis", false);
+        onFailed(job.id, new Error("The worker returned something that is not an analysis"));
       },
     );
   };
@@ -277,7 +256,10 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
           return;
         }
 
-        onError(request.id, "The worker returned something that is not a redacted file", false);
+        onFailed(
+          request.id,
+          new Error("The worker returned something that is not a redacted file"),
+        );
       },
     );
   };
@@ -297,31 +279,15 @@ const createRedactionPool = (options: RedactionPoolOptions): RedactionPool => {
       void shutDownWith(pool);
     },
     /* A switch replaces the model worker outright: two sessions of nearly a gigabyte each do not fit
-       side by side, and terminating is the only way to be sure the old one lets go. Whatever was in
-       flight starts over on the new model rather than finishing half on each. */
+       side by side, and terminating is the only way to be sure the old one lets go. The runner
+       switches only while no file is in flight, so nothing is left talking to the old one. */
     setModel: (next) => {
-      if (next === model) {
-        return;
-      }
-
-      const live = [...jobs.values()];
-
-      for (const job of live) {
-        release(job);
-        job.task.cancel();
-      }
-
-      model = next;
       host.destroy();
       host = hostFor(next);
-
-      for (const job of live) {
-        job.restart();
-      }
     },
     submit,
   };
 };
 
 export { createRedactionPool };
-export type { ApplyRequest, JobRequest, RedactionPool, RedactionPoolOptions, WorkerTask };
+export type { WorkerTask };

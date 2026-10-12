@@ -1,73 +1,21 @@
-import type { Analysis, FileStageKey } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import type { Job, JobResult, JobSource, JobStatus } from "../store";
-import { renderWithI18n } from "../test-utils";
+import type { Job, JobState } from "../store";
+import { jobOf, renderWithI18n } from "../test-utils";
 
 import { JobList } from "./job-list";
 
-type JobPatch = {
-  analysis?: Analysis;
-  covered?: ReadonlyArray<string>;
-  error?: string;
-  file?: File;
-  id?: string;
-  path?: string;
-  progress?: number;
-  result?: JobResult;
-  stage?: FileStageKey;
-  status?: JobStatus;
-};
+const PDF = new File(["%PDF"], "card.pdf", { type: "application/pdf" });
 
-const EMPTY_ANALYSIS: Analysis = { detections: [], handle: undefined, warnings: [] };
+const job = (state?: JobState) => jobOf(state);
 
-const EMPTY_RESULT: JobResult = { blob: new Blob([]), redactionCount: 0, warnings: [] };
+const other = jobOf({ phase: "queued" }, { id: "job-2" });
 
-const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job => {
-  const source: JobSource = {
-    file: patch.file ?? fallbackFile,
-    id: patch.id ?? fallbackId,
-    path: patch.path,
-  };
-
-  if (patch.status === "done") {
-    return { ...source, result: patch.result ?? EMPTY_RESULT, status: "done" };
-  }
-
-  if (patch.status === "error") {
-    return { ...source, error: patch.error ?? "boom", status: "error" };
-  }
-
-  if (patch.status === "running") {
-    return { ...source, progress: patch.progress ?? 0, stage: patch.stage, status: "running" };
-  }
-
-  if (patch.status === "reviewing") {
-    return {
-      ...source,
-      analysis: patch.analysis ?? EMPTY_ANALYSIS,
-      covered: patch.covered ?? [],
-      progress: patch.progress ?? 0.5,
-      status: "reviewing",
-    };
-  }
-
-  return { ...source, stage: patch.stage, status: "queued" };
-};
-
-const job = (patch: JobPatch = {}): Job =>
-  jobFrom(patch, new File(["hello"], "notes.txt", { type: "text/plain" }), "job-1");
-
-const pdf = (patch: JobPatch = {}): Job =>
-  jobFrom(
-    { file: new File(["%PDF"], "card.pdf", { type: "application/pdf" }), ...patch },
-    new File(["%PDF"], "card.pdf", { type: "application/pdf" }),
-    "job-pdf",
-  );
+const pdf = (id: string) => jobOf({ phase: "queued" }, { file: PDF, id });
 
 const setup = (jobs: Array<Job>) => {
-  const onApply = vi.fn<(id: string) => void>();
+  const onApply = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onClear = vi.fn<() => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onRemove = vi.fn<(id: string) => void>();
@@ -76,6 +24,7 @@ const setup = (jobs: Array<Job>) => {
   const view = renderWithI18n(
     <JobList
       jobs={jobs}
+      modelLoading={false}
       onApply={onApply}
       onClear={onClear}
       onCoveredChange={onCoveredChange}
@@ -88,6 +37,7 @@ const setup = (jobs: Array<Job>) => {
     view.rerender(
       <JobList
         jobs={next}
+        modelLoading={false}
         onApply={onApply}
         onClear={onClear}
         onCoveredChange={onCoveredChange}
@@ -109,7 +59,10 @@ describe("JobList", () => {
   });
 
   it("names each file and its status", () => {
-    setup([job(), job({ id: "job-2", status: "running" })]);
+    setup([
+      job(),
+      jobOf({ phase: "analysing", progress: 0.2, stage: "stage.reading" }, { id: "job-2" }),
+    ]);
 
     expect(screen.getAllByText("notes.txt").length).toBe(2);
     expect(screen.getByText("Queued")).toBeInTheDocument();
@@ -117,7 +70,7 @@ describe("JobList", () => {
   });
 
   it("shows progress and the current stage while a file is running", () => {
-    setup([job({ progress: 0.8, stage: "stage.redacting", status: "running" })]);
+    setup([job({ phase: "applying", progress: 0.8, stage: "stage.redacting" })]);
 
     const bar = screen.getByRole("progressbar", { name: "notes.txt" });
 
@@ -127,11 +80,7 @@ describe("JobList", () => {
 
   it("drops the progress bar once a file has settled", () => {
     setup([
-      job({
-        progress: 1,
-        result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] },
-        status: "done",
-      }),
+      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] } }),
     ]);
 
     expect(screen.queryByRole("progressbar")).toBeNull();
@@ -139,10 +88,7 @@ describe("JobList", () => {
 
   it("reports how many spans were redacted", () => {
     setup([
-      job({
-        result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] },
-        status: "done",
-      }),
+      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] } }),
     ]);
 
     expect(screen.getByText("3 redacted")).toBeInTheDocument();
@@ -150,17 +96,14 @@ describe("JobList", () => {
 
   it("says so when a clean file had nothing to redact", () => {
     setup([
-      job({
-        result: { blob: new Blob(["hi"]), redactionCount: 0, warnings: [] },
-        status: "done",
-      }),
+      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 0, warnings: [] } }),
     ]);
 
     expect(screen.getByText("Nothing found to redact")).toBeInTheDocument();
   });
 
   it("empties the whole list when asked", () => {
-    const { onClear } = setup([job(), job({ id: "job-2" })]);
+    const { onClear } = setup([job(), other]);
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
 
@@ -168,7 +111,7 @@ describe("JobList", () => {
   });
 
   it("removes the file it was asked to remove", () => {
-    const { onRemove } = setup([job(), job({ id: "job-2" })]);
+    const { onRemove } = setup([job(), other]);
 
     const [, second] = screen.getAllByLabelText("Remove notes.txt");
 
@@ -181,7 +124,7 @@ describe("JobList", () => {
 
 describe("selecting files", () => {
   it("swaps the heading for a toolbar once a row is picked", () => {
-    setup([job(), job({ id: "job-2" })]);
+    setup([job(), other]);
 
     const [first] = screen.getAllByLabelText("Select notes.txt");
 
@@ -193,7 +136,7 @@ describe("selecting files", () => {
   });
 
   it("picks every row from the header checkbox", () => {
-    setup([job(), job({ id: "job-2" })]);
+    setup([job(), other]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
 
@@ -201,7 +144,7 @@ describe("selecting files", () => {
   });
 
   it("hands the whole selection to the bulk remove", () => {
-    const { onRemoveMany } = setup([job(), job({ id: "job-2" })]);
+    const { onRemoveMany } = setup([job(), other]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
@@ -210,7 +153,7 @@ describe("selecting files", () => {
   });
 
   it("forgets a picked row that has left the list", () => {
-    const { onRemoveMany, rerenderWith } = setup([job(), job({ id: "job-2" })]);
+    const { onRemoveMany, rerenderWith } = setup([job(), other]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     rerenderWith([job()]);
@@ -223,7 +166,7 @@ describe("selecting files", () => {
   });
 
   it("removes a whole selection of scans at once", () => {
-    const { onRemoveMany } = setup([pdf(), pdf({ id: "job-pdf-2" })]);
+    const { onRemoveMany } = setup([pdf("job-pdf"), pdf("job-pdf-2")]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));

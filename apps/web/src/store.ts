@@ -1,29 +1,30 @@
 import type { Analysis, FileStageKey, WarningKey } from "@repo/redact-core";
 import { create } from "zustand";
 
-type JobStatus = "done" | "error" | "queued" | "reviewing" | "running";
-
 type JobResult = { blob: Blob; redactionCount: number; warnings: Array<WarningKey> };
 
 type JobSource = {
   file: File;
   id: string;
-  path?: string;
+  path: string;
 };
 
 type JobState =
-  | { analysis: Analysis; covered: ReadonlyArray<string>; progress: number; status: "reviewing" }
-  | { error: string; status: "error" }
-  | { progress: number; stage?: FileStageKey; status: "running" }
-  | { result: JobResult; status: "done" }
-  | { stage?: FileStageKey; status: "queued" };
+  | { analysis: Analysis; covered: ReadonlyArray<string>; phase: "reviewing"; progress: number }
+  | { error: string; phase: "error" }
+  | { phase: "analysing"; progress: number; stage: FileStageKey }
+  | { phase: "applying"; progress: number; stage?: FileStageKey }
+  | { phase: "done"; result: JobResult }
+  | { phase: "queued" };
+
+type JobPhase = JobState["phase"];
 
 type Job = JobSource & JobState;
 
 type JobStore = {
   addFiles: (files: Array<JobInput>) => Array<Job>;
   jobs: Array<Job>;
-  removeJob: (id: string) => void;
+  modelLoading: boolean;
   removeJobs: (ids: ReadonlyArray<string>) => void;
   reset: () => void;
   setCovered: (id: string, covered: ReadonlyArray<string>) => void;
@@ -49,7 +50,7 @@ const useJobStore = create<JobStore>((set) => {
       const created = files.map((input): Job => {
         const { file, path } = sourceOf(input);
 
-        return { file, id: crypto.randomUUID(), path, status: "queued" };
+        return { file, id: crypto.randomUUID(), path, phase: "queued" };
       });
 
       set((state) => ({ jobs: [...state.jobs, ...created] }));
@@ -57,20 +58,17 @@ const useJobStore = create<JobStore>((set) => {
       return created;
     },
     jobs: [],
-    removeJob: (id) => {
-      set((state) => ({ jobs: state.jobs.filter((job) => job.id !== id) }));
-    },
+    modelLoading: false,
     removeJobs: (ids) => {
       const dropping = new Set(ids);
 
       set((state) => ({ jobs: state.jobs.filter((job) => !dropping.has(job.id)) }));
     },
-
     reset: () => {
       set({ jobs: [] });
     },
     setCovered: (id, covered) => {
-      mapJob(id, (job) => (job.status === "reviewing" ? { ...job, covered } : job));
+      mapJob(id, (job) => (job.phase === "reviewing" ? { ...job, covered } : job));
     },
     setState: (id, next) => {
       mapJob(id, (job) => ({ ...justTheSource(job), ...next }));
@@ -78,28 +76,53 @@ const useJobStore = create<JobStore>((set) => {
   };
 });
 
-type CompletedJob = Job & { result: JobResult; status: "done" };
+type CompletedJob = Job & { phase: "done"; result: JobResult };
 
-const isFinished = (job: Job) => job.status === "done" || job.status === "error";
+const isInFlight = (job: Job) =>
+  job.phase === "queued" || job.phase === "analysing" || job.phase === "applying";
+
+const isWorking = (job: Job) => job.phase === "analysing" || job.phase === "applying";
+
+const isFinished = (job: Job) => job.phase === "done" || job.phase === "error";
+
+/* Files already in review keep the analysis their model gave them; only work still reaching the
+   model would be split across two of them, so that is what holds a model switch back. */
+const holdsModel = (jobs: Array<Job>) => jobs.some((job) => isInFlight(job));
 
 const progressOf = (job: Job) => {
-  if (job.status === "done") {
+  if (job.phase === "done") {
     return 1;
   }
 
-  return job.status === "running" || job.status === "reviewing" ? job.progress : 0;
+  return "progress" in job ? job.progress : 0;
 };
 
-const stageOf = (job: Job) =>
-  job.status === "queued" || job.status === "running" ? job.stage : undefined;
+// A queued file is waiting on the model only while the model is actually loading.
+const stageOf = (job: Job, modelLoading: boolean) => {
+  if (job.phase === "queued") {
+    return modelLoading ? "stage.loadingModel" : undefined;
+  }
+
+  return job.phase === "analysing" || job.phase === "applying" ? job.stage : undefined;
+};
 
 const completedJobs = (jobs: Array<Job>): Array<CompletedJob> =>
-  jobs.filter((job): job is CompletedJob => job.status === "done");
+  jobs.filter((job): job is CompletedJob => job.phase === "done");
 
 const hasCompletedJobs = (jobs: Array<Job>) =>
   jobs.every((job) => isFinished(job)) && completedJobs(jobs).length > 0;
 
-const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.status === "error");
+const failedJobs = (jobs: Array<Job>) => jobs.filter((job) => job.phase === "error");
 
-export { completedJobs, failedJobs, hasCompletedJobs, progressOf, stageOf, useJobStore };
-export type { CompletedJob, Job, JobInput, JobResult, JobSource, JobState, JobStatus };
+export {
+  completedJobs,
+  failedJobs,
+  hasCompletedJobs,
+  holdsModel,
+  isInFlight,
+  isWorking,
+  progressOf,
+  stageOf,
+  useJobStore,
+};
+export type { CompletedJob, Job, JobInput, JobPhase, JobResult, JobSource, JobState };

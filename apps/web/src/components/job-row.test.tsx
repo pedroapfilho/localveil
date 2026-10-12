@@ -1,69 +1,29 @@
-import type { Analysis, FileStageKey } from "@repo/redact-core";
+import type { Detection } from "@repo/redact-core";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Job, JobResult, JobSource, JobStatus } from "../store";
-import { renderWithI18n } from "../test-utils";
+import type { Job, JobState } from "../store";
+import { jobOf, renderWithI18n } from "../test-utils";
 
 import { JobRow } from "./job-row";
 
-type JobPatch = {
-  analysis?: Analysis;
-  covered?: ReadonlyArray<string>;
-  error?: string;
-  file?: File;
-  id?: string;
-  path?: string;
-  progress?: number;
-  result?: JobResult;
-  stage?: FileStageKey;
-  status?: JobStatus;
+const PDF = new File(["%PDF"], "card.pdf", { type: "application/pdf" });
+
+const text = (state?: JobState) => jobOf(state);
+
+const pdf = (state?: JobState) => jobOf(state, { file: PDF });
+
+const ANA: Detection = {
+  confidence: 0.9,
+  end: 8,
+  id: "a",
+  label: "private_person",
+  preview: "Ana Lima",
+  start: 0,
 };
 
-const EMPTY_ANALYSIS: Analysis = { detections: [], handle: undefined, warnings: [] };
-
-const EMPTY_RESULT: JobResult = { blob: new Blob([]), redactionCount: 0, warnings: [] };
-
-const jobFrom = (patch: JobPatch, fallbackFile: File, fallbackId: string): Job => {
-  const source: JobSource = {
-    file: patch.file ?? fallbackFile,
-    id: patch.id ?? fallbackId,
-    path: patch.path,
-  };
-
-  if (patch.status === "done") {
-    return { ...source, result: patch.result ?? EMPTY_RESULT, status: "done" };
-  }
-
-  if (patch.status === "error") {
-    return { ...source, error: patch.error ?? "boom", status: "error" };
-  }
-
-  if (patch.status === "running") {
-    return { ...source, progress: patch.progress ?? 0, stage: patch.stage, status: "running" };
-  }
-
-  if (patch.status === "reviewing") {
-    return {
-      ...source,
-      analysis: patch.analysis ?? EMPTY_ANALYSIS,
-      covered: patch.covered ?? [],
-      progress: patch.progress ?? 0.5,
-      status: "reviewing",
-    };
-  }
-
-  return { ...source, stage: patch.stage, status: "queued" };
-};
-
-const text = (patch: JobPatch = {}): Job =>
-  jobFrom(patch, new File(["hello"], "notes.txt", { type: "text/plain" }), "job-1");
-
-const pdf = (patch: JobPatch = {}): Job =>
-  text({ file: new File(["%PDF"], "card.pdf", { type: "application/pdf" }), ...patch });
-
-const setup = (job: Job, selected = false) => {
-  const onApply = vi.fn<(id: string) => void>();
+const setup = (job: Job, { modelLoading = false, selected = false } = {}) => {
+  const onApply = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onRemove = vi.fn<(id: string) => void>();
   const onSelect = vi.fn<(id: string, next: boolean) => void>();
@@ -73,6 +33,7 @@ const setup = (job: Job, selected = false) => {
       <JobRow
         index={0}
         job={job}
+        modelLoading={modelLoading}
         onApply={onApply}
         onCoveredChange={onCoveredChange}
         onRemove={onRemove}
@@ -88,6 +49,7 @@ const setup = (job: Job, selected = false) => {
         <JobRow
           index={0}
           job={next}
+          modelLoading={modelLoading}
           onApply={onApply}
           onCoveredChange={onCoveredChange}
           onRemove={onRemove}
@@ -98,7 +60,7 @@ const setup = (job: Job, selected = false) => {
     );
   };
 
-  return { container: view.container, onRemove, onSelect, rerenderWith };
+  return { container: view.container, onApply, onRemove, onSelect, rerenderWith };
 };
 
 const LOW_CONFIDENCE =
@@ -108,8 +70,8 @@ describe("JobRow", () => {
   it("keeps the warnings behind the disclosure until it is opened", () => {
     setup(
       pdf({
+        phase: "done",
         result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: ["warning.lowConfidence"] },
-        status: "done",
       }),
     );
 
@@ -121,17 +83,52 @@ describe("JobRow", () => {
   });
 
   it("spins the status marker while the file is being worked on", () => {
-    const { container } = setup(text({ stage: "stage.reading", status: "running" }));
+    const { container } = setup(text({ phase: "analysing", progress: 0, stage: "stage.reading" }));
 
     expect(screen.getByText("Working")).toBeInTheDocument();
     expect(container.querySelector("[class*=animate-spin]")).toBeInTheDocument();
   });
 
+  it("keeps spinning while the decisions are applied", () => {
+    const { container } = setup(text({ phase: "applying", progress: 0.5 }));
+
+    expect(screen.getByText("Working")).toBeInTheDocument();
+    expect(container.querySelector("[class*=animate-spin]")).toBeInTheDocument();
+  });
+
+  it("says a queued file waits on the model while the model loads", () => {
+    setup(text(), { modelLoading: true });
+
+    expect(screen.getByText("Loading the detection model")).toBeInTheDocument();
+  });
+
+  it("says nothing of the model to a queued file waiting on a loaded one", () => {
+    setup(text());
+
+    expect(screen.getByText("Queued")).toBeInTheDocument();
+    expect(screen.queryByText("Loading the detection model")).toBeNull();
+  });
+
+  it("applies the covered set the review shows", () => {
+    const { onApply } = setup(
+      text({
+        analysis: { detections: [ANA], handle: undefined, warnings: [] },
+        covered: ["a"],
+        phase: "reviewing",
+        progress: 0.5,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply redactions" }));
+
+    expect(onApply).toHaveBeenCalledWith("job-1", ["a"]);
+  });
+
   it("explains OCR inside the warning that mentions it", async () => {
     setup(
       pdf({
+        phase: "done",
         result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: ["warning.scannedPages"] },
-        status: "done",
       }),
     );
 
@@ -142,7 +139,7 @@ describe("JobRow", () => {
   });
 
   it("opens a failed row without being asked", () => {
-    setup(text({ error: "The worker gave up", status: "error" }));
+    setup(text({ error: "The worker gave up", phase: "error" }));
 
     expect(screen.getByText("Failed")).toBeInTheDocument();
     expect(screen.getByText("The worker gave up")).toBeInTheDocument();
@@ -151,7 +148,7 @@ describe("JobRow", () => {
   it("opens a row that fails long after it mounted", () => {
     const { rerenderWith } = setup(text());
 
-    rerenderWith(text({ error: "The worker gave up", status: "error" }));
+    rerenderWith(text({ error: "The worker gave up", phase: "error" }));
 
     expect(screen.getByText("The worker gave up")).toBeInTheDocument();
   });
@@ -159,7 +156,7 @@ describe("JobRow", () => {
   it("respects a reader who shuts a failed row again", () => {
     const { rerenderWith } = setup(text());
 
-    rerenderWith(text({ error: "The worker gave up", status: "error" }));
+    rerenderWith(text({ error: "The worker gave up", phase: "error" }));
     fireEvent.click(screen.getByLabelText("Details for notes.txt"));
 
     expect(screen.queryByText("The worker gave up")).toBeNull();
@@ -173,7 +170,7 @@ describe("JobRow", () => {
 
   it("offers no disclosure at all on a clean text file", () => {
     setup(
-      text({ result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] }, status: "done" }),
+      text({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] } }),
     );
 
     expect(screen.queryByLabelText("Details for notes.txt")).toBeNull();
@@ -188,7 +185,7 @@ describe("JobRow", () => {
   });
 
   it("unpicks a row that was already picked", () => {
-    const { onSelect } = setup(text(), true);
+    const { onSelect } = setup(text(), { selected: true });
 
     fireEvent.click(screen.getByLabelText("Select notes.txt"));
 
