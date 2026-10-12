@@ -1,46 +1,24 @@
-/* oxlint-disable anti-slop/no-module-mocking -- @repo/ocr wraps a wasm OCR engine; the module seam is the only practical hermetic substitute */
-import type * as OcrModule from "@repo/ocr";
-import type { ImageReading } from "@repo/ocr";
-import type { Detect, FileProgress } from "@repo/redact-core";
+import type { ReadText, TextReading } from "@repo/ocr";
+import type { Detect, FileProgress, WordInput } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ readImageText: vi.fn() }));
-
-vi.mock("@repo/ocr", async (importOriginal) => ({
-  ...(await importOriginal<typeof OcrModule>()),
-  readImageText: mocks.readImageText,
-}));
-
-import { imageRedactor } from "./index";
+import { createImageRedactor } from "./index";
 
 const bitmap = { close: vi.fn(), height: 1, width: 2 };
-const contexts: Array<{
-  drawImage: ReturnType<typeof vi.fn>;
-  fillRect: ReturnType<typeof vi.fn>;
-}> = [];
 
 class CanvasStub {
   static contextless = false;
 
-  height: number;
-  width: number;
+  static made: Array<CanvasStub> = [];
 
-  private readonly context;
+  readonly context = { drawImage: vi.fn(), fillRect: vi.fn(), fillStyle: "" };
 
-  constructor(width: number, height: number) {
-    this.height = height;
-    this.width = width;
-    this.context = {
-      drawImage: vi.fn(),
-      fillRect: vi.fn(),
-      fillStyle: "",
-      getImageData: vi.fn(() => ({
-        data: new Uint8ClampedArray(width * height * 4).fill(255),
-      })),
-      putImageData: vi.fn(),
-    };
-    contexts.push(this.context);
+  constructor(
+    public width: number,
+    public height: number,
+  ) {
+    CanvasStub.made.push(this);
   }
 
   convertToBlob({ type }: { type: string }) {
@@ -52,70 +30,50 @@ class CanvasStub {
   }
 }
 
-const BOX = { x0: 0, x1: 10, y0: 0, y1: 10 };
-
-const reading = (
-  language: ImageReading["language"],
-  confidence: number,
-  words: Array<[text: string, confidence: number]>,
-): ImageReading => ({
-  confidence,
-  language,
-  words: words.map(([text, wordConfidence], index) => ({
-    bbox: { ...BOX, x0: index * 12, x1: index * 12 + 10 },
-    confidence: wordConfidence,
+const placed = (...texts: Array<string>): Array<WordInput> =>
+  texts.map((text, index) => ({
+    bbox: { x0: index * 12, x1: index * 12 + 10, y0: 0, y1: 10 },
     text,
-  })),
-});
+  }));
 
-const file = () => new File(["image"], "identity.jpg", { type: "image/jpeg" });
-
-const noSpans: Detect = () => Promise.resolve([]);
-
-const detectEitherSpelling: Detect = (text) => {
-  const start = text.indexOf("108");
-
-  return Promise.resolve(
-    start === -1
-      ? []
-      : [
-          {
-            end: start + (text.includes(".") ? 14 : 11),
-            label: "account_number" as const,
-            score: 1,
-            start,
-          },
-        ],
+/* A fixed-words reader: it hands back the same reading whatever image it is given. */
+const reads = (words: Array<WordInput>, rest: Partial<TextReading> = {}) =>
+  vi.fn<ReadText>(() =>
+    Promise.resolve({ alternatives: [], language: "en", legibility: "legible", words, ...rest }),
   );
-};
 
-const detectCpf: Detect = (text) => {
-  const start = text.indexOf("108");
+const naming =
+  (target: string): Detect =>
+  (text) => {
+    const spans = [];
 
-  return Promise.resolve(
-    start === -1 ? [] : [{ end: start + 14, label: "account_number" as const, score: 1, start }],
-  );
-};
-const detectRole: Detect = (text) =>
-  Promise.resolve(
-    [...text.matchAll(/Client/gv)].map((match) => ({
-      end: match.index + "Client".length,
-      label: "private_person" as const,
-      score: 0.97,
-      start: match.index,
-    })),
-  );
+    for (let start = text.indexOf(target); start !== -1; start = text.indexOf(target, start + 1)) {
+      spans.push({
+        end: start + target.length,
+        label: "private_person" as const,
+        score: 0.9,
+        start,
+      });
+    }
+
+    return Promise.resolve(spans);
+  };
+
+const nothing: Detect = () => Promise.resolve([]);
 
 const onProgress: FileProgress = () => undefined;
 
-const redact = (detect: Detect = noSpans) =>
-  redactFile({ detect, file: file(), onProgress, redactor: imageRedactor });
+const file = (type = "image/jpeg") => new File(["image"], "identity.jpg", { type });
+
+const redact = (read: ReadText, detect = nothing, input = file()) =>
+  redactFile({ detect, file: input, onProgress, redactor: createImageRedactor(read) });
+
+const painter = () => CanvasStub.made.at(-1)?.context.fillRect;
 
 beforeEach(() => {
   CanvasStub.contextless = false;
-  contexts.length = 0;
+  CanvasStub.made = [];
   bitmap.close.mockClear();
-  mocks.readImageText.mockReset();
   vi.stubGlobal(
     "createImageBitmap",
     vi.fn(() => Promise.resolve(bitmap)),
@@ -127,272 +85,102 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("image OCR retry", () => {
-  it("does not prepare or reread a legible image", async () => {
-    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Alice", 95]]));
+describe("imageRedactor", () => {
+  it("hands the reader the decoded image at its own size", async () => {
+    const read = reads(placed("Alice"));
 
-    const detect = vi.fn<Detect>(() => Promise.resolve([]));
+    await redact(read);
 
-    await redact(detect);
+    expect(read.mock.calls[0]?.[0]).toMatchObject({ height: 1, width: 2 });
+    expect(CanvasStub.made[0]?.context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
+  });
 
-    expect(mocks.readImageText).toHaveBeenCalledTimes(1);
-    expect(detect).toHaveBeenCalledWith("Alice");
-    expect(contexts).toHaveLength(1);
+  it("says nothing about an image that read cleanly", async () => {
+    const { warnings } = await redact(reads(placed("Alice")));
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("warns that there was no text when the reader found none", async () => {
+    const { warnings } = await redact(reads([], { legibility: "blank" }));
+
+    expect(warnings).toEqual(["warning.noText"]);
+  });
+
+  it("warns when the reader could not make most of the image out", async () => {
+    const { warnings } = await redact(reads(placed("CPF"), { legibility: "unreadable" }));
+
+    expect(warnings).toEqual(["warning.lowConfidence"]);
+  });
+
+  it("paints over a value only a reading the reader passed over could see", async () => {
+    const read = reads(placed("NOME", "JOSE", "SILVA"), {
+      alternatives: [placed("CPF", "108.467.036-45")],
+    });
+
+    const { redactionCount } = await redact(read, naming("108.467.036-45"));
+
+    expect(painter()).toHaveBeenCalledWith(12, 0, 10, 10);
+    expect(painter()).not.toHaveBeenCalledWith(0, 0, 10, 10);
+    expect(redactionCount).toBe(1);
   });
 
   it("warns when the detector still finds personal data in what stayed visible", async () => {
-    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Alice", 95]]));
-
     const answers = [[], [{ end: 5, label: "private_person" as const, score: 0.9, start: 0 }]];
-    const { warnings } = await redact(() => Promise.resolve(answers.shift() ?? []));
-
-    expect(warnings).toContain("warning.notFullyRedacted");
-  });
-
-  it("says nothing when the words left showing carry no personal data", async () => {
-    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Alice", 95]]));
-
-    const { warnings } = await redact();
-
-    expect(warnings).not.toContain("warning.notFullyRedacted");
-  });
-
-  it("redetects language when an automatic reading is retried", async () => {
-    mocks.readImageText.mockResolvedValueOnce(reading("en", 0, [])).mockResolvedValueOnce(
-      reading("pt", 70, [
-        ["Maria", 92],
-        ["Silva", 88],
-      ]),
+    const { warnings } = await redact(reads(placed("Alice")), () =>
+      Promise.resolve(answers.shift() ?? []),
     );
 
-    const detect = vi.fn<Detect>(() => Promise.resolve([]));
-
-    await redact(detect);
-
-    expect(mocks.readImageText).toHaveBeenCalledTimes(2);
-    expect(mocks.readImageText.mock.calls.map((call) => call[1])).toEqual([undefined, undefined]);
-    expect(detect.mock.calls.map(([text]) => text)).toEqual(["Maria Silva", "Maria Silva"]);
-    expect(contexts).toHaveLength(2);
-    expect(contexts.at(-1)?.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
+    expect(warnings).toEqual(["warning.notFullyRedacted"]);
   });
 
-  it("redacts PII found only by the original low-confidence reading", async () => {
-    mocks.readImageText
-      .mockResolvedValueOnce(
-        reading("pt", 40, [
-          ["CPF", 95],
-          ["108.467.036-45", 92],
-          ["ruido", 10],
-          ["texto", 15],
-        ]),
-      )
-      .mockResolvedValueOnce(
-        reading("pt", 80, [
-          ["NOME", 95],
-          ["JOSE", 94],
-          ["DA", 93],
-          ["SILVA", 92],
-          ["VALIDADE", 91],
-        ]),
-      );
+  it("checks only the words left showing", async () => {
+    const detect = vi.fn(naming("Alice"));
 
-    const detect = vi.fn<Detect>((text) =>
-      Promise.resolve(
-        text === "CPF 108.467.036-45"
-          ? [{ end: 18, label: "account_number", score: 1, start: 4 }]
-          : [],
-      ),
-    );
+    const { warnings } = await redact(reads(placed("Alice", "Smith")), detect);
 
-    const result = await redact(detect);
-
-    expect(detect.mock.calls.map(([text]) => text)).toEqual([
-      "CPF 108.467.036-45",
-      "NOME JOSE DA SILVA VALIDADE",
-      "NOME DA SILVA VALIDADE",
-    ]);
-    expect(contexts.at(-1)?.fillRect).toHaveBeenCalledWith(12, 0, 10, 10);
-    expect(result.redactionCount).toBe(1);
+    expect(detect).toHaveBeenLastCalledWith("Smith");
+    expect(warnings).toEqual([]);
   });
 
-  it("does not count the same PII twice when both readings find it", async () => {
-    const first = reading("pt", 40, [
-      ["CPF", 95],
-      ["108.467.036-45", 92],
-      ["ruido", 10],
-      ["texto", 15],
-    ]);
-    const retry = reading("pt", 80, [
-      ["CPF", 96],
-      ["10846703645", 94],
-      ["NOME", 93],
-      ["JOSE", 92],
-      ["SILVA", 91],
-    ]);
+  it("paints nothing once its one detection is dismissed", async () => {
+    const redactor = createImageRedactor(reads(placed("Alice")));
+    const analysis = await redactor.analyse(file(), naming("Alice"), onProgress);
 
-    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
-
-    const detect = vi.fn<Detect>((text) => {
-      const start = text.indexOf("108");
-
-      return Promise.resolve([
-        { end: start + (text.includes(".") ? 14 : 11), label: "account_number", score: 1, start },
-      ]);
-    });
-
-    const result = await redact(detect);
-
-    expect(result.redactionCount).toBe(1);
-  });
-
-  it("redacts distinct PII at nested offsets across readings", async () => {
-    mocks.readImageText
-      .mockResolvedValueOnce(
-        reading("en", 40, [
-          ["Ana", 95],
-          ["noise", 10],
-        ]),
-      )
-      .mockResolvedValueOnce(
-        reading("en", 80, [
-          ["Jose", 95],
-          ["Silva", 94],
-        ]),
-      );
-
-    const detect = vi.fn<Detect>((text) => {
-      if (text === "Ana") {
-        return Promise.resolve([{ end: 3, label: "private_person", score: 0.9, start: 0 }]);
-      }
-
-      return Promise.resolve(
-        text === "Jose Silva" ? [{ end: 10, label: "private_person", score: 0.9, start: 0 }] : [],
-      );
-    });
-
-    const result = await redact(detect);
-
-    expect(result.redactionCount).toBe(2);
-  });
-
-  it("uses an improved Portuguese retry", async () => {
-    mocks.readImageText
-      .mockResolvedValueOnce(
-        reading("pt", 30, [
-          ["ruido", 10],
-          ["texto", 15],
-          ["Pedro", 90],
-        ]),
-      )
-      .mockResolvedValueOnce(
-        reading("pt", 70, [
-          ["Pedro", 92],
-          ["Afonso", 90],
-          ["Pedrosa", 88],
-        ]),
-      );
-
-    const detect = vi.fn<Detect>(() => Promise.resolve([]));
-
-    await redactFile({
-      detect,
-      file: file(),
-      onProgress,
-      redactor: imageRedactor,
-    });
-
-    expect(detect).toHaveBeenCalledWith("Pedro Afonso Pedrosa");
-  });
-
-  it("keeps the original reading when the retry recovers fewer words", async () => {
-    mocks.readImageText
-      .mockResolvedValueOnce(
-        reading("en", 60, [
-          ["Alice", 95],
-          ["Smith", 92],
-          ["London", 90],
-          ["noise", 10],
-          ["mark", 5],
-        ]),
-      )
-      .mockResolvedValueOnce(
-        reading("en", 80, [
-          ["Alice", 95],
-          ["noise", 10],
-        ]),
-      );
-
-    const detect = vi.fn<Detect>(() => Promise.resolve([]));
-
-    await redact(detect);
-
-    expect(detect).toHaveBeenCalledWith("Alice Smith London");
-  });
-
-  it("reports one detection when both readings find the same value", async () => {
-    const first = reading("pt", 40, [
-      ["CPF", 95],
-      ["108.467.036-45", 92],
-      ["ruido", 10],
-      ["texto", 12],
-    ]);
-    const retry = reading("pt", 80, [
-      ["CPF", 96],
-      ["108.467.036-45", 94],
-      ["NOME", 93],
-    ]);
-
-    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
-
-    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
-
-    expect(analysis.detections).toHaveLength(1);
-  });
-
-  it("paints nothing once that single detection is dismissed", async () => {
-    const first = reading("pt", 40, [
-      ["CPF", 95],
-      ["108.467.036-45", 92],
-      ["ruido", 10],
-      ["texto", 12],
-    ]);
-    const retry = reading("pt", 80, [
-      ["CPF", 96],
-      ["108.467.036-45", 94],
-      ["NOME", 93],
-    ]);
-
-    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
-
-    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
-
-    contexts.length = 0;
-
-    const result = await imageRedactor.apply({
+    const result = await redactor.apply({
       analysis,
       decisions: { covered: [] },
-      detect: noSpans,
+      detect: nothing,
       file: file(),
       onProgress,
     });
 
-    expect(contexts.at(-1)?.fillRect).not.toHaveBeenCalled();
+    expect(painter()).not.toHaveBeenCalled();
     expect(result.redactionCount).toBe(0);
   });
 
-  it("closes the bitmap when painting throws", async () => {
-    mocks.readImageText.mockResolvedValue(reading("en", 90, [["Ana", 95]]));
+  it("keeps a type the encoder takes and falls back to PNG for one it does not", async () => {
+    const read = reads(placed("Alice"));
 
-    const analysis = await imageRedactor.analyse(file(), noSpans, onProgress);
+    const webp = await redact(read, nothing, file("image/webp"));
+    const gif = await redact(read, nothing, file("image/gif"));
+
+    expect(webp.blob.type).toBe("image/webp");
+    expect(gif.blob.type).toBe("image/png");
+  });
+
+  it("closes the bitmap when painting throws", async () => {
+    const redactor = createImageRedactor(reads(placed("Ana")));
+    const analysis = await redactor.analyse(file(), nothing, onProgress);
 
     bitmap.close.mockClear();
     CanvasStub.contextless = true;
 
     await expect(
-      imageRedactor.apply({
+      redactor.apply({
         analysis,
         decisions: { covered: [] },
-        detect: noSpans,
+        detect: nothing,
         file: file(),
         onProgress,
       }),
@@ -400,59 +188,18 @@ describe("image OCR retry", () => {
     expect(bitmap.close).toHaveBeenCalled();
   });
 
-  it("reports one detection when the readings spell the same value differently", async () => {
-    const first = reading("pt", 40, [
-      ["CPF", 95],
-      ["108.467.036-45", 92],
-      ["ruido", 10],
-      ["texto", 12],
-    ]);
-    const retry = reading("pt", 80, [
-      ["CPF", 96],
-      ["10846703645", 94],
-      ["NOME", 93],
-    ]);
+  it("refuses a handle whose readings carry no words", async () => {
+    const redactor = createImageRedactor(reads(placed("Ana")));
+    const analysis = await redactor.analyse(file(), nothing, onProgress);
 
-    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
-
-    const analysis = await imageRedactor.analyse(file(), detectEitherSpelling, onProgress);
-
-    expect(analysis.detections).toHaveLength(1);
-  });
-
-  it("reports one detection when the readings put the same value at different offsets", async () => {
-    const first = reading("pt", 40, [
-      ["CPF", 95],
-      ["108.467.036-45", 92],
-      ["ruido", 10],
-      ["texto", 12],
-    ]);
-    const retry = reading("pt", 80, [
-      ["DOCUMENTO", 96],
-      ["NUMERO", 95],
-      ["108.467.036-45", 94],
-    ]);
-
-    mocks.readImageText.mockResolvedValueOnce(first).mockResolvedValueOnce(retry);
-
-    const analysis = await imageRedactor.analyse(file(), detectCpf, onProgress);
-
-    expect(analysis.detections).toHaveLength(1);
-    expect(new Set(analysis.detections.map((entry) => entry.id)).size).toBe(1);
-  });
-
-  it("leaves a role the page defined for itself out of the detections", async () => {
-    mocks.readImageText.mockResolvedValue(
-      reading("en", 90, [
-        ["Zora", 95],
-        ['("Client")', 95],
-        ["engages", 95],
-        ["Client", 95],
-      ]),
-    );
-
-    const analysis = await imageRedactor.analyse(file(), detectRole, onProgress);
-
-    expect(analysis.detections).toEqual([]);
+    await expect(
+      redactor.apply({
+        analysis: { ...analysis, handle: { readings: [{ marks: [], text: "Ana" }] } },
+        decisions: { covered: [] },
+        detect: nothing,
+        file: file(),
+        onProgress,
+      }),
+    ).rejects.toThrow(/no recognised readings/v);
   });
 });

@@ -1,37 +1,27 @@
 import { APPLY_SCORE } from "./detections";
-import { preview } from "./text";
-import type { Detect, PiiLabel } from "./types";
+import type { Detect, WarningKey } from "./types";
 
-const BLOCK = "█";
+/* Detecting again over what stayed visible catches what painting cannot see: a box that landed
+   short of a word, or a word written back into a rebuilt text layer beside the box meant to hide
+   it. */
+const verifyOutput = async (
+  visible: string,
+  detect: Detect,
+  warnings: Iterable<WarningKey>,
+): Promise<Array<WarningKey>> => {
+  const verified = [...warnings];
 
-type Survivor = { label: PiiLabel; score: number; text: string };
-
-const isMasked = (value: string) => value.replaceAll(BLOCK, "").trim().length === 0;
-
-const survivingSpans = async (text: string, detect: Detect): Promise<Array<Survivor>> => {
-  if (text.trim().length === 0) {
-    return [];
+  if (visible.trim().length === 0) {
+    return verified;
   }
 
-  const spans = await detect(text);
-  const survivors: Array<Survivor> = [];
+  const spans = await detect(visible);
 
-  for (const span of spans) {
-    if (span.score < APPLY_SCORE) {
-      continue;
-    }
-
-    const covered = text.slice(span.start, span.end);
-
-    if (isMasked(covered)) {
-      continue;
-    }
-
-    survivors.push({ label: span.label, score: span.score, text: preview(covered) });
+  if (spans.some((span) => span.score >= APPLY_SCORE)) {
+    verified.push("warning.notFullyRedacted");
   }
 
-  return survivors;
+  return verified;
 };
 
-export { survivingSpans };
-export type { Survivor };
+export { verifyOutput };

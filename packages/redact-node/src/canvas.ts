@@ -13,10 +13,6 @@ const createNodeCanvas = (width: number, height: number) => {
 
       return encoded;
     },
-
-    *[Symbol.iterator]() {
-      yield* canvas.toBuffer("image/png");
-    },
   });
 };
 

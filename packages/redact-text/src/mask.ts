@@ -1,4 +1,4 @@
-import type { Range } from "@repo/redact-core";
+import type { Detect, Range } from "@repo/redact-core";
 
 import { isLineBreak } from "./line-break";
 
@@ -35,4 +35,16 @@ const maskRanges = (text: string, ranges: ReadonlyArray<Range>): string => {
   return parts.join("");
 };
 
-export { maskRanges };
+const isMasked = (value: string) => value.replaceAll(BLOCK, "").trim().length === 0;
+
+/* A detector shown the masked output can tag a run of blocks as a name, and a span over nothing
+   but mask has leaked nothing. */
+const ignoringMasks =
+  (detect: Detect): Detect =>
+  async (text) => {
+    const spans = await detect(text);
+
+    return spans.filter((span) => !isMasked(text.slice(span.start, span.end)));
+  };
+
+export { ignoringMasks, maskRanges };

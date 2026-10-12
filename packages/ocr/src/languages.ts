@@ -1,7 +1,5 @@
 type OcrLanguage = "en" | "es" | "pt";
 
-type DetectedLanguage = { confidence: number; language: OcrLanguage };
-
 const TRAINEDDATA = {
   en: "eng",
   es: "spa",
@@ -96,6 +94,8 @@ const LANGUAGES: ReadonlyArray<OcrLanguage> = ["en", "es", "pt"];
 
 const MIN_HITS = 5;
 
+const MIN_CONFIDENCE = 0.5;
+
 const WORD = /[\p{Letter}']+/gv;
 const COMBINING_MARK = /\p{Mark}/gv;
 
@@ -116,28 +116,24 @@ const tally = (tokens: Array<string>) => {
   return scores;
 };
 
-const detectLanguage = (text: string, fallback: OcrLanguage = "en"): DetectedLanguage => {
+/* A language is named only when its stopwords outvote every other's and there are enough of them
+   to trust: a few stray hits name nothing, and the caller reads in its default instead. */
+const languageOf = (text: string): OcrLanguage | undefined => {
   const tokens = normalise(text).match(WORD) ?? [];
   const scores = tally([...tokens]);
-  const ranked = [...scores.entries()].toSorted(([, left], [, right]) => right - left);
-  const top = ranked.at(0);
-  const second = ranked.at(1);
+  const [top, second] = [...scores.entries()].toSorted(([, left], [, right]) => right - left);
   const hits = [...scores.values()].reduce((sum, score) => sum + score, 0);
 
-  if (top === undefined || top[1] === 0) {
-    return { confidence: 0, language: fallback };
+  if (top === undefined || top[1] === 0 || (second !== undefined && top[1] <= second[1])) {
+    return undefined;
   }
 
-  const share = top[1] / hits;
-  const volume = Math.min(1, hits / MIN_HITS);
-  const decisive = second === undefined || top[1] > second[1];
+  const confidence = (top[1] / hits) * Math.min(1, hits / MIN_HITS);
 
-  return decisive
-    ? { confidence: share * volume, language: top[0] }
-    : { confidence: 0, language: fallback };
+  return confidence >= MIN_CONFIDENCE ? top[0] : undefined;
 };
 
 const traineddataFor = (language: OcrLanguage) => TRAINEDDATA[language];
 
-export { detectLanguage, LANGUAGES, traineddataFor };
-export type { DetectedLanguage, OcrLanguage };
+export { languageOf, traineddataFor };
+export type { OcrLanguage };

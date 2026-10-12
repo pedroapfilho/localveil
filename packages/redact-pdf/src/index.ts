@@ -1,25 +1,28 @@
-import type { ImageReading, OcrLanguage } from "@repo/ocr";
-import { assessReading, detectLanguage, readImageText } from "@repo/ocr";
+import type { OcrLanguage, ReadText } from "@repo/ocr";
+import { languageOf } from "@repo/ocr";
 import type {
   AnalysedUnit,
   Detect,
   FileProgress,
-  PositionedWord,
-  Rect,
+  PageSurface,
   Redactor,
   WarningKey,
+  WordInput,
 } from "@repo/redact-core";
 import {
   analyseUnits,
-  buildWordIndex,
+  contextOf,
   inReadingOrder,
   isAnalysedUnit,
-  isCovered,
+  isPageSurface,
   keptSpans,
+  paint,
+  rectsFor,
   redactionCount,
-  spansToRects,
-  survivingSpans,
+  surfaceOf,
   toArrayBuffer,
+  uncovered,
+  verifyOutput,
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
@@ -29,19 +32,13 @@ import { textLayerWords } from "./text-layer";
 
 const SCALE = 2;
 
-const MIN_TEXT_WORDS = 4;
-
 const MIN_LAYER_WORDS = 12;
-
-const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
 const READ_SHARE = 0.45;
 
 const DETECT_SHARE = 0.45;
 
-type Page = { text: string; words: Array<PositionedWord> };
-
-type PdfHandle = { pages: Array<AnalysedUnit & Page> };
+type PdfHandle = { pages: Array<AnalysedUnit & PageSurface> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -59,26 +56,6 @@ const documentOptions = (data: Uint8Array) => ({
   disableFontFace: true,
   FilterFactory: NoFilterFactory,
 });
-
-const contextOf = (canvas: OffscreenCanvas) => {
-  const context = canvas.getContext("2d");
-
-  if (context === null) {
-    throw new Error("This browser gave no 2d canvas to render the page on");
-  }
-
-  return context;
-};
-
-const paint = (canvas: OffscreenCanvas, rects: Array<Rect>) => {
-  const context = contextOf(canvas);
-
-  context.fillStyle = "#000000";
-
-  for (const rect of rects) {
-    context.fillRect(rect.x, rect.y, rect.width, rect.height);
-  }
-};
 
 const openPdf = async (file: File) => {
   parserInstalled ??= installParser();
@@ -149,23 +126,19 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
   return canvas;
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
-const hasWords = (page: unknown) =>
-  typeof page === "object" && page !== null && "words" in page && Array.isArray(page.words);
-
 const isHandle = (value: unknown): value is PdfHandle =>
   typeof value === "object" &&
   value !== null &&
   "pages" in value &&
   Array.isArray(value.pages) &&
-  value.pages.every((page) => hasWords(page) && isAnalysedUnit(page));
+  value.pages.every((page) => isAnalysedUnit(page) && isPageSurface(page));
 
-const readPages = (file: File, onProgress: FileProgress) =>
+const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
   withPdf(file, async (pdf) => {
     onProgress(0, "stage.reading");
 
     const warnings = new Set<WarningKey>();
-    const pages: Array<Page> = [];
+    const pages: Array<PageSurface> = [];
 
     let language: OcrLanguage | undefined;
     let anyText = false;
@@ -176,57 +149,44 @@ const readPages = (file: File, onProgress: FileProgress) =>
       onProgress(progress, "stage.extracting");
 
       // oxlint-disable-next-line eslint/no-loop-func -- the callback runs to completion inside this iteration's await
-      const { hasText, ...built } = await withPage(pdf, number, async (proxy, viewport) => {
+      const { found, words } = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
         const layerText = content.items
           .map((item) => ("str" in item ? item.str : ""))
           .join(" ")
           .trim();
 
-        if (language === undefined && layerText.split(/\s+/v).length >= MIN_TEXT_WORDS) {
-          const guess = detectLanguage(layerText);
-
-          language = guess.confidence >= MIN_LANGUAGE_CONFIDENCE ? guess.language : undefined;
-        }
+        language ??= languageOf(layerText);
 
         if (layerText.length === 0) {
           warnings.add("warning.scannedPages");
         }
 
         const typed = inReadingOrder(textLayerWords({ items: content.items, viewport }));
-        const readable = typed.length >= MIN_LAYER_WORDS ? typed : undefined;
 
-        let reading: ImageReading;
-
-        if (readable === undefined) {
-          onProgress(progress, "stage.rendering");
-
-          const canvas = await render(proxy, viewport);
-
-          onProgress(progress, "stage.recognising");
-
-          reading = await readImageText(canvas, language === undefined ? {} : { known: language });
-          language ??= reading.language;
-
-          if (assessReading(reading).unreadable) {
-            warnings.add("warning.lowConfidence");
-          }
-        } else {
-          reading = {
-            confidence: 100,
-            language: language ?? "en",
-            words: readable.map((word) => ({ bbox: word.bbox, confidence: 100, text: word.text })),
-          };
+        if (typed.length >= MIN_LAYER_WORDS) {
+          return { found: true, words: typed };
         }
 
-        return {
-          hasText: reading.words.length > 0,
-          ...buildWordIndex(assessReading(reading).legible),
-        };
+        onProgress(progress, "stage.rendering");
+
+        const canvas = await render(proxy, viewport);
+
+        onProgress(progress, "stage.recognising");
+
+        const reading = await read(canvas, language);
+
+        language ??= reading.language;
+
+        if (reading.legibility === "unreadable") {
+          warnings.add("warning.lowConfidence");
+        }
+
+        return { found: reading.legibility !== "blank", words: reading.words };
       });
 
-      anyText ||= hasText;
-      pages.push(built);
+      anyText ||= found;
+      pages.push(surfaceOf(words));
     }
 
     if (!anyText) {
@@ -247,19 +207,6 @@ const detectingPages = (detect: Detect, count: number, onProgress: FileProgress)
   };
 };
 
-const analysePdf: Redactor["analyse"] = async (file, detect, onProgress) => {
-  const { pages, warnings } = await readPages(file, onProgress);
-  const { detections, units } = await analyseUnits({
-    detect: detectingPages(detect, pages.length, onProgress),
-    kind: "pages",
-    units: pages,
-  });
-
-  onProgress(1, "stage.finished");
-
-  return { detections, handle: { pages: units } satisfies PdfHandle, warnings: [...warnings] };
-};
-
 const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, onProgress }) => {
   if (!isHandle(analysis.handle)) {
     throw new TypeError("The PDF analysis carried no recognised pages to paint from");
@@ -271,7 +218,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
     const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
 
     const warnings = new Set<WarningKey>(analysis.warnings);
-    const survived: Array<string> = [];
+    const survived: Array<WordInput> = [];
 
     let original: Promise<PDFDocument> | undefined;
     let copying = true;
@@ -306,10 +253,10 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
       onProgress(progress, "stage.redacting");
 
-      const rects = spansToRects(keptSpans(page, decisions), page.words);
-      const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
+      const rects = rectsFor(page, keptSpans(page, decisions));
+      const showing = uncovered(page, rects).words;
 
-      survived.push(...showing.map((word) => word.text));
+      survived.push(...showing);
 
       if (rects.length === 0 && (await copyPage(number))) {
         continue;
@@ -350,27 +297,34 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       });
     }
 
-    const survivors = await survivingSpans(survived.join(" "), detect);
-
-    if (survivors.length > 0) {
-      warnings.add("warning.notFullyRedacted");
-    }
+    const verified = await verifyOutput(surfaceOf(survived).text, detect, warnings);
 
     onProgress(1, "stage.finished");
 
     return {
       blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
       redactionCount: redactionCount("pages", pages, decisions),
-      warnings: [...warnings],
+      warnings: verified,
     };
   });
 
   return built;
 };
 
-const pdfRedactor: Redactor = {
-  analyse: analysePdf,
-  apply: applyPdf,
-};
+const createPdfRedactor = (read: ReadText): Redactor => ({
+  analyse: async (file, detect, onProgress) => {
+    const { pages, warnings } = await readPages(file, read, onProgress);
+    const { detections, units } = await analyseUnits({
+      detect: detectingPages(detect, pages.length, onProgress),
+      kind: "pages",
+      units: pages,
+    });
 
-export { documentOptions, pdfRedactor };
+    onProgress(1, "stage.finished");
+
+    return { detections, handle: { pages: units } satisfies PdfHandle, warnings: [...warnings] };
+  },
+  apply: applyPdf,
+});
+
+export { createPdfRedactor, documentOptions };

@@ -4,8 +4,6 @@ import { readFileAsFile } from "./read-file";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 
-const PNG_MAGIC = new Uint8Array([137, 80, 78, 71]);
-
 describe("readFileAsFile", () => {
   it("names the file after the path it was read from", async () => {
     const file = await readFileAsFile(`${FIXTURES}sample.txt`);
@@ -31,13 +29,5 @@ describe("readFileAsFile", () => {
     const file = await readFileAsFile(`${FIXTURES}sample.txt`);
 
     await expect(file.text()).resolves.toContain("John Smith");
-  });
-
-  it("spells itself out as bytes for a recogniser that reads nothing else", async () => {
-    const file = await readFileAsFile(`${FIXTURES}sample.png`);
-    const bytes = new Uint8Array(file);
-
-    expect(bytes.slice(0, 4)).toEqual(PNG_MAGIC);
-    expect(bytes.length).toBe(file.size);
   });
 });

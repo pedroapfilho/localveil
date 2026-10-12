@@ -120,6 +120,18 @@ describe("textRedactor", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("says nothing when the detector tags two masked words and the space between", async () => {
+    const result = await redactFile({
+      detect: answering([span(3, 6), span(7, 12)], [span(3, 12)]),
+      file: file("a.txt", "text/plain", "Hi Ana Silva!"),
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
+
+    await expect(result.blob.text()).resolves.toBe("Hi ███ █████!");
+    expect(result.warnings).toEqual([]);
+  });
+
   it("leaves the role a contract defined for itself readable", async () => {
     const text = 'Zora Labs, Inc. ("Client") engages Pedro Filho. Client will pay Pedro Filho.';
     const at = (value: string, from = 0) => {

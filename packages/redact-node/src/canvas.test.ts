@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import { createNodeCanvas, installCanvas } from "./canvas";
 
-const PNG_MAGIC = new Uint8Array([137, 80, 78, 71]);
-
 const filled = (width: number, height: number) => {
   const canvas = createNodeCanvas(width, height);
   const context = canvas.getContext("2d");
@@ -101,11 +99,5 @@ describe("createNodeCanvas", () => {
 
   it("defaults to a PNG when nobody says which type they want", async () => {
     await expect(filled(20, 20).convertToBlob()).resolves.toHaveProperty("type", "image/png");
-  });
-
-  it("spells itself out as a PNG for a recogniser that only reads bytes", () => {
-    const bytes = new Uint8Array(filled(20, 20));
-
-    expect(bytes.slice(0, 4)).toEqual(PNG_MAGIC);
   });
 });

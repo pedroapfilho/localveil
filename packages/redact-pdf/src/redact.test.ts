@@ -1,41 +1,35 @@
-/* oxlint-disable anti-slop/no-module-mocking -- pdfjs-dist, pdf-lib and @repo/ocr wrap wasm/canvas engines; the module seam is the only practical hermetic substitute */
-import type * as Ocr from "@repo/ocr";
-import type { Bbox, Detect, FileStageKey } from "@repo/redact-core";
+/* oxlint-disable anti-slop/no-module-mocking -- pdfjs-dist and pdf-lib are the wasm/canvas engines this redactor drives; the module seam is the only practical hermetic substitute */
+import type { OcrLanguage, ReadText, Recognise, TextReading } from "@repo/ocr";
+import { createTextReader } from "@repo/ocr";
+import type { Detect, FileProgress, FileStageKey } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
-const events: Array<string> = [];
-
 type FakePage = {
   layer: string;
   layout?: Array<[x: number, y: number]>;
-  words: Array<string>;
+  legibility?: TextReading["legibility"];
+  readsAs?: OcrLanguage;
+  scanned: Array<string>;
 };
 
+const events: Array<string> = [];
+
+/* What pdf.js drew onto each canvas, so a reader handed the canvas can tell which page it holds. */
+const rendered = new WeakMap<object, FakePage>();
+
 const state = {
-  confidence: 90,
-  confidenceOf: (_text: string) => 95,
   copied: [] as Array<number>,
   drawn: [] as Array<Array<string>>,
   drawTextThrowsOn: undefined as string | undefined,
-  language: "en" as "en" | "es" | "pt",
   layerTransform: undefined as Array<number> | undefined,
   pages: [] as Array<FakePage>,
   painted: [] as Array<string>,
-  recognisedIn: [] as Array<string | undefined>,
   sourceOpens: true,
 };
 
-const WORD_WIDTH = 40;
-const LINE_HEIGHT = 20;
-
-const boxFor = (index: number): Bbox => ({
-  x0: index * WORD_WIDTH,
-  x1: index * WORD_WIDTH + WORD_WIDTH,
-  y0: 0,
-  y1: LINE_HEIGHT,
-});
+const TYPED = [2, 0, 0, -2, 0, 400];
 
 vi.mock("#pdfjs-worker", () => {
   Object.assign(globalThis, { pdfjsWorker: {} });
@@ -51,17 +45,17 @@ vi.mock("#pdfjs", () => ({
       return Promise.resolve();
     },
     promise: Promise.resolve({
-      getPage: (number: number) =>
-        Promise.resolve({
+      getPage: (number: number) => {
+        const page = state.pages[number - 1];
+
+        assert.isDefined(page, `no fake page ${String(number)}`);
+
+        return Promise.resolve({
           cleanup: () => {
             events.push(`cleanup:${String(number)}`);
           },
           getTextContent: () => {
             events.push(`text:${String(number)}`);
-
-            const page = state.pages[number - 1];
-
-            assert.isDefined(page, `no fake page ${String(number)}`);
 
             return Promise.resolve({
               items: page.layer.split(" ").map((str, at) => {
@@ -71,17 +65,15 @@ vi.mock("#pdfjs", () => ({
               }),
             });
           },
-          getViewport: () => ({
-            height: 200,
-            transform: state.layerTransform,
-            width: 400,
-          }),
-          render: () => {
+          getViewport: () => ({ height: 200, transform: state.layerTransform, width: 400 }),
+          render: ({ canvasContext }: { canvasContext: { canvas: object } }) => {
             events.push(`render:${String(number)}`);
+            rendered.set(canvasContext.canvas, page);
 
             return { promise: Promise.resolve() };
           },
-        }),
+        });
+      },
       numPages: state.pages.length,
     }),
   }),
@@ -131,29 +123,17 @@ vi.mock("pdf-lib", () => ({
   StandardFonts: { Helvetica: "Helvetica" },
 }));
 
-vi.mock("@repo/ocr", async (importOriginal) => ({
-  ...(await importOriginal<typeof Ocr>()),
-  detectLanguage: () => ({ confidence: 0.9, language: state.language }),
-  readImageText: (_image: OffscreenCanvas, options: { known?: string } = {}) => {
-    state.recognisedIn.push(options.known);
-
-    const page = state.pages[state.recognisedIn.length - 1];
-
-    assert.isDefined(page, `no fake page for recognition ${String(state.recognisedIn.length)}`);
-
-    return Promise.resolve({
-      confidence: state.confidence,
-      language: state.language,
-      words: page.words.map((text, index) => ({
-        bbox: boxFor(index),
-        confidence: state.confidenceOf(text),
-        text,
-      })),
-    });
-  },
-}));
-
 class FakeCanvas {
+  readonly context = {
+    canvas: this,
+    fillRect: (x: number, y: number, width: number, height: number) => {
+      state.painted.push(`${String(x)},${String(y)},${String(width)},${String(height)}`);
+    },
+    fillStyle: "",
+    getImageData: () => ({ data: new Uint8ClampedArray(this.width * this.height * 4) }),
+    putImageData: () => undefined,
+  };
+
   constructor(
     public width: number,
     public height: number,
@@ -164,20 +144,31 @@ class FakeCanvas {
   }
 
   getContext() {
-    return {
-      fillRect: (x: number, y: number, w: number, h: number) => {
-        state.painted.push(`${x},${y},${w},${h}`);
-      },
-      fillStyle: "",
-    };
+    return this.context;
   }
 }
 
-const { pdfRedactor } = await import("./index");
+const { createPdfRedactor } = await import("./index");
+
+const boxOf = (index: number) => ({ x0: index * 40, x1: index * 40 + 40, y0: 0, y1: 20 });
+
+/* A fixed-words reader: it hands back the words scanned onto whichever page pdf.js rendered. */
+const fixedWords = vi.fn<ReadText>((canvas) => {
+  const page = rendered.get(canvas);
+
+  assert.isDefined(page, "the reader was handed a canvas pdf.js never rendered");
+
+  return Promise.resolve({
+    alternatives: [],
+    language: page.readsAs ?? "en",
+    legibility: page.legibility ?? (page.scanned.length === 0 ? "blank" : "legible"),
+    words: page.scanned.map((text, index) => ({ bbox: boxOf(index), text })),
+  });
+});
 
 const file = () => new File([new Uint8Array([37, 80, 68, 70])], "statement.pdf");
 
-const detecting = (targets: Array<string>): Detect =>
+const naming = (...targets: Array<string>): Detect =>
   vi.fn((text: string) =>
     Promise.resolve(
       targets.flatMap((target) => {
@@ -190,33 +181,7 @@ const detecting = (targets: Array<string>): Detect =>
     ),
   );
 
-const detectingEvery = (targets: Array<string>): Detect =>
-  vi.fn((text: string) =>
-    Promise.resolve(
-      targets.flatMap((target) =>
-        [...text.matchAll(new RegExp(target.replaceAll(".", String.raw`\.`), "gv"))].map(
-          (match) => ({
-            end: match.index + target.length,
-            label: "private_person" as const,
-            score: 0.9,
-            start: match.index,
-          }),
-        ),
-      ),
-    ),
-  );
-
-const onlyOnTheSignaturePage: Detect = (text) => {
-  const start = text.startsWith("Signed") ? text.indexOf("Ana Lima") : -1;
-
-  return Promise.resolve(
-    start === -1
-      ? []
-      : [{ end: start + "Ana Lima".length, label: "private_person" as const, score: 0.9, start }],
-  );
-};
-
-const run = (detect: Detect = detecting([])) => {
+const run = (detect: Detect = naming(), read: ReadText = fixedWords) => {
   const stages: Array<FileStageKey> = [];
 
   return redactFile({
@@ -225,31 +190,39 @@ const run = (detect: Detect = detecting([])) => {
     onProgress: (_fraction, stage) => {
       stages.push(stage);
     },
-    redactor: pdfRedactor,
+    redactor: createPdfRedactor(read),
   }).then((result) => ({ ...result, stages }));
 };
 
-const page = (layer: string, words = layer.split(" ")): FakePage => ({ layer, words });
+const analyse = (detect: Detect, onProgress: FileProgress = () => undefined) =>
+  createPdfRedactor(fixedWords).analyse(file(), detect, onProgress);
+
+const page = (layer: string, scanned = layer.split(" ")): FakePage => ({ layer, scanned });
+
+const scan = (scanned: Array<string>, rest: Partial<FakePage> = {}): FakePage => ({
+  layer: "",
+  scanned,
+  ...rest,
+});
+
+const knownLanguages = () => fixedWords.mock.calls.map(([, known]) => known);
 
 beforeEach(() => {
   events.length = 0;
-  state.confidence = 90;
   state.copied = [];
   state.drawn = [];
   state.drawTextThrowsOn = undefined;
-  state.language = "en";
-  state.pages = [page("Invoice for Ana Lima")];
-  state.confidenceOf = () => 95;
-  state.painted = [];
   state.layerTransform = undefined;
-  state.recognisedIn = [];
+  state.pages = [page("Invoice for Ana Lima")];
+  state.painted = [];
   state.sourceOpens = true;
+  fixedWords.mockClear();
 
   vi.stubGlobal("OffscreenCanvas", FakeCanvas);
 });
 
-describe("pdfRedactor", () => {
-  it("hands back a PDF", async () => {
+describe("the document it hands back", () => {
+  it("is a PDF", async () => {
     const { blob } = await run();
 
     expect(blob.type).toBe("application/pdf");
@@ -259,24 +232,13 @@ describe("pdfRedactor", () => {
   it("reads every page before it paints any of them", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima")];
 
-    await run(detecting(["Ana Lima"]));
+    await run(naming("Ana Lima"));
 
-    const lastRead = events.lastIndexOf("text:2");
-    const firstPainted = events.indexOf("image");
-
-    expect(lastRead).toBeLessThan(firstPainted);
-  });
-
-  it("covers a name on the page where the model missed it", async () => {
-    state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima today")];
-
-    await run(onlyOnTheSignaturePage);
-
-    expect(state.drawn[0]).toEqual(["Invoice", "for"]);
+    expect(events.lastIndexOf("text:2")).toBeLessThan(events.indexOf("image"));
   });
 
   it("puts the words it did not cover back, so the output stays searchable", async () => {
-    await run(detecting(["Ana Lima"]));
+    await run(naming("Ana Lima"));
 
     expect(state.drawn[0]).toEqual(["Invoice", "for"]);
   });
@@ -284,108 +246,9 @@ describe("pdfRedactor", () => {
   it("counts what it covered", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima")];
 
-    const { redactionCount } = await run(detecting(["Ana Lima"]));
+    const { redactionCount } = await run(naming("Ana Lima"));
 
     expect(redactionCount).toBe(2);
-  });
-
-  it("finds nothing to count in a page with nothing to hide", async () => {
-    const { redactionCount } = await run();
-
-    expect(redactionCount).toBe(0);
-  });
-
-  it("finds nothing to search in a page the recogniser could not read", async () => {
-    state.confidenceOf = () => 28;
-
-    const detect = detecting(["Ana Lima"]);
-    const { warnings } = await run(detect);
-
-    expect(detect).not.toHaveBeenCalled();
-    expect(warnings).toContain("warning.lowConfidence");
-  });
-
-  it("leaves an unreadable page whole rather than blacking it out", async () => {
-    state.confidenceOf = () => 28;
-
-    await run(detecting(["Ana Lima"]));
-
-    expect(state.painted).toEqual([]);
-  });
-
-  it("covers the words it could read on a page the average would have condemned", async () => {
-    state.confidence = 46;
-    state.confidenceOf = (text) => (text === "Ana" || text === "Lima" ? 95 : 20);
-
-    const { redactionCount, warnings } = await run(detecting(["Ana Lima"]));
-
-    expect(redactionCount).toBe(1);
-    expect(state.painted.length).toBeGreaterThan(0);
-    expect(warnings).toContain("warning.lowConfidence");
-  });
-
-  it("warns when most of the page was beyond the recogniser", async () => {
-    state.confidenceOf = () => 40;
-
-    const { warnings } = await run();
-
-    expect(warnings).toContain("warning.lowConfidence");
-  });
-
-  it("says nothing about the odd word it could not make out", async () => {
-    state.pages = [page("Invoice for Ana Lima on the fourteenth of March")];
-    state.confidenceOf = (text) => (text === "fourteenth" ? 20 : 95);
-
-    const { warnings } = await run();
-
-    expect(warnings).toEqual([]);
-  });
-
-  it("says nothing when the page read cleanly", async () => {
-    const { warnings } = await run();
-
-    expect(warnings).toEqual([]);
-  });
-
-  it("warns that a page carried no text layer, which means it was scanned", async () => {
-    state.pages = [{ layer: "", words: ["Ana", "Lima"] }];
-
-    const { warnings } = await run();
-
-    expect(warnings).toContain("warning.scannedPages");
-  });
-
-  it("warns when a file gave up no text at all", async () => {
-    state.pages = [{ layer: "", words: [] }];
-
-    const { warnings } = await run();
-
-    expect(warnings).toContain("warning.noText");
-  });
-
-  it("warns when a character could not go back into the text layer", async () => {
-    state.drawTextThrowsOn = "Invoice";
-
-    const { warnings } = await run(detecting(["Ana Lima"]));
-
-    expect(warnings).toContain("warning.droppedCharacters");
-  });
-
-  it("reads the language off the text layer and recognises in it", async () => {
-    state.language = "pt";
-    state.pages = [page("Fatura para Ana Lima"), page("Assinado por Ana Lima")];
-
-    await run();
-
-    expect(state.recognisedIn).toEqual(["pt", "pt"]);
-  });
-
-  it("lets the recogniser work the language out when there is no text layer to read", async () => {
-    state.pages = [{ layer: "", words: ["Ana", "Lima"] }];
-
-    await run();
-
-    expect(state.recognisedIn).toEqual([undefined]);
   });
 
   it("reports the stages a reader watches go by", async () => {
@@ -397,58 +260,56 @@ describe("pdfRedactor", () => {
     expect(stages).toContain("stage.redacting");
     expect(stages.at(-1)).toBe("stage.finished");
   });
+});
 
-  it("adds one output page per input page", async () => {
-    state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima"), page("Page three")];
-
-    await run();
-
-    expect(state.copied.length + state.drawn.length).toBe(3);
-  });
-
-  it("copies a page that carries no redaction rather than rasterising it", async () => {
-    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
-
-    await run(detecting(["Ana Lima"]));
-
-    expect(state.copied).toEqual([0]);
-    expect(state.drawn.length).toBe(1);
-  });
-
-  it("keeps every page when it mixes copied and painted ones", async () => {
+describe("pages without redactions", () => {
+  it("are copied rather than rasterised", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima"), page("Page three")];
 
-    await run(detecting(["Ana Lima"]));
+    await run(naming("Ana Lima"));
 
-    expect(state.copied.length + state.drawn.length).toBe(3);
+    expect(state.copied).toEqual([0, 2]);
+    expect(state.drawn).toHaveLength(1);
   });
 
-  it("paints every page when every page carries a redaction", async () => {
+  it("are all painted when every page carries a redaction", async () => {
     state.pages = [page("Invoice for Ana Lima"), page("Signed by Ana Lima")];
 
-    await run(detecting(["Ana Lima"]));
+    await run(naming("Ana Lima"));
 
     expect(state.copied).toEqual([]);
-    expect(state.drawn.length).toBe(2);
+    expect(state.drawn).toHaveLength(2);
   });
 
-  it("does not render a page a second time to copy it", async () => {
+  it("are not rendered a second time to be copied", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
 
-    await run(detecting(["Ana Lima"]));
+    await run(naming("Ana Lima"));
 
     expect(events.filter((event) => event === "render:1")).toHaveLength(1);
     expect(events.filter((event) => event === "render:2")).toHaveLength(2);
   });
 
-  it("counts the same whether a page is copied or painted", async () => {
+  it("count the same whether copied or painted", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
 
-    const { redactionCount } = await run(detecting(["Ana Lima"]));
+    const { redactionCount } = await run(naming("Ana Lima"));
 
     expect(redactionCount).toBe(1);
   });
 
+  it("are painted when the source cannot be reopened", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+    state.sourceOpens = false;
+
+    await run(naming("Ana Lima"));
+
+    expect(state.copied).toEqual([]);
+    expect(state.drawn).toHaveLength(2);
+  });
+});
+
+describe("the check on the output", () => {
   it("warns when the detector still finds personal data in what stayed visible", async () => {
     const answers = [[], [{ end: 20, label: "private_person" as const, score: 0.9, start: 12 }]];
     const { warnings } = await run(() => Promise.resolve(answers.shift() ?? []));
@@ -457,156 +318,187 @@ describe("pdfRedactor", () => {
   });
 
   it("says nothing when the words left showing carry no personal data", async () => {
-    const { warnings } = await run(detecting(["Ana Lima"]));
+    const { warnings } = await run(naming("Ana Lima"));
 
     expect(warnings).not.toContain("warning.notFullyRedacted");
   });
 
-  it("checks what stayed visible on a copied page too", async () => {
+  it("reads what stayed visible on a copied page too", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
 
-    const detect = detecting(["Ana Lima"]);
+    const detect = naming("Ana Lima");
 
     await run(detect);
 
-    expect(detect).toHaveBeenCalledWith("Invoice total due Signed by");
+    expect(detect).toHaveBeenLastCalledWith("Invoice total due Signed by");
+  });
+});
+
+describe("warnings", () => {
+  it("say nothing when the page read cleanly", async () => {
+    const { warnings } = await run();
+
+    expect(warnings).toEqual([]);
   });
 
-  it("reads a typed page from its own text layer instead of recognising it", async () => {
-    state.layerTransform = [2, 0, 0, -2, 0, 400];
+  it("say a page carried no text layer, which means it was scanned", async () => {
+    state.pages = [scan(["Ana", "Lima"])];
+
+    const { warnings } = await run();
+
+    expect(warnings).toEqual(["warning.scannedPages"]);
+  });
+
+  it("say a file gave up no text at all", async () => {
+    state.pages = [scan([])];
+
+    const { warnings } = await run();
+
+    expect(warnings).toContain("warning.noText");
+  });
+
+  it("carry the reader's verdict that a page was mostly unreadable", async () => {
     state.pages = [
-      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais palavras"),
+      page("Invoice for Ana Lima"),
+      { ...page("Signed by"), legibility: "unreadable" },
     ];
 
-    const seen: Array<string> = [];
-    const detect = (text: string) => {
-      seen.push(text);
+    const { warnings } = await run();
 
-      return detecting(["Ana Lima"])(text);
-    };
-
-    await run(detect);
-
-    expect(state.recognisedIn).toEqual([]);
-    expect(seen.at(0)).toContain("Ana Lima");
+    expect(warnings).toEqual(["warning.lowConfidence"]);
   });
 
-  it("still recognises a typed page when its layer is too thin to trust", async () => {
-    state.layerTransform = [2, 0, 0, -2, 0, 400];
-    state.pages = [page("Invoice for Ana Lima")];
+  it("say when a character could not go back into the text layer", async () => {
+    state.drawTextThrowsOn = "Invoice";
 
-    await run(detecting(["Ana Lima"]));
+    const { warnings } = await run(naming("Ana Lima"));
 
-    expect(state.recognisedIn).toHaveLength(1);
+    expect(warnings).toContain("warning.droppedCharacters");
+  });
+});
+
+describe("the language a page is read in", () => {
+  it("comes off the text layer when the layer says enough", async () => {
+    const prose = "Ele nao foi a reuniao entao voce deve enviar uma copia";
+
+    state.pages = [page(prose, ["Fatura"]), page("Assinado", ["Ana"])];
+
+    await run();
+
+    expect(knownLanguages()).toEqual(["pt", "pt"]);
   });
 
-  it("recognises a page whose viewport gives no transform to place words with", async () => {
-    state.layerTransform = undefined;
-    state.pages = [
-      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais"),
-    ];
+  it("is left to the reader when there is no text layer to sample", async () => {
+    state.pages = [scan(["Ana", "Lima"])];
 
-    await run(detecting(["Ana Lima"]));
+    await run();
 
-    expect(state.recognisedIn).toHaveLength(1);
+    expect(knownLanguages()).toEqual([undefined]);
   });
 
-  it("covers a name it read out of the text layer", async () => {
-    state.layerTransform = [2, 0, 0, -2, 0, 400];
-    state.pages = [
-      page("Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais palavras"),
-    ];
+  it("carries over from the first page the reader worked it out on", async () => {
+    state.pages = [scan(["Fatura"], { readsAs: "pt" }), scan(["Ana"]), scan(["Lima"])];
 
-    const { redactionCount } = await run(detecting(["Ana"]));
+    await run();
 
-    expect(redactionCount).toBeGreaterThan(0);
-    expect(state.painted.length).toBeGreaterThan(0);
+    expect(knownLanguages()).toEqual([undefined, "pt", "pt"]);
   });
+});
 
-  it("paints an untouched page when the source cannot be reopened", async () => {
-    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
-    state.sourceOpens = false;
+describe("a scanned page", () => {
+  it("is read again from a black and white copy when its first reading is mostly illegible", async () => {
+    state.pages = [scan([])];
 
-    await run(detecting(["Ana Lima"]));
-
-    expect(state.copied).toEqual([]);
-    expect(state.drawn.length).toBe(2);
-  });
-
-  it("releases every page it opens and the document at the end of the pass", async () => {
-    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
-
-    await pdfRedactor.analyse(file(), detecting(["Ana Lima"]), () => undefined);
-
-    expect(events.filter((entry) => entry.startsWith("cleanup:"))).toHaveLength(2);
-    expect(events.filter((entry) => entry === "destroy")).toHaveLength(1);
-  });
-
-  it("releases the document on the apply pass too", async () => {
-    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
-
-    await run(detecting(["Ana Lima"]));
-
-    expect(events.filter((entry) => entry === "destroy")).toHaveLength(2);
-  });
-
-  it("still releases the document when the job is cancelled mid-pass", async () => {
-    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
-
-    const stopped = pdfRedactor.analyse(file(), detecting([]), (fraction, stage) => {
-      if (stage === "stage.extracting" && fraction > 0) {
-        throw new Error("cancelled");
-      }
-    });
-
-    await expect(stopped).rejects.toThrow("cancelled");
-    expect(events).toContain("destroy");
-    expect(events.some((entry) => entry.startsWith("cleanup:"))).toBe(true);
-  });
-
-  it("keeps only the analysed page and its word geometry in the handle it hands to apply", async () => {
-    const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
-    const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
-
-    assert.isDefined(first);
-
-    expect(Object.keys(first).toSorted()).toEqual(["marks", "text", "words"]);
-  });
-
-  it("refuses a handle whose pages carry no words", async () => {
-    const analysis = await pdfRedactor.analyse(file(), detecting(["Ana"]), () => undefined);
-
-    await expect(
-      pdfRedactor.apply({
-        analysis: { ...analysis, handle: { pages: [{}] } },
-        decisions: { covered: [] },
-        detect: detecting([]),
-        file: file(),
-        onProgress: () => undefined,
-      }),
-    ).rejects.toThrow(/no recognised pages/v);
-  });
-
-  it("leaves a role the first page defined out of the detections on every page", async () => {
-    state.pages = [
-      page('Zora Labs, Inc. ("Client") engages Ana Lima'),
-      page("Client will pay Ana Lima"),
-    ];
-
-    const analysis = await pdfRedactor.analyse(
-      file(),
-      detectingEvery(["Client", "Ana Lima"]),
-      () => undefined,
+    const recognise = vi.fn<Recognise>((image) =>
+      Promise.resolve(
+        rendered.has(image)
+          ? {
+              confidence: 40,
+              words: [
+                { bbox: boxOf(0), confidence: 95, text: "Ana" },
+                { bbox: boxOf(1), confidence: 20, text: "Lima" },
+              ],
+            }
+          : {
+              confidence: 90,
+              words: ["Signed", "by", "Ana", "Lima"].map((text, index) => ({
+                bbox: boxOf(index),
+                confidence: 95,
+                text,
+              })),
+            },
+      ),
     );
+    const detect = naming("Ana Lima");
 
-    expect(analysis.detections.map((detection) => detection.preview)).toEqual([
-      "Ana Lima",
-      "Ana Lima",
-    ]);
+    const { redactionCount, warnings } = await run(detect, createTextReader(recognise));
+
+    const [first, retry] = recognise.mock.calls.map(([image]) => image);
+
+    expect(recognise).toHaveBeenCalledTimes(2);
+    expect(first === undefined ? false : rendered.has(first)).toBe(true);
+    expect(retry === undefined ? true : rendered.has(retry)).toBe(false);
+    expect(detect).toHaveBeenCalledWith("Signed by Ana Lima");
+    expect(redactionCount).toBe(1);
+    expect(warnings).toEqual(["warning.scannedPages"]);
   });
 
-  it("reads a filled form by its layout, not by the order the layer lists it", async () => {
-    state.layerTransform = [2, 0, 0, -2, 0, 400];
+  it("is painted with nothing over it when the reader could make none of it out", async () => {
+    state.pages = [scan([], { legibility: "unreadable" })];
+
+    const detect = naming("Ana Lima");
+    const { warnings } = await run(detect);
+
+    expect(detect).not.toHaveBeenCalled();
+    expect(state.painted).toEqual([]);
+    expect(warnings).toContain("warning.lowConfidence");
+  });
+});
+
+describe("a typed page", () => {
+  const LONG =
+    "Fatura para Ana Lima em Recife com telefone e endereco e conta e data e mais palavras";
+
+  it("is read from its own text layer instead of being recognised", async () => {
+    state.layerTransform = TYPED;
+    state.pages = [page(LONG)];
+
+    const detect = naming("Ana Lima");
+
+    await run(detect);
+
+    expect(fixedWords).not.toHaveBeenCalled();
+    expect(detect).toHaveBeenCalledWith(expect.stringContaining("Ana Lima"));
+  });
+
+  it("is still recognised when its layer is too thin to trust", async () => {
+    state.layerTransform = TYPED;
+
+    await run(naming("Ana Lima"));
+
+    expect(fixedWords).toHaveBeenCalledTimes(1);
+  });
+
+  it("is recognised when its viewport gives no transform to place words with", async () => {
+    state.pages = [page(LONG)];
+
+    await run(naming("Ana Lima"));
+
+    expect(fixedWords).toHaveBeenCalledTimes(1);
+  });
+
+  it("is covered where the text layer put a name", async () => {
+    state.layerTransform = TYPED;
+    state.pages = [page(LONG)];
+
+    const { redactionCount } = await run(naming("Ana"));
+
+    expect(redactionCount).toBe(1);
+    expect(state.painted).not.toEqual([]);
+  });
+
+  it("is read by its layout, not by the order the layer lists it", async () => {
+    state.layerTransform = TYPED;
     state.pages = [
       {
         layer: "Name of Recipient Please Print Ana Lima The parties have executed this agreement",
@@ -625,20 +517,74 @@ describe("pdfRedactor", () => {
           [160, 140],
           [200, 140],
         ],
-        words: [],
+        scanned: [],
       },
     ];
 
-    const seen: Array<string> = [];
+    const detect = naming();
 
-    await run((text) => {
-      seen.push(text);
+    await run(detect);
 
-      return detecting([])(text);
-    });
-
-    expect(seen.at(0)).toBe(
+    expect(detect).toHaveBeenCalledWith(
       "The parties have executed this agreement Ana Lima Name of Recipient Please Print",
     );
+  });
+});
+
+describe("the pdf.js resources it holds", () => {
+  it("are released page by page and as a document at the end of the pass", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await analyse(naming("Ana Lima"));
+
+    expect(events.filter((entry) => entry.startsWith("cleanup:"))).toHaveLength(2);
+    expect(events.filter((entry) => entry === "destroy")).toHaveLength(1);
+  });
+
+  it("are released on the apply pass too", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    await run(naming("Ana Lima"));
+
+    expect(events.filter((entry) => entry === "destroy")).toHaveLength(2);
+  });
+
+  it("are still released when the job is cancelled mid-pass", async () => {
+    state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
+
+    const stopped = analyse(naming(), (fraction, stage) => {
+      if (stage === "stage.extracting" && fraction > 0) {
+        throw new Error("cancelled");
+      }
+    });
+
+    await expect(stopped).rejects.toThrow("cancelled");
+    expect(events).toContain("destroy");
+    expect(events.some((entry) => entry.startsWith("cleanup:"))).toBe(true);
+  });
+});
+
+describe("the handle analysis hands to apply", () => {
+  it("keeps only each analysed page and its word geometry", async () => {
+    const analysis = await analyse(naming("Ana"));
+    const [first] = (analysis.handle as { pages: Array<Record<string, unknown>> }).pages;
+
+    assert.isDefined(first);
+
+    expect(Object.keys(first).toSorted()).toEqual(["marks", "text", "words"]);
+  });
+
+  it("is refused when its pages carry no words", async () => {
+    const analysis = await analyse(naming("Ana"));
+
+    await expect(
+      createPdfRedactor(fixedWords).apply({
+        analysis: { ...analysis, handle: { pages: [{ marks: [], text: "Ana" }] } },
+        decisions: { covered: [] },
+        detect: naming(),
+        file: file(),
+        onProgress: () => undefined,
+      }),
+    ).rejects.toThrow(/no recognised pages/v);
   });
 });
