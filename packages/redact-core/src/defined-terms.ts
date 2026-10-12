@@ -1,4 +1,5 @@
-import type { Span } from "./types";
+import { normalise } from "./text";
+import type { DetectedText, Span } from "./types";
 
 const QUOTE = String.raw`["“”]`;
 
@@ -14,9 +15,9 @@ const ALIAS_WINDOW = 80;
 /* Matches the same three languages patterns.ts writes its month names in. */
 const LEADING_ARTICLE = /^(?:the|an?|os?|as|un[ao]?|el|l[ao]s?)\s+/iv;
 
-const normalise = (value: string) => value.trim().replaceAll(/\s+/gv, " ").toLowerCase();
+const folded = (value: string) => normalise(value).toLowerCase();
 
-const asTerm = (value: string) => normalise(value).replace(LEADING_ARTICLE, "");
+const asTerm = (value: string) => folded(value).replace(LEADING_ARTICLE, "");
 
 const holdsWord = (haystack: string, word: string) =>
   new RegExp(String.raw`(?<![\p{Letter}\p{Number}])${word}(?![\p{Letter}\p{Number}])`, "iv").test(
@@ -38,21 +39,23 @@ const aliasesDetected = (text: string, spans: ReadonlyArray<Span>, at: number, t
 
     const tagged = text.slice(span.start, span.end);
 
-    return normalise(tagged) !== normalise(term) && holdsWord(tagged, term);
+    return folded(tagged) !== folded(term) && holdsWord(tagged, term);
   });
 };
 
-const definedTerms = (text: string, spans: ReadonlyArray<Span>): Set<string> => {
+const definedTerms = (units: ReadonlyArray<DetectedText>): Set<string> => {
   const terms = new Set<string>();
 
-  for (const match of text.matchAll(DEFINITION)) {
-    const term = match.groups?.term;
+  for (const { spans, text } of units) {
+    for (const match of text.matchAll(DEFINITION)) {
+      const term = match.groups?.term;
 
-    if (term === undefined || aliasesDetected(text, spans, match.index, term)) {
-      continue;
+      if (term === undefined || aliasesDetected(text, spans, match.index, term)) {
+        continue;
+      }
+
+      terms.add(folded(term));
     }
-
-    terms.add(normalise(term));
   }
 
   return terms;

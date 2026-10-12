@@ -12,6 +12,8 @@ type Span = { end: number; label: PiiLabel; score: number; start: number };
 
 type Detect = (text: string) => Promise<Array<Span>>;
 
+type DetectedText = { spans: Array<Span>; text: string };
+
 type DocumentLanguage = "en" | "es" | "pt";
 
 type ModelStageKey = "model.downloading" | "model.ready" | "model.slowDevice";
@@ -90,6 +92,7 @@ export type {
   Bbox,
   Decisions,
   Detect,
+  DetectedText,
   Detection,
   DocumentLanguage,
   FileProgress,

@@ -1,14 +1,11 @@
-import type { Redactor, WarningKey } from "@repo/redact-core";
+import type { AnalysedUnit, Detect, Redactor, WarningKey } from "@repo/redact-core";
 import {
-  dedupeDetections,
-  definedTerms,
-  describeSpans,
-  dropDefinedTerms,
+  analyseUnits,
+  isAnalysedUnit,
   keptSpans,
   mergeOverlappingRanges,
-  spansForTokens,
+  redactionCount,
   survivingSpans,
-  tokensFromSpans,
 } from "@repo/redact-core";
 
 import { maskRanges } from "./mask";
@@ -45,9 +42,13 @@ const structuralSpans = (name: string, text: string) => {
   return extension === ".json" ? jsonFieldSpans(text) : [];
 };
 
+const withStructure =
+  (name: string, detect: Detect): Detect =>
+  async (text) => [...(await detect(text)), ...structuralSpans(name, text)];
+
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
-const analysedText = (handle: unknown): string => {
-  if (typeof handle !== "string") {
+const analysedText = (handle: unknown): AnalysedUnit => {
+  if (!isAnalysedUnit(handle)) {
     throw new TypeError("The text analysis carried no source text to mask");
   }
 
@@ -61,34 +62,26 @@ const textRedactor: Redactor = {
 
     const text = await file.text();
 
-    if (text.length === 0) {
-      onProgress(1, "stage.finished");
-
-      return { detections: [], handle: text, warnings: ["warning.noText"] };
-    }
-
     onProgress(0.2, "stage.detecting");
 
-    const found = await detect(text);
-    const structural = structuralSpans(file.name, text);
-    const detected = [...found, ...structural];
-    const repeated = spansForTokens(text, tokensFromSpans(text, detected));
-    const spans = dropDefinedTerms([...detected, ...repeated], text, definedTerms(text, detected));
+    const {
+      detections,
+      units: [unit],
+    } = await analyseUnits({
+      detect: withStructure(file.name, detect),
+      kind: "file",
+      units: [{ text }],
+    });
 
     onProgress(1, "stage.finished");
 
-    return {
-      detections: dedupeDetections(describeSpans(spans, text)),
-      handle: text,
-      warnings: [],
-    };
+    return { detections, handle: unit, warnings: text.length === 0 ? ["warning.noText"] : [] };
   },
   apply: async ({ analysis, decisions, detect, file, onProgress }) => {
     onProgress(0.8, "stage.redacting");
 
-    const text = analysedText(analysis.handle);
-    const ranges = mergeOverlappingRanges(keptSpans(analysis.detections, decisions));
-    const masked = maskRanges(text, ranges);
+    const unit = analysedText(analysis.handle);
+    const masked = maskRanges(unit.text, mergeOverlappingRanges(keptSpans(unit, decisions)));
     const survivors = await survivingSpans(verifiable(file.name, masked), detect);
     const warnings: Array<WarningKey> = [...analysis.warnings];
 
@@ -100,7 +93,7 @@ const textRedactor: Redactor = {
 
     return {
       blob: new Blob([masked], { type: file.type }),
-      redactionCount: ranges.length,
+      redactionCount: redactionCount("file", [unit], decisions),
       warnings,
     };
   },

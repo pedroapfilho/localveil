@@ -1,21 +1,25 @@
 import type { ImageReading, OcrLanguage } from "@repo/ocr";
 import { assessReading, detectLanguage, readImageText } from "@repo/ocr";
-import type { PiiToken, PositionedWord, Rect, Redactor, Span, WarningKey } from "@repo/redact-core";
+import type {
+  AnalysedUnit,
+  Detect,
+  FileProgress,
+  PositionedWord,
+  Rect,
+  Redactor,
+  WarningKey,
+} from "@repo/redact-core";
 import {
+  analyseUnits,
   buildWordIndex,
-  dedupeDetections,
-  definedTerms,
-  describeSpans,
-  dropDefinedTerms,
   inReadingOrder,
+  isAnalysedUnit,
   isCovered,
   keptSpans,
-  mergeOverlappingRanges,
-  spansForTokens,
+  redactionCount,
   spansToRects,
   survivingSpans,
   toArrayBuffer,
-  tokensFromSpans,
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
@@ -31,9 +35,13 @@ const MIN_LAYER_WORDS = 12;
 
 const MIN_LANGUAGE_CONFIDENCE = 0.5;
 
-type Page = { spans: Array<Span>; text: string; words: Array<PositionedWord> };
+const READ_SHARE = 0.45;
 
-type PdfHandle = { pages: Array<{ words: Array<PositionedWord> }> };
+const DETECT_SHARE = 0.45;
+
+type Page = { text: string; words: Array<PositionedWord> };
+
+type PdfHandle = { pages: Array<AnalysedUnit & Page> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -150,22 +158,20 @@ const isHandle = (value: unknown): value is PdfHandle =>
   value !== null &&
   "pages" in value &&
   Array.isArray(value.pages) &&
-  value.pages.every(hasWords);
+  value.pages.every((page) => hasWords(page) && isAnalysedUnit(page));
 
-const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
+const readPages = (file: File, onProgress: FileProgress) =>
   withPdf(file, async (pdf) => {
     onProgress(0, "stage.reading");
 
     const warnings = new Set<WarningKey>();
     const pages: Array<Page> = [];
-    const tokens = new Map<string, PiiToken>();
-    const terms = new Set<string>();
 
     let language: OcrLanguage | undefined;
     let anyText = false;
 
     for (let number = 1; number <= pdf.numPages; number += 1) {
-      const progress = ((number - 1) / pdf.numPages) * 0.9;
+      const progress = ((number - 1) / pdf.numPages) * READ_SHARE;
 
       onProgress(progress, "stage.extracting");
 
@@ -213,25 +219,10 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
           };
         }
 
-        onProgress(progress, "stage.detecting");
-
-        const { text, words } = buildWordIndex(assessReading(reading).legible);
-        const spans = await detect(text);
-
-        for (const term of definedTerms(text, spans)) {
-          terms.add(term);
-        }
-
-        for (const token of tokensFromSpans(text, spans)) {
-          const key = token.text.toLowerCase();
-          const existing = tokens.get(key);
-
-          if (existing === undefined || existing.score < token.score) {
-            tokens.set(key, token);
-          }
-        }
-
-        return { hasText: reading.words.length > 0, spans, text, words };
+        return {
+          hasText: reading.words.length > 0,
+          ...buildWordIndex(assessReading(reading).legible),
+        };
       });
 
       anyText ||= hasText;
@@ -242,28 +233,32 @@ const analysePdf: Redactor["analyse"] = (file, detect, onProgress) =>
       warnings.add("warning.noText");
     }
 
-    const everyToken = [...tokens.values()];
-
-    onProgress(1, "stage.finished");
-
-    return {
-      detections: dedupeDetections(
-        pages.flatMap((page, at) =>
-          describeSpans(
-            dropDefinedTerms(
-              [...page.spans, ...spansForTokens(page.text, everyToken)],
-              page.text,
-              terms,
-            ),
-            page.text,
-            at,
-          ),
-        ),
-      ),
-      handle: { pages: pages.map(({ words }) => ({ words })) } satisfies PdfHandle,
-      warnings: [...warnings],
-    };
+    return { pages, warnings };
   });
+
+const detectingPages = (detect: Detect, count: number, onProgress: FileProgress): Detect => {
+  let detected = 0;
+
+  return (text) => {
+    onProgress(READ_SHARE + (detected / count) * DETECT_SHARE, "stage.detecting");
+    detected += 1;
+
+    return detect(text);
+  };
+};
+
+const analysePdf: Redactor["analyse"] = async (file, detect, onProgress) => {
+  const { pages, warnings } = await readPages(file, onProgress);
+  const { detections, units } = await analyseUnits({
+    detect: detectingPages(detect, pages.length, onProgress),
+    kind: "pages",
+    units: pages,
+  });
+
+  onProgress(1, "stage.finished");
+
+  return { detections, handle: { pages: units } satisfies PdfHandle, warnings: [...warnings] };
+};
 
 const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, onProgress }) => {
   if (!isHandle(analysis.handle)) {
@@ -280,7 +275,6 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
     let original: Promise<PDFDocument> | undefined;
     let copying = true;
-    let redactionCount = 0;
 
     const copyPage = async (number: number) => {
       if (!copying) {
@@ -312,11 +306,9 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
       onProgress(progress, "stage.redacting");
 
-      const spans = keptSpans(analysis.detections, decisions, number - 1);
-      const rects = spansToRects(spans, page.words);
+      const rects = spansToRects(keptSpans(page, decisions), page.words);
       const showing = page.words.filter((word) => !isCovered(word.bbox, rects));
 
-      redactionCount += mergeOverlappingRanges(spans).length;
       survived.push(...showing.map((word) => word.text));
 
       if (rects.length === 0 && (await copyPage(number))) {
@@ -368,7 +360,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
     return {
       blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
-      redactionCount,
+      redactionCount: redactionCount("pages", pages, decisions),
       warnings: [...warnings],
     };
   });

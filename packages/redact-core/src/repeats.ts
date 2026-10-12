@@ -1,5 +1,6 @@
 import { APPLY_SCORE } from "./detections";
-import type { PiiLabel, Span } from "./types";
+import { normalise } from "./text";
+import type { DetectedText, PiiLabel, Span } from "./types";
 
 type PiiToken = { label: PiiLabel; score: number; text: string };
 
@@ -10,26 +11,26 @@ const BOUNDARY = String.raw`[\p{Letter}\p{Number}]`;
 const escapeForRegExp = (value: string) =>
   value.replaceAll(/[$*+.?^\\\/\(\)\[\]\{\|\}]/gv, String.raw`\$&`);
 
-const normalise = (value: string) => value.trim().replaceAll(/\s+/gv, " ");
-
 /* Only whole spans travel. Splitting one into words used to let a weak multi-word tag donate its
    filler: a 0.49 "the addresses set forth at the end of this Agreement" turned "the" into a
    document-wide detection, hundreds of hits per contract. */
-const tokensFromSpans = (text: string, spans: Array<Span>): Array<PiiToken> => {
+const tokensFromSpans = (units: ReadonlyArray<DetectedText>): Array<PiiToken> => {
   const byText = new Map<string, PiiToken>();
 
-  for (const span of spans) {
-    const phrase = normalise(text.slice(span.start, span.end));
+  for (const { spans, text } of units) {
+    for (const span of spans) {
+      const phrase = normalise(text.slice(span.start, span.end));
 
-    if (span.score < APPLY_SCORE || phrase.length < MIN_LENGTH) {
-      continue;
-    }
+      if (span.score < APPLY_SCORE || phrase.length < MIN_LENGTH) {
+        continue;
+      }
 
-    const key = phrase.toLowerCase();
-    const existing = byText.get(key);
+      const key = phrase.toLowerCase();
+      const existing = byText.get(key);
 
-    if (existing === undefined || existing.score < span.score) {
-      byText.set(key, { label: span.label, score: span.score, text: phrase });
+      if (existing === undefined || existing.score < span.score) {
+        byText.set(key, { label: span.label, score: span.score, text: phrase });
+      }
     }
   }
 
@@ -45,7 +46,7 @@ const patternFor = (token: string) =>
     "giv",
   );
 
-const spansForTokens = (text: string, tokens: Array<PiiToken>): Array<Span> => {
+const spansForTokens = (text: string, tokens: ReadonlyArray<PiiToken>): Array<Span> => {
   const found = new Map<string, Span>();
 
   for (const token of tokens) {
@@ -66,4 +67,3 @@ const spansForTokens = (text: string, tokens: Array<PiiToken>): Array<Span> => {
 };
 
 export { spansForTokens, tokensFromSpans };
-export type { PiiToken };
