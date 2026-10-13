@@ -11,6 +11,10 @@
     "#pdfjs-worker": {
       "node": "pdfjs-dist/legacy/build/pdf.worker.mjs",
       "default": "pdfjs-dist/build/pdf.worker.mjs"
+    },
+    "#standard-fonts": {
+      "node": "./src/standard-fonts-node.ts",
+      "default": "./src/standard-fonts.ts"
     }
   },
   "exports": {
