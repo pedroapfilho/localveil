@@ -26,9 +26,12 @@ import {
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
+import { StandardFontFactory } from "#standard-fonts";
+
 import { OffscreenCanvasFactory } from "./canvas-factory";
 import { NoFilterFactory } from "./filter-factory";
 import { textLayerWords } from "./text-layer";
+import type { MeasureText } from "./text-layer";
 
 const SCALE = 2;
 
@@ -44,6 +47,16 @@ type PdfHandle = { pages: Array<Array<AnalysedReading & PageSurface>> };
 
 let parserInstalled: Promise<void> | undefined;
 
+const measureText = (): MeasureText => {
+  const context = contextOf(new OffscreenCanvas(1, 1));
+
+  return (text, fontFamily) => {
+    context.font = `100px ${fontFamily}`;
+
+    return context.measureText(text).width;
+  };
+};
+
 const installParser = async () => {
   await import("#pdfjs-worker");
 
@@ -52,7 +65,11 @@ const installParser = async () => {
   }
 };
 
+/* A PDF that names a standard font such as Helvetica without embedding it is drawn from pdf.js's own
+   copies; without them pdf.js falls back to a canvas font taller and wider than the metrics the
+   boxes are placed by, so letter edges show past them. */
 const documentOptions = (data: Uint8Array) => ({
+  BinaryDataFactory: StandardFontFactory,
   CanvasFactory: OffscreenCanvasFactory,
   data,
   disableFontFace: true,
@@ -169,7 +186,9 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
           warnings.add("warning.scannedPages");
         }
 
-        const typed = inReadingOrder(textLayerWords({ items: content.items, viewport }));
+        const typed = inReadingOrder(
+          textLayerWords({ items: content.items, styles: content.styles, viewport }, measureText()),
+        );
 
         if (typed.length >= MIN_LAYER_WORDS) {
           readings += 1;

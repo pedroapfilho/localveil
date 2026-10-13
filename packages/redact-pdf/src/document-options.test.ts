@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { OffscreenCanvasFactory } from "./canvas-factory";
 import { NoFilterFactory } from "./filter-factory";
+import { StandardFontFactory } from "./standard-fonts-node";
 
 import { documentOptions } from "./index";
 
@@ -18,6 +19,15 @@ describe("documentOptions", () => {
 
   it("brings its own filter factory, which would otherwise append SVG to a body", () => {
     expect(options.FilterFactory).toBe(NoFilterFactory);
+  });
+
+  it("reads the standard fonts a PDF names without embedding them", async () => {
+    const font = await new options.BinaryDataFactory().fetch({
+      filename: "LiberationSans-Regular.ttf",
+    });
+
+    expect(options.BinaryDataFactory).toBe(StandardFontFactory);
+    expect(font.byteLength).toBeGreaterThan(100_000);
   });
 
   it("passes the bytes through untouched", () => {

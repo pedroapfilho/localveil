@@ -64,6 +64,7 @@ vi.mock("#pdfjs", () => ({
 
                 return { height: 10, str, transform: [10, 0, 0, 10, x, y], width: str.length * 5 };
               }),
+              styles: {},
             });
           },
           getViewport: () => ({ height: 200, transform: state.layerTransform, width: 400 }),
@@ -131,7 +132,9 @@ class FakeCanvas {
       state.painted.push(`${String(x)},${String(y)},${String(width)},${String(height)}`);
     },
     fillStyle: "",
+    font: "",
     getImageData: () => ({ data: new Uint8ClampedArray(this.width * this.height * 4) }),
+    measureText: (text: string) => ({ width: text.length }),
     putImageData: () => undefined,
   };
 
@@ -554,18 +557,18 @@ describe("a typed page", () => {
         layer: "Name of Recipient Please Print Ana Lima The parties have executed this agreement",
         layout: [
           [0, 100],
+          [25, 100],
           [40, 100],
-          [80, 100],
-          [120, 100],
-          [160, 100],
+          [90, 100],
+          [125, 100],
           [0, 120],
-          [40, 120],
+          [20, 120],
           [0, 140],
-          [40, 140],
-          [80, 140],
-          [120, 140],
-          [160, 140],
-          [200, 140],
+          [20, 140],
+          [60, 140],
+          [85, 140],
+          [130, 140],
+          [155, 140],
         ],
         scanned: [],
       },
