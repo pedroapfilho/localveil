@@ -1,6 +1,7 @@
 ---
-title: "Two native ONNX runtime versions collide on Linux"
-severity: "minor"
+title: 'Two native ONNX runtime versions collide on Linux'
+severity: 'minor'
+issue: 'pedroapfilho/localveil#80'
 ---
 
 ## Expected Behavior
