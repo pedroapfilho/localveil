@@ -2,6 +2,14 @@
 
 Guidance for AI coding agents working in `localveil`. `CLAUDE.md` is a symlink to this file.
 
+## Friction Log
+
+- Log papercuts and friction (tooling, docs, APIs, tests, conventions) as you hit them with `npx frog log`.
+- Do not add global, system, or internal friction.
+- Run `npx frog list` first to see what is already known.
+
+Entries live in `.agents/friction-log/`, one directory each. A GitHub Action reports them as issues and deletes the entry once the issue closes, so anything still in that directory is still outstanding.
+
 ## What this repo is
 
 A local-first redaction tool, and the source of truth for the fleet's `tool` profile. It blacks out personal data in files without uploading them: a named-entity model plus a pattern layer finds names, emails, phones, addresses, dates, account numbers and secrets, then paints over them. Detection runs in a Web Worker in the browser and in a worker thread in the CLI. There is no account, no server, no database and no auth stack, so none of the SaaS-shaped standards apply here.
