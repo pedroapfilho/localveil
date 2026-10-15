@@ -12,11 +12,11 @@ Entries live in `.agents/friction-log/`, one directory each. A GitHub Action rep
 
 ## Standards
 
-This repo follows the fleet's shared standards, checked by `keel` (`~/dev/keel`).
+This repo follows the fleet's shared standards, checked by `standy` (`~/dev/standy`).
 
-- Before editing, run `keel standards --for <paths>` for the rules that apply to the files you will touch.
-- Before finishing, run `keel check --changed --fix-hints` and fix what fails. It only sees tracked files, so run `git add -N` on new files first.
-- When a failure is unclear, `keel explain <rule>` prints what the rule asserts, why, and how to fix it.
+- Before editing, run `standy standards --for <paths>` for the rules that apply to the files you will touch.
+- Before finishing, run `standy check --changed --fix-hints` and fix what fails. It only sees tracked files, so run `git add -N` on new files first.
+- When a failure is unclear, `standy explain <rule>` prints what the rule asserts, why, and how to fix it.
 
 ## What this repo is
 
@@ -75,7 +75,7 @@ The detection weights are large and are never committed. `.gitignore` excludes `
 
 - Everything runs client-side. A change that introduces a network call for anything but the weights and a Tesseract language pack breaks the product's core promise.
 - Workers are addressed by URL (`new URL("model-worker.ts", import.meta.url)`), not by import specifier, so those strings keep their extension.
-- This repo is registered in keel (`~/dev/keel`) as the `tool` profile's base: its tsconfig presets and root devDependency versions are the check baseline for that profile. Change them deliberately.
+- This repo is registered in standy (`~/dev/standy`) as the `tool` profile's base: its tsconfig presets and root devDependency versions are the check baseline for that profile. Change them deliberately.
 
 ## Design-system linting
 
