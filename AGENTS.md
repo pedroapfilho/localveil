@@ -10,6 +10,14 @@ Guidance for AI coding agents working in `localveil`. `CLAUDE.md` is a symlink t
 
 Entries live in `.agents/friction-log/`, one directory each. A GitHub Action reports them as issues and deletes the entry once the issue closes, so anything still in that directory is still outstanding.
 
+## Standards
+
+This repo follows the fleet's shared standards, checked by `keel` (`~/dev/keel`).
+
+- Before editing, run `keel standards --for <paths>` for the rules that apply to the files you will touch.
+- Before finishing, run `keel check --changed --fix-hints` and fix what fails. It only sees tracked files, so run `git add -N` on new files first.
+- When a failure is unclear, `keel explain <check>` prints what the check asserts and how to fix it.
+
 ## What this repo is
 
 A local-first redaction tool, and the source of truth for the fleet's `tool` profile. It blacks out personal data in files without uploading them: a named-entity model plus a pattern layer finds names, emails, phones, addresses, dates, account numbers and secrets, then paints over them. Detection runs in a Web Worker in the browser and in a worker thread in the CLI. There is no account, no server, no database and no auth stack, so none of the SaaS-shaped standards apply here.
