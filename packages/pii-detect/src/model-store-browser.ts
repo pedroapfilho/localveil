@@ -1,3 +1,5 @@
+import { warnRecoverable } from "@repo/redact-core";
+
 import type { ModelSpec } from "./catalog";
 import { revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
 import type { ChunkStore } from "./chunk-store";
@@ -51,8 +53,7 @@ const bytesOf = async (response: Response) => new Uint8Array(await response.arra
 const isStale = (url: string) => url.includes(MODEL_HOST) && !CATALOGUED.has(url);
 
 const warnStorageFailed = (url: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console -- a cache write failure is recoverable, so it is surfaced in the console instead of thrown
-  console.warn(`Could not keep ${url} in the browser cache`, cause);
+  warnRecoverable(`Could not keep ${url} in the browser cache`, cause);
 };
 
 const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {

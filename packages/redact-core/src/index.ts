@@ -30,5 +30,6 @@ export type {
 } from "./types";
 export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-error";
 export { verifyOutput } from "./verify";
+export { warnRecoverable } from "./warn-recoverable";
 export { buildZip, toArrayBuffer, uniqueFilename } from "./zip";
 export type { ZipEntry } from "./zip";

@@ -1,4 +1,4 @@
-import type { AnalysedReading, Detect, Redactor } from "@repo/redact-core";
+import type { Detect, Redactor } from "@repo/redact-core";
 import {
   analyseUnits,
   isAnalysedReading,
@@ -42,15 +42,6 @@ const withStructure =
   (name: string, detect: Detect): Detect =>
   async (text) => [...(await detect(text)), ...structuralSpans(name, text)];
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- the analysis handle round-trips through the caller untyped; this guard is its parser
-const analysedText = (handle: unknown): AnalysedReading => {
-  if (!isAnalysedReading(handle)) {
-    throw new TypeError("The text analysis carried no source text to mask");
-  }
-
-  return handle;
-};
-
 const textRedactor: Redactor = {
   analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
@@ -75,7 +66,12 @@ const textRedactor: Redactor = {
   apply: async ({ analysis, decisions, detect, file, onProgress }) => {
     onProgress(0.8, "stage.redacting");
 
-    const reading = analysedText(analysis.handle);
+    const reading = analysis.handle;
+
+    if (!isAnalysedReading(reading)) {
+      throw new TypeError("The text analysis carried no source text to mask");
+    }
+
     const masked = maskRanges(reading.text, mergeOverlappingRanges(keptSpans(reading, decisions)));
     const warnings = await verifyOutput(
       verifiable(file.name, masked),

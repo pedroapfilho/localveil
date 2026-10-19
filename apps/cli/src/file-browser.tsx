@@ -64,19 +64,18 @@ const FileBrowser = ({
     status: "reading",
   }));
 
-  // oxlint-disable-next-line react-doctor/no-set-state-after-await-in-effect -- both setters are gated on pending.signal.aborted and the cleanup aborts, which is the cancellation flag this rule asks for
   useEffect(() => {
-    const pending = new AbortController();
+    let ignore = false;
 
     const load = async () => {
       try {
         const found = await readDirectory(directory);
 
-        if (!pending.signal.aborted) {
+        if (!ignore) {
           setListing({ directory, entries: found, status: "ready" });
         }
       } catch (error) {
-        if (!pending.signal.aborted) {
+        if (!ignore) {
           setListing({ directory, reason: describeError(error), status: "failed" });
         }
       }
@@ -85,7 +84,7 @@ const FileBrowser = ({
     void load();
 
     return () => {
-      pending.abort();
+      ignore = true;
     };
   }, [directory]);
 

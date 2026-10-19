@@ -25,8 +25,7 @@ const tokenizer = {
       return [SEP_ID];
     }
 
-    // oxlint-disable-next-line typescript/no-misused-spread -- the fixture tokenizer splits by code point on purpose
-    return [...text].map((piece) => piece.codePointAt(0) ?? 0);
+    return Array.from(text, (piece) => piece.codePointAt(0) ?? 0);
   }),
 };
 

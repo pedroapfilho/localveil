@@ -68,8 +68,9 @@ const parseMarked = (marked: string, id: string) => {
   return { spans, text: text + marked.slice(read) };
 };
 
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- corpus JSON boundary: JSON.parse output is untyped and this function is its parser
-const toDocument = (raw: unknown, file: string): EvalDocument => {
+const toDocument = (json: string, file: string): EvalDocument => {
+  const raw: unknown = JSON.parse(json);
+
   if (typeof raw !== "object" || raw === null) {
     throw new TypeError(`${file} does not hold an object`);
   }
@@ -112,9 +113,7 @@ const loadCorpus = async (directory = CORPUS_DIR): Promise<Array<EvalDocument>> 
 
   const documents = await Promise.all(
     files.map(async (name) => {
-      const raw: unknown = JSON.parse(await readFile(path.join(directory, name), "utf8"));
-
-      return toDocument(raw, name);
+      return toDocument(await readFile(path.join(directory, name), "utf8"), name);
     }),
   );
 
