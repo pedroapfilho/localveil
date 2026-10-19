@@ -43,3 +43,7 @@ packageExtensions:
   "@huggingface/transformers":
     dependencies:
       onnxruntime-common: "1.30.0"
+
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - semver@6.3.1

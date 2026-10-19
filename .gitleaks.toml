@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "The redaction eval corpus and its baseline report hold synthetic secrets by design"
+paths = ['''^packages/eval/''']
