@@ -3,6 +3,8 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/p
 import { homedir } from "node:os";
 import path from "node:path";
 
+import { warnRecoverable } from "@repo/redact-core";
+
 import type { ModelSpec } from "./catalog";
 import { tokenizerUrls, weightsUrl } from "./catalog";
 import type { FileProgress, Persistence } from "./model-files";
@@ -33,8 +35,7 @@ const isMissingFile = (cause: unknown) =>
   cause instanceof Error && "code" in cause && cause.code === "ENOENT";
 
 const warnNotKept = (file: string, cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console -- a cache write failure is recoverable, so it is surfaced in the console instead of thrown
-  console.warn(`Could not keep the model at ${file}`, cause);
+  warnRecoverable(`Could not keep the model at ${file}`, cause);
 };
 
 const readBytes = async (response: Response, onProgress: FileProgress): Promise<Uint8Array> => {

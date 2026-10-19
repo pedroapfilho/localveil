@@ -19,6 +19,16 @@ const startWorker = async (language: OcrLanguage) => {
   return tesseract.createWorker(traineddataFor(language));
 };
 
+const evictOnFailure = async (language: OcrLanguage, started: Promise<Worker>) => {
+  try {
+    await started;
+  } catch {
+    if (workers.get(language) === started) {
+      workers.delete(language);
+    }
+  }
+};
+
 const workerFor = (language: OcrLanguage) => {
   const existing = workers.get(language);
 
@@ -30,12 +40,7 @@ const workerFor = (language: OcrLanguage) => {
 
   workers.set(language, started);
 
-  // oxlint-disable-next-line promise/prefer-await-to-then -- eviction must not make callers wait
-  started.catch(() => {
-    if (workers.get(language) === started) {
-      workers.delete(language);
-    }
-  });
+  void evictOnFailure(language, started);
 
   return started;
 };

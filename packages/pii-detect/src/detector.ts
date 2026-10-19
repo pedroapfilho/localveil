@@ -1,6 +1,6 @@
 import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, Span } from "@repo/redact-core";
-import { absorbNested, describeError, serialiseDetect } from "@repo/redact-core";
+import { absorbNested, describeError, serialiseDetect, warnRecoverable } from "@repo/redact-core";
 
 import { openModel } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
@@ -72,8 +72,7 @@ const loadRunner = async (
       throw firstError;
     }
 
-    // oxlint-disable-next-line eslint/no-console -- the wasm fallback is recoverable, so it is surfaced in the console instead of thrown
-    console.warn("Could not run the model on WebGPU, falling back to wasm", firstError);
+    warnRecoverable("Could not run the model on WebGPU, falling back to wasm", firstError);
     report({ kind: "slow-device" });
 
     try {

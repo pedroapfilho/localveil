@@ -1,3 +1,5 @@
+import { warnRecoverable } from "@repo/redact-core";
+
 import type { ModelSpec } from "./catalog";
 import { MODELS, tokenizerUrls, weightsUrl } from "./catalog";
 import type { ModelFiles } from "./model-status";
@@ -48,8 +50,7 @@ const parseJson = (bytes: Uint8Array, url: string): object => {
 };
 
 const warnSweepFailed = (cause: unknown) => {
-  // oxlint-disable-next-line eslint/no-console -- a stale-weights purge failure is recoverable, so it is surfaced in the console instead of thrown
-  console.warn("Could not clear superseded model weights", cause);
+  warnRecoverable("Could not clear superseded model weights", cause);
 };
 
 const downloadInOrder = async <T>(

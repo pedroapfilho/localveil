@@ -1,6 +1,6 @@
 import type { ModelId } from "@repo/pii-detect/models";
 import type { Analysis, RedactionResult } from "@repo/redact-core";
-import { isProgressEvent } from "@repo/redact-core";
+import { isProgressEvent, warnRecoverable } from "@repo/redact-core";
 import workerpool from "workerpool";
 
 import type { ApplyRequest, CreatePool, JobRequest } from "./job-runner";
@@ -73,8 +73,7 @@ const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void>
   try {
     await pool.terminate(true);
   } catch (error) {
-    // oxlint-disable-next-line eslint/no-console -- a failed shutdown is recoverable, so it is surfaced in the console instead of thrown
-    console.warn("A redaction worker would not shut down", error);
+    warnRecoverable("A redaction worker would not shut down", error);
   }
 };
 
@@ -84,15 +83,6 @@ const createRedactionPool: CreatePool = (options) => {
   const jobs = new Map<string, LiveJob>();
 
   let host: ModelHost;
-
-  const arm = (job: LiveJob) => {
-    clearTimeout(job.watchdog);
-
-    job.watchdog = setTimeout(() => {
-      // eslint-disable-next-line no-use-before-define -- mutually recursive with give
-      give(job, "The redaction worker stopped answering");
-    }, SILENCE_LIMIT);
-  };
 
   const release = (job: LiveJob | undefined) => {
     if (job === undefined || jobs.get(job.id) !== job) {
@@ -115,6 +105,14 @@ const createRedactionPool: CreatePool = (options) => {
     onFailed(job.id, new Error(reason));
   };
 
+  const arm = (job: LiveJob) => {
+    clearTimeout(job.watchdog);
+
+    job.watchdog = setTimeout(() => {
+      give(job, "The redaction worker stopped answering");
+    }, SILENCE_LIMIT);
+  };
+
   const hostFor = (chosen: ModelId) =>
     createModelHost({
       model: chosen,
@@ -131,12 +129,10 @@ const createRedactionPool: CreatePool = (options) => {
       // Every file is failed or restarted before the loss is reported, since the runner reads what is left.
       onLost: (reason, fatal) => {
         const waiting = [...jobs.values()].filter((job) => !job.started);
+        const failing = [...jobs.values()].filter((job) => job.started || fatal);
 
-        // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
-        for (const job of [...jobs.values()]) {
-          if (job.started || fatal) {
-            give(job, reason);
-          }
+        for (const job of failing) {
+          give(job, reason);
         }
 
         if (!fatal) {
@@ -270,8 +266,7 @@ const createRedactionPool: CreatePool = (options) => {
       release(jobs.get(id))?.task.cancel();
     },
     destroy: () => {
-      // oxlint-disable-next-line unicorn/no-useless-spread -- the loop body mutates the collection it iterates, so it walks a snapshot
-      for (const job of [...jobs.values()]) {
+      for (const job of jobs.values()) {
         release(job);
       }
 

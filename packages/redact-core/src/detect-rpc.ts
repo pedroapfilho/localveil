@@ -26,13 +26,16 @@ const isDetectResponse = (value: unknown): value is DetectResponse =>
 const serialiseDetect = (detect: Detect): Detect => {
   let tail: Promise<unknown> = Promise.resolve();
 
-  return (text) => {
-    /* oxlint-disable-next-line promise/prefer-await-to-then -- the chain is the queue: awaiting
-       here would need an externally settled promise per call, which is what this replaced. */
-    const spans = tail.then(() => detect(text));
+  const after = async (previous: Promise<unknown>, text: string) => {
+    await previous;
 
-    // oxlint-disable-next-line promise/prefer-await-to-then -- a rejection only has to leave the queue, not reach this caller
-    tail = spans.catch(() => {});
+    return detect(text);
+  };
+
+  return (text) => {
+    const spans = after(tail, text);
+
+    tail = Promise.allSettled([spans]);
 
     return spans;
   };

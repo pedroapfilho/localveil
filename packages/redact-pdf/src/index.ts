@@ -23,6 +23,7 @@ import {
   toArrayBuffer,
   uncovered,
   verifyOutput,
+  warnRecoverable,
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 
@@ -172,15 +173,15 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
 
       onProgress(progress, "stage.extracting");
 
-      // oxlint-disable-next-line eslint/no-loop-func -- the callback runs to completion inside this iteration's await
-      const { found, page } = await withPage(pdf, number, async (proxy, viewport) => {
+      const known = language;
+      const scanned = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
         const layerText = content.items
           .map((item) => ("str" in item ? item.str : ""))
           .join(" ")
           .trim();
 
-        language ??= languageOf(layerText);
+        const layerLanguage = known ?? languageOf(layerText);
 
         if (layerText.length === 0) {
           warnings.add("warning.scannedPages");
@@ -191,9 +192,7 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
         );
 
         if (typed.length >= MIN_LAYER_WORDS) {
-          readings += 1;
-
-          return { found: true, page: surfaceOf(typed) };
+          return { found: true, language: layerLanguage, page: surfaceOf(typed), readings: 1 };
         }
 
         onProgress(progress, "stage.rendering");
@@ -202,9 +201,7 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
 
         onProgress(progress, "stage.recognising");
 
-        const reading = await read(canvas, language);
-
-        language ??= reading.language;
+        const reading = await read(canvas, layerLanguage);
 
         if (reading.legibility === "unreadable") {
           warnings.add("warning.lowConfidence");
@@ -212,13 +209,18 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
 
         const passes = [reading.words, ...reading.alternatives].map(surfaceOf);
 
-        readings += passes.length;
-
-        return { found: reading.legibility !== "blank", page: { readings: passes } };
+        return {
+          found: reading.legibility !== "blank",
+          language: layerLanguage ?? reading.language,
+          page: { readings: passes },
+          readings: passes.length,
+        };
       });
 
-      anyText ||= found;
-      pages.push(page);
+      language = scanned.language;
+      readings += scanned.readings;
+      anyText ||= scanned.found;
+      pages.push(scanned.page);
     }
 
     if (!anyText) {
@@ -272,8 +274,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       } catch (error) {
         copying = false;
 
-        // oxlint-disable-next-line eslint/no-console -- the painted fallback is recoverable, so it is surfaced in the console instead of thrown
-        console.warn("Could not copy an untouched page, so it is painted instead", error);
+        warnRecoverable("Could not copy an untouched page, so it is painted instead", error);
 
         return false;
       }

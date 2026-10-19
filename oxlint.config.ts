@@ -13,7 +13,7 @@ export default defineConfig({
         allow: ["layout"],
         contracts: [
           { allow: ["layout", "gap-*"], pattern: "^PopoverContent$" },
-          { allow: ["layout", "spacing", "scroll-fade", "no-scrollbar"], pattern: "^ScrollArea$" },
+          { allow: ["layout", "spacing"], pattern: "^ScrollArea$" },
           { allow: ["layout", "gap-*", "text-pretty"], pattern: "^AttachmentDescription$" },
         ],
       },

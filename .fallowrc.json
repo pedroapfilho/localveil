@@ -10,7 +10,7 @@
     "apps/web/src/wasm-check.ts",
     "packages/redact-pdf/src/standard-fonts.ts"
   ],
-  "ignoreDependencies": ["@vitest/coverage-v8", "jsdom", "react-dom"],
+  "ignoreDependencies": ["@shadcn/lint", "@vitest/coverage-v8", "jsdom", "react-dom"],
   "ignoreUnresolvedImports": ["postcss-load-config"],
   "typeAware": {
     "enabled": true,
