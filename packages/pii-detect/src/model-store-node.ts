@@ -14,13 +14,10 @@ import { settleAll } from "./settle-all";
 
 type NodeModelStore = ModelStore & {
   openModel: OpenModel;
-  weightsPath: (model: ModelSpec) => string;
 };
 
 const MODEL_CACHE_DIR = path.join(homedir(), ".cache", "localveil", "models");
 
-/* Only finished model files are swept: a `.part-` name is a write still in flight, and any other
-   name, such as the eval's `.original` backup of swapped weights, is not the store's to delete. */
 const MODEL_FILE = /\.(?:json|onnx)$/v;
 
 const nameFor = (url: string) => {
@@ -95,9 +92,6 @@ const keepOnDisk = async (file: string, bytes: Uint8Array) => {
 
 const createNodeModelStore = (directory: string): NodeModelStore => {
   const pathFor = (url: string) => path.join(directory, nameFor(url));
-
-  // Where the CLI keeps a model's weights, whether or not they have been downloaded yet.
-  const weightsPath = (model: ModelSpec) => pathFor(weightsUrl(model));
 
   const sizeOnDisk = async (url: string) => {
     try {
@@ -174,7 +168,7 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
     }
 
     return tokenizer.every((size) => size !== undefined)
-      ? { bytes: weights, path: weightsPath(model), state: "ready" }
+      ? { bytes: weights, path: pathFor(weightsUrl(model)), state: "ready" }
       : { loaded: weights, state: "partial", total: model.bytes };
   };
 
@@ -202,10 +196,10 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
     await Promise.all(fileUrls(model).map((url) => rm(pathFor(url), { force: true })));
   };
 
-  return { downloadModel, inspectModel, openModel, removeModel, weightsPath };
+  return { downloadModel, inspectModel, openModel, removeModel };
 };
 
-const { downloadModel, inspectModel, openModel, removeModel, weightsPath } =
+const { downloadModel, inspectModel, openModel, removeModel } =
   createNodeModelStore(MODEL_CACHE_DIR);
 
 export {
@@ -215,5 +209,4 @@ export {
   MODEL_CACHE_DIR,
   openModel,
   removeModel,
-  weightsPath,
 };

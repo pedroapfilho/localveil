@@ -35,6 +35,8 @@ just tokenizes about half again as long and the model loses 5 F1.
 
 ## Setup
 
+From `tools/model-export`:
+
 ```bash
 uv venv --python 3.12 .venv
 .venv/bin/python -m pip install -r requirements.txt
@@ -42,15 +44,15 @@ uv venv --python 3.12 .venv
 
 ## Run
 
-```bash
-# 24 entity prompts, read straight out of the TypeScript source so the two cannot drift
-python3 - <<'PY'
-import json, re, pathlib
-src = pathlib.Path("packages/pii-detect/src/gliner-labels.ts").read_text()
-pathlib.Path("tools/model-export/prompts.json").write_text(
-    json.dumps(re.findall(r'prompt:\s*"([^"]+)"', src), indent=2) + "\n")
-PY
+From the repo root, select the candidate's catalogue vocabulary:
 
+```bash
+pnpm --filter @repo/eval exec tsx -e 'import { writeFileSync } from "node:fs"; import { modelById } from "@repo/pii-detect"; writeFileSync("../../tools/model-export/prompts.json", JSON.stringify(modelById("gliner-multi-pii").prompts.map(({ prompt }) => prompt), null, 2) + "\n")'
+```
+
+From `tools/model-export`:
+
+```bash
 .venv/bin/python export.py --prompts prompts.json --out build
 .venv/bin/python trim_vocab.py --prompts prompts.json --out build/trimmed
 .venv/bin/python export.py --source build/trimmed --prompts prompts.json --out build/trimmed-onnx
@@ -58,23 +60,21 @@ PY
 
 ## Score a candidate
 
-`packages/pii-detect` fetches one pinned URL and the CLI caches it under
-`~/.cache/localveil/models` keyed by a sha256 of that URL. `@repo/eval`'s `swap` script puts a
-candidate in that slot, keeping the shipped weights beside it, so the harness scores the
-candidate without any source change:
+Keep each candidate in its own directory with `model.onnx`, `tokenizer.json` and
+`tokenizer_config.json`. The evaluator reads all three directly and never writes to the
+catalogue cache:
 
 ```bash
-pnpm --filter @repo/eval swap /tmp/lv-export/build/model_int8_embeddings.onnx
-EVAL_MIN_SCORE=0.65 pnpm --filter @repo/eval start
-pnpm --filter @repo/eval swap --restore
+EVAL_MIN_SCORE=0.65 pnpm --filter @repo/eval start --model gliner-multi-pii --candidate /tmp/lv-export/candidate
 ```
 
-**Check the browser before believing a CPU number.** `apps/web/wasm-check.html` runs a
-candidate through the app's own loading and device selection and prints the model's score for a
-known name. Drop the file at `apps/web/public/candidate.onnx`, run `pnpm dev --filter=web`, and
-open `/wasm-check.html`, or `?device=wasm` to force the fallback path. This is not optional:
-the per-channel int8 recipe below scores 0.9972 on native CPU and 0.09 on WebGPU for the same
-input, which is the whole reason int8 was rejected.
+**Check the browser before believing a CPU number.** Copy that directory to
+`apps/web/public/candidate`, run `pnpm dev --filter=web`, and open
+`/wasm-check.html?candidate=/candidate&model=gliner-multi-pii`, adding `&device=wasm` to force
+the fallback path. Both paths read the candidate files directly. A missing file fails the run
+instead of mixing candidate weights with a catalogue tokenizer. Without `candidate`, the
+harness uses the normal catalogue store. The per-channel int8 recipe scores 0.9972 on native
+CPU and 0.09 on WebGPU for the same input, which is why int8 was rejected.
 
 **Sweep the floor, do not fix it.** Quantization shifts the score distribution, so two exports
 compared at one threshold are being compared on calibration rather than accuracy. Measured on
@@ -91,18 +91,17 @@ it clears all of:
 - loads on browser WebGPU, browser wasm and `onnxruntime-node`, because the app ships one file
   to all three and the terminal and the tab must not disagree about a document.
 
-A trimmed model also needs its `tokenizer.json` served from the same repo and revision as the
-weights, because `detector.ts` loads the tokenizer with `AutoTokenizer.from_pretrained(MODEL_ID,
-{ revision })`. Scoring a trimmed candidate therefore needs the tokenizer overridden too, not
-just the weights swapped.
+A trimmed model needs its matching tokenizer and config in the candidate directory.
+`detector.ts` builds `PreTrainedTokenizer` from the supplied `ModelFiles`; it makes no separate
+unpinned tokenizer request.
 
 ## Publishing
 
-Not automated, and deliberately. The winner goes to a Hugging Face repo the project controls,
-with `urchade/gliner_multi_pii-v1` named as the source (it is Apache 2.0, so a derivative is
-fine), the exact recipe recorded, and the eval table in the card. Then three constants change:
-`MODEL_ID` and `MODEL_REVISION` in `packages/pii-detect/src/detector.ts`, pinned to a commit
-SHA and never a branch, and `MODEL_FILE` in `model-runtime.ts` if the name differs.
+The winner goes to a Hugging Face repo the project controls, with
+`urchade/gliner_multi_pii-v1` named as the source (Apache 2.0), the recipe recorded, and the eval
+table in the card. Update the model's `repo`, `revision` and `file` in
+`packages/pii-detect/src/catalog.ts`, pinned to a commit SHA. Publish the matching
+`tokenizer.json` and `tokenizer_config.json` at that same revision.
 
 A fourth interface language later means re-running the trim with that language's script in the
 keep set, or its text tokenizes to `UNK` and detection looks broken for a reason nothing in the

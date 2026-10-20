@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,6 +22,13 @@ const ignore = () => undefined;
 const superseded = (model: ModelSpec): ModelSpec => ({ ...model, revision: "0".repeat(40) });
 
 let directory = "";
+
+const weightsPath = (model: ModelSpec) => {
+  const url = weightsUrl(model);
+  const digest = createHash("sha256").update(url).digest("hex").slice(0, 16);
+
+  return path.join(directory, `${digest}-${path.basename(new URL(url).pathname)}`);
+};
 
 const failFetch = (failing: string, failure: () => Promise<void>) => {
   const serve = fetch;
@@ -61,7 +69,7 @@ describe("inspectModel on disk", () => {
 
     await expect(store.inspectModel(MODEL)).resolves.toEqual({
       bytes: WEIGHTS_BODY.length,
-      path: store.weightsPath(MODEL),
+      path: weightsPath(MODEL),
       state: "ready",
     });
   });
@@ -69,7 +77,7 @@ describe("inspectModel on disk", () => {
   it("does not call weights without their tokenizer ready, since they cannot load offline", async () => {
     const store = createNodeModelStore(directory);
 
-    await writeFile(store.weightsPath(MODEL), WEIGHTS_BODY);
+    await writeFile(weightsPath(MODEL), WEIGHTS_BODY);
 
     await expect(store.inspectModel(MODEL)).resolves.toEqual({
       loaded: WEIGHTS_BODY.length,
@@ -106,7 +114,7 @@ describe("downloadModel on disk", () => {
   it("fetches only what is missing and reports already kept weights complete", async () => {
     const store = createNodeModelStore(directory);
 
-    await writeFile(store.weightsPath(MODEL), WEIGHTS_BODY);
+    await writeFile(weightsPath(MODEL), WEIGHTS_BODY);
     const asked = serveFiles();
     const reported: Array<number> = [];
 
@@ -209,13 +217,13 @@ describe("openModel on disk", () => {
     serveFiles();
     const store = createNodeModelStore(directory);
     const droppedExport: ModelSpec = { ...MODEL, file: "model_fp16.onnx" };
-    const backup = `${store.weightsPath(MODEL)}.original`;
-    const inFlight = `${store.weightsPath(superseded(OTHER))}.part-0`;
+    const unrelated = path.join(directory, "notes.txt");
+    const inFlight = `${weightsPath(superseded(OTHER))}.part-0`;
 
     await store.downloadModel(superseded(MODEL), ignore);
     await store.downloadModel(droppedExport, ignore);
     await store.downloadModel(OTHER, ignore);
-    await writeFile(backup, WEIGHTS_BODY);
+    await writeFile(unrelated, WEIGHTS_BODY);
     await writeFile(inFlight, WEIGHTS_BODY);
 
     await store.openModel(MODEL, ignore);
@@ -226,7 +234,7 @@ describe("openModel on disk", () => {
     await expect(store.inspectModel(MODEL)).resolves.toMatchObject({ state: "ready" });
     const left = await readdir(directory);
 
-    expect(left).toContain(path.basename(backup));
+    expect(left).toContain(path.basename(unrelated));
     expect(left).toContain(path.basename(inFlight));
   });
 
@@ -236,7 +244,7 @@ describe("openModel on disk", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(ignore);
 
     // A directory under a stale file's name cannot be removed as a file.
-    await mkdir(store.weightsPath(superseded(MODEL)));
+    await mkdir(weightsPath(superseded(MODEL)));
 
     await expect(store.openModel(MODEL, ignore)).resolves.toMatchObject({
       weights: WEIGHTS_BODY,

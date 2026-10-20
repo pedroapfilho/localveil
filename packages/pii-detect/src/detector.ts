@@ -43,6 +43,7 @@ type ReportLoad = (event: ModelLoadEvent) => void;
 
 type DetectorOptions = {
   batchSize?: number;
+  files?: ModelFiles;
   maxWords?: number;
   minScore?: number;
   model?: ModelId;
@@ -89,6 +90,7 @@ const loadRunner = async (
 const buildDetector = async (options: DetectorOptions, report: ReportLoad): Promise<Detect> => {
   const {
     batchSize,
+    files: suppliedFiles,
     maxWords = MAX_WORDS,
     minScore = MIN_SCORE,
     model = DEFAULT_MODEL_ID,
@@ -97,13 +99,17 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
   } = options;
 
   const spec = modelById(model);
-  const files = await openModel(
-    spec,
-    (downloaded) => {
-      report({ downloaded, kind: "loading" });
-    },
-    signal,
-  );
+  signal?.throwIfAborted();
+
+  const files =
+    suppliedFiles ??
+    (await openModel(
+      spec,
+      (downloaded) => {
+        report({ downloaded, kind: "loading" });
+      },
+      signal,
+    ));
   const codec = createGlinerCodec(spec, loadTokenizer(files));
 
   const device = await pickDevice();
@@ -117,6 +123,8 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
   signal?.throwIfAborted();
 
   const run = await loadRunner(files.weights, device, spec.repo, report);
+
+  signal?.throwIfAborted();
 
   const jobsFor = (text: string): Array<GlinerInput> => {
     const jobs: Array<GlinerInput> = [];

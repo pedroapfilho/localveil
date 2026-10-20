@@ -50,8 +50,7 @@ playwright/.cache/
 tools/model-export/build/
 tools/model-export/prompts.json
 
-apps/web/public/candidate.onnx
-apps/web/public/candidate-tokenizer.json
+apps/web/public/candidate/
 
 # CI selection and execution reports
 .ci-results/
