@@ -3,116 +3,93 @@ import type { PiiLabel, Span } from "@repo/redact-core";
 import { labelForField } from "./field-labels";
 
 type Cell = { end: number; start: number; value: string };
+type Row = { cells: Array<Cell>; end: number };
 
 const DELIMITERS = [",", ";", "\t"] as const;
 
-const countOutsideQuotes = (line: string, delimiter: string) => {
-  let count = 0;
-  let quoted = false;
+const cellAt = (text: string, from: number, to: number): Cell => {
+  const raw = text.slice(from, to);
+  const start = from + raw.length - raw.trimStart().length;
+  const end = to - (raw.length - raw.trimEnd().length);
+  const quoted = end - start >= 2 && text[start] === '"' && text[end - 1] === '"';
+  const innerStart = quoted ? start + 1 : start;
+  const innerEnd = quoted ? end - 1 : end;
 
-  for (const character of line) {
-    if (character === '"') {
-      quoted = !quoted;
-      continue;
-    }
-
-    if (character === delimiter && !quoted) {
-      count += 1;
-    }
-  }
-
-  return count;
+  return {
+    end: innerEnd,
+    start: innerStart,
+    value: text.slice(innerStart, innerEnd).replaceAll('""', '"'),
+  };
 };
 
-const pickDelimiter = (header: string) =>
-  DELIMITERS.reduce((best, candidate) =>
-    countOutsideQuotes(header, candidate) > countOutsideQuotes(header, best) ? candidate : best,
+const csvRows = function* (text: string, delimiter: string): Generator<Row, void> {
+  const field = new RegExp(
+    String.raw`(?:[^\S${delimiter}\r\n]*"(?:[^"]|"")*"[^\S${delimiter}\r\n]*|[^"${delimiter}\r\n]*)(?<separator>${delimiter}|\r\n|[\r\n]|$)`,
+    "gyv",
   );
+  let cells: Array<Cell> = [];
 
-const splitRow = (text: string, from: number, to: number, delimiter: string): Array<Cell> => {
-  const cells: Array<Cell> = [];
-  let start = from;
-  let quoted = false;
+  for (const match of text.matchAll(field)) {
+    if (match[0].length === 0 && cells.length === 0) {
+      break;
+    }
 
-  for (let at = from; at < to; at += 1) {
-    const character = text[at];
+    const separator = match.groups?.separator ?? "";
+    const end = match.index + match[0].length;
 
-    if (character === '"') {
-      quoted = !quoted;
+    cells.push(cellAt(text, match.index, end - separator.length));
+
+    if (separator === delimiter) {
       continue;
     }
 
-    if (character === delimiter && !quoted) {
-      cells.push({ end: at, start, value: text.slice(start, at) });
-      start = at + 1;
+    if (cells.some((cell) => cell.value.length > 0)) {
+      yield { cells, end };
     }
+
+    cells = [];
   }
-
-  cells.push({ end: to, start, value: text.slice(start, to) });
-
-  return cells;
 };
 
-const trimmed = ({ end, start, value }: Cell): Cell => {
-  const lead = value.length - value.trimStart().length;
-  const tail = value.length - value.trimEnd().length;
-  const inner = value.slice(lead, value.length - tail);
+const pickDelimiter = (text: string) => {
+  const candidates = DELIMITERS.map((delimiter) => ({
+    columns: csvRows(text, delimiter).next().value?.cells.length ?? 0,
+    delimiter,
+  }));
 
-  if (inner.length >= 2 && inner.startsWith('"') && inner.endsWith('"')) {
-    return { end: end - tail - 1, start: start + lead + 1, value: inner.slice(1, -1) };
-  }
-
-  return { end: end - tail, start: start + lead, value: inner };
-};
-
-const lineRanges = (text: string) => {
-  const ranges: Array<{ end: number; start: number }> = [];
-  let start = 0;
-
-  for (let at = 0; at <= text.length; at += 1) {
-    if (at === text.length || text[at] === "\n") {
-      const end = at > start && text[at - 1] === "\r" ? at - 1 : at;
-
-      if (end > start) {
-        ranges.push({ end, start });
-      }
-
-      start = at + 1;
-    }
-  }
-
-  return ranges;
+  return candidates.reduce((best, candidate) =>
+    candidate.columns > best.columns ? candidate : best,
+  ).delimiter;
 };
 
 const csvFieldSpans = (text: string): Array<Span> => {
-  const rows = lineRanges(text);
-  const header = rows.at(0);
+  const rows = csvRows(text, pickDelimiter(text));
+  const header = rows.next().value;
 
-  if (header === undefined || rows.length < 2) {
+  if (header === undefined) {
     return [];
   }
 
-  const delimiter = pickDelimiter(text.slice(header.start, header.end));
-  const columns = splitRow(text, header.start, header.end, delimiter).map(
-    (cell): PiiLabel | undefined => labelForField(trimmed(cell).value),
-  );
+  const columns = header.cells.map((cell): PiiLabel | undefined => labelForField(cell.value));
+  const spans: Array<Span> = [];
 
-  if (!columns.some((label) => label !== undefined)) {
-    return [];
-  }
-
-  return rows.slice(1).flatMap((row) =>
-    splitRow(text, row.start, row.end, delimiter).flatMap((cell, at) => {
+  for (const row of rows) {
+    row.cells.forEach((cell, at) => {
       const label = columns[at];
-      const value = trimmed(cell);
 
-      if (label === undefined || value.value.trim().length === 0) {
-        return [];
+      if (label !== undefined && cell.value.trim().length > 0) {
+        spans.push({ end: cell.end, label, score: 1, start: cell.start });
       }
+    });
+  }
 
-      return [{ end: value.end, label, score: 1, start: value.start }];
-    }),
-  );
+  return spans;
 };
 
-export { csvFieldSpans };
+const csvBody = (text: string) => {
+  const header = csvRows(text, pickDelimiter(text)).next().value;
+
+  return header === undefined ? "" : text.slice(header.end);
+};
+
+export { csvBody, csvFieldSpans };

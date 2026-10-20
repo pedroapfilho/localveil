@@ -28,6 +28,31 @@ const file = (name: string, type: string, content = "Hi Ana!") =>
   new File([content], name, { type });
 
 describe("textRedactor", () => {
+  it.each([
+    [
+      "csv",
+      'notes,nome,sku\r\n"a ""note""\r\ncontinues","Ana\r\nLima",X-1',
+      'notes,nome,sku\r\n"a ""note""\r\ncontinues","███\r\n████",X-1',
+    ],
+    [
+      "json",
+      String.raw`{ "na\u006de": "Ana Lima", "accountNumber": -1.234e+5, "sku": "X-1" }`,
+      String.raw`{ "na\u006de": "████████", "accountNumber": █████████, "sku": "X-1" }`,
+    ],
+  ])(
+    "masks lexical values in %s without changing adjacent source bytes",
+    async (extension, input, output) => {
+      const result = await redactFile({
+        detect: detecting([]),
+        file: file(`data.${extension}`, "", input),
+        onProgress: noProgress,
+        redactor: textRedactor,
+      });
+
+      await expect(result.blob.text()).resolves.toBe(output);
+    },
+  );
+
   it("masks the detected spans and counts them", async () => {
     const result = await redactFile({
       detect: detecting([span(3, 6)]),
@@ -39,6 +64,20 @@ describe("textRedactor", () => {
     await expect(result.blob.text()).resolves.toBe("Hi ███!");
     expect(result.redactionCount).toBe(1);
     expect(result.warnings).toEqual([]);
+  });
+
+  it("excludes the complete multiline CSV header from output verification", async () => {
+    const detect = vi.fn<Detect>().mockResolvedValue([]);
+    const text = '"notes\ncontinued",sku\nplain,X-1';
+
+    await redactFile({
+      detect,
+      file: file("data.csv", "", text),
+      onProgress: noProgress,
+      redactor: textRedactor,
+    });
+
+    expect(detect.mock.calls.at(-1)).toEqual(["plain,X-1"]);
   });
 
   it("covers a CSV column the model walked past", async () => {

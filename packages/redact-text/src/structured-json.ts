@@ -1,33 +1,49 @@
-import type { Span } from "@repo/redact-core";
+import type { PiiLabel, Span } from "@repo/redact-core";
 
 import { labelForField } from "./field-labels";
 
-const PAIR = /"(?<key>(?:[^"\\]|\\.)*)"\s*:\s*(?<value>"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?)/dgv;
+const TOKEN =
+  /"(?:[^"\\]|\\.)*"(?:\s*:)?|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+\-]?\d+)?|true|false|null|[\{\}\[\],]/gv;
+
+const jsonTokens = (text: string) => {
+  try {
+    JSON.parse(text);
+
+    return text.matchAll(TOKEN);
+  } catch {
+    return [];
+  }
+};
+
+const labelForKeyToken = (raw: string) => {
+  const key: unknown = JSON.parse(raw.slice(0, -1));
+
+  return typeof key === "string" ? labelForField(key) : undefined;
+};
 
 const jsonFieldSpans = (text: string): Array<Span> => {
   const spans: Array<Span> = [];
+  let label: PiiLabel | undefined;
 
-  for (const match of text.matchAll(PAIR)) {
-    const key = match.groups?.key;
-    const range = match.indices?.groups?.value;
+  for (const token of jsonTokens(text)) {
+    const raw = token[0];
 
-    if (key === undefined || range === undefined) {
+    if (raw.endsWith(":")) {
+      label = labelForKeyToken(raw);
       continue;
     }
 
-    const label = labelForField(key);
+    if (label !== undefined && (raw.startsWith('"') || /^-?\d/v.test(raw))) {
+      const quote = raw.startsWith('"') ? 1 : 0;
+      const start = token.index + quote;
+      const end = token.index + raw.length - quote;
 
-    if (label === undefined) {
-      continue;
+      if (end > start) {
+        spans.push({ end, label, score: 1, start });
+      }
     }
 
-    const quoted = text[range[0]] === '"';
-    const start = quoted ? range[0] + 1 : range[0];
-    const end = quoted ? range[1] - 1 : range[1];
-
-    if (end > start) {
-      spans.push({ end, label, score: 1, start });
-    }
+    label = undefined;
   }
 
   return spans;

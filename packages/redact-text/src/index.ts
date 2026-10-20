@@ -9,7 +9,7 @@ import {
 } from "@repo/redact-core";
 
 import { ignoringMasks, maskRanges } from "./mask";
-import { csvFieldSpans } from "./structured-csv";
+import { csvBody, csvFieldSpans } from "./structured-csv";
 import { jsonFieldSpans } from "./structured-json";
 
 const extensionOf = (name: string) => {
@@ -18,15 +18,8 @@ const extensionOf = (name: string) => {
   return dot > 0 ? name.slice(dot).toLowerCase() : "";
 };
 
-const verifiable = (name: string, text: string) => {
-  if (extensionOf(name) !== ".csv") {
-    return text;
-  }
-
-  const firstBreak = text.indexOf("\n");
-
-  return firstBreak === -1 ? "" : text.slice(firstBreak + 1);
-};
+const verifiable = (name: string, text: string) =>
+  extensionOf(name) === ".csv" ? csvBody(text) : text;
 
 const structuralSpans = (name: string, text: string) => {
   const extension = extensionOf(name);
