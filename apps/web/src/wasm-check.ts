@@ -1,13 +1,7 @@
-import { createDetector, DEFAULT_MODEL_ID, isModelId, modelById } from "@repo/pii-detect";
-import { seedModelFile } from "@repo/pii-detect/browser";
-import { removeModel, tokenizerUrls, weightsUrl } from "@repo/pii-detect/models";
+import { createDetector, DEFAULT_MODEL_ID, isModelId, readModelFiles } from "@repo/pii-detect";
 
 const asked = new URLSearchParams(location.search).get("model") ?? DEFAULT_MODEL_ID;
 const MODEL = isModelId(asked) ? asked : DEFAULT_MODEL_ID;
-
-const MODEL_URL = weightsUrl(modelById(MODEL));
-
-const [TOKENIZER_URL] = tokenizerUrls(modelById(MODEL));
 
 const TEXT = "Fatura para Mariana Duarte Rocha, CPF 529.982.247-25, em 14/03/2024.";
 
@@ -23,37 +17,18 @@ const say = (line: string) => {
   }
 };
 
-const seedFrom = async (local: string, url: string, label: string) => {
-  const response = await fetch(local);
-  const type = response.headers.get("content-type") ?? "";
+const candidateFiles = async (directory: string) =>
+  readModelFiles(async (name) => {
+    const response = await fetch(`${directory.replace(/\/$/v, "")}/${name}`);
 
-  if (!response.ok || type.includes("text/html")) {
-    say(`no ${local} to seed, so ${label} comes from Hugging Face`);
+    if (!response.ok || response.headers.get("content-type")?.includes("text/html") === true) {
+      throw new Error(`Could not load candidate ${name}: ${String(response.status)}`);
+    }
 
-    return;
-  }
-
-  const started = performance.now();
-  const bytes = await response.arrayBuffer();
-
-  say(
-    `${label} ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB in ${(performance.now() - started).toFixed(0)} ms`,
-  );
-
-  await seedModelFile(url, bytes);
-};
-
-const seed = async () => {
-  await seedFrom("/candidate-tokenizer.json", TOKENIZER_URL, "tokenizer");
-  await seedFrom("/candidate.onnx", MODEL_URL, "weights");
-};
+    return new Uint8Array(await response.arrayBuffer());
+  });
 
 const run = async () => {
-  if (new URLSearchParams(location.search).get("reset") === "1") {
-    await removeModel(modelById(MODEL));
-    say(`removed the kept ${MODEL}, so nothing stale is reused`);
-  }
-
   if (new URLSearchParams(location.search).get("device") === "wasm") {
     Object.defineProperty(navigator, "gpu", { configurable: true, value: undefined });
     say("forced the wasm path by hiding navigator.gpu");
@@ -61,7 +36,8 @@ const run = async () => {
 
   say(`webgpu adapter: ${String(hasWebGpu(navigator))}`);
 
-  await seed();
+  const candidate = new URLSearchParams(location.search).get("candidate");
+  const files = candidate === null ? undefined : await candidateFiles(candidate);
 
   const batchSize = Number(new URLSearchParams(location.search).get("batch") ?? "1");
 
@@ -69,6 +45,7 @@ const run = async () => {
 
   const detect = await createDetector({
     batchSize,
+    files,
     minScore: 0.05,
     model: MODEL,
     onLoad: (event) => {

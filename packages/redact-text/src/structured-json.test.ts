@@ -6,6 +6,32 @@ const covered = (text: string) =>
   jsonFieldSpans(text).map((span) => `${span.label}:${text.slice(span.start, span.end)}`);
 
 describe("jsonFieldSpans", () => {
+  it("decodes escaped keys and leaves their source spelling intact", () => {
+    expect(covered(String.raw`{"na\u006de":"Ana Lima","sku":"X-1"}`)).toEqual([
+      "private_person:Ana Lima",
+    ]);
+  });
+
+  it.each(["1.234e5", "-1.234e-5", "1E+6", "0e0", "-0.2E+10"])(
+    "covers the entire JSON number %s",
+    (number) => {
+      expect(covered(`{"accountNumber":${number},"sku":"X-1"}`)).toEqual([
+        `account_number:${number}`,
+      ]);
+    },
+  );
+
+  it("does not mistake property syntax inside a string for a field", () => {
+    expect(covered(String.raw`{"notes":"\"nome\":\"Ana\"","nome":null,"email":false}`)).toEqual([]);
+  });
+
+  it.each(['{"accountNumber":1e}', '{"nome":"Ana}', '{"nome":"Ana",}'])(
+    "does not return partial token spans for invalid JSON %s",
+    (text) => {
+      expect(jsonFieldSpans(text)).toEqual([]);
+    },
+  );
+
   it("covers the value under a key it recognises", () => {
     expect(covered('{"nome": "Ana Lima", "sku": "X-1"}')).toEqual(["private_person:Ana Lima"]);
   });

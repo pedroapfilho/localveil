@@ -61,6 +61,30 @@ beforeEach(() => {
 });
 
 describe("runRedaction", () => {
+  it("keeps both completed runs when they publish into the same directory", async () => {
+    const { directory, first, second } = await makeWorkspace();
+    const signal = new AbortController().signal;
+    const results = await Promise.all([
+      runRedaction(runOptions(directory, [first], signal)),
+      runRedaction(runOptions(directory, [second], signal)),
+    ]);
+    const paths = results.map((result) => result.zipPath);
+
+    expect(new Set(paths).size).toBe(2);
+
+    for (const [at, path] of paths.entries()) {
+      expect(path).not.toBeNull();
+      const archive = await readFile(path ?? "");
+
+      expect(archive.subarray(0, 2)).toStrictEqual(Buffer.from("PK"));
+      expect(archive.includes(Buffer.from(at === 0 ? "one.txt" : "two.txt"))).toBe(true);
+    }
+
+    const left = await readdir(directory);
+
+    expect(left.filter((name) => name.endsWith(".part"))).toEqual([]);
+  });
+
   it("writes one archive holding every file it redacted", async () => {
     const { directory, first, second } = await makeWorkspace();
     const options = runOptions(directory, [first, second], new AbortController().signal);

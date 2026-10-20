@@ -12,3 +12,5 @@ export {
 } from "./models";
 export type { ModelId, ModelLanguage, ModelSpec, ModelStatus, ModelStore } from "./models";
 export { patternSpans } from "./patterns";
+export { readModelFiles } from "./model-files";
+export type { ModelFiles } from "./model-status";

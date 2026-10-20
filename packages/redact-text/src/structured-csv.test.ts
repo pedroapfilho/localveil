@@ -6,6 +6,32 @@ const covered = (text: string) =>
   csvFieldSpans(text).map((span) => `${span.label}:${text.slice(span.start, span.end)}`);
 
 describe("csvFieldSpans", () => {
+  it("keeps the final record when its last cell is empty", () => {
+    expect(covered("nome,sku\nAna Lima,")).toEqual(["private_person:Ana Lima"]);
+  });
+
+  it("does not consume a tab delimiter as padding before a quoted cell", () => {
+    expect(covered('nome\tsku\n\t"X-1"')).toEqual([]);
+  });
+
+  it.each(["\n", "\r\n"])("keeps column offsets across quoted %j records", (newline) => {
+    const text = `notes,nome,sku${newline}"first${newline}second",Ana Lima,X-1${newline}"plain","Joao${newline}Reis",X-2`;
+
+    expect(covered(text)).toEqual(["private_person:Ana Lima", `private_person:Joao${newline}Reis`]);
+  });
+
+  it("reads doubled quotes without ending a multiline field", () => {
+    expect(covered('notes,nome,sku\n"a ""quote""\ncontinues","Ana ""Aninha"" Lima",X-1')).toEqual([
+      'private_person:Ana ""Aninha"" Lima',
+    ]);
+  });
+
+  it("keeps delimiter detection inside the same record scanner", () => {
+    expect(covered('"notes,\nextra";nome;sku\n"a;note";Ana Lima;X-1')).toEqual([
+      "private_person:Ana Lima",
+    ]);
+  });
+
   it("covers every cell under a column it recognises", () => {
     expect(covered("nome,sku\nAna Lima,X-1\nJoao Reis,X-2")).toEqual([
       "private_person:Ana Lima",

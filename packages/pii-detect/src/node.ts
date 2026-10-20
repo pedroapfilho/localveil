@@ -1,1 +1,1 @@
-export { MODEL_CACHE_DIR, weightsPath } from "./model-store-node";
+export { MODEL_CACHE_DIR } from "./model-store-node";

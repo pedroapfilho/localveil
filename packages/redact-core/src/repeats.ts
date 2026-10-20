@@ -1,5 +1,5 @@
 import { APPLY_SCORE } from "./detections";
-import { normalise } from "./text";
+import { escapeForRegExp, normalise } from "./text";
 import type { DetectedText, PiiLabel, Span } from "./types";
 
 type PiiToken = { label: PiiLabel; score: number; text: string };
@@ -7,9 +7,6 @@ type PiiToken = { label: PiiLabel; score: number; text: string };
 const MIN_LENGTH = 3;
 
 const BOUNDARY = String.raw`[\p{Letter}\p{Number}]`;
-
-const escapeForRegExp = (value: string) =>
-  value.replaceAll(/[$*+.?^\\\/\(\)\[\]\{\|\}]/gv, String.raw`\$&`);
 
 /* Only whole spans travel. Splitting one into words used to let a weak multi-word tag donate its
    filler: a 0.49 "the addresses set forth at the end of this Agreement" turned "the" into a

@@ -477,18 +477,3 @@ describe("removeModel in the browser", () => {
     await expect(chunks.listUrls()).resolves.toEqual([weightsUrl(OTHER)]);
   });
 });
-
-describe("seedModelFile", () => {
-  it("keeps the given bytes as the model's file, so opening the model loads them", async () => {
-    memoryCaches();
-    const asked = serveFiles();
-    const store = createBrowserModelStore(memoryChunks());
-    const candidate = Uint8Array.from({ length: 7 }, () => 9);
-
-    await store.seedModelFile(WEIGHTS, candidate.buffer);
-
-    await expect(store.openModel(MODEL, ignore)).resolves.toMatchObject({ weights: candidate });
-    expect(asked).not.toContain(WEIGHTS);
-    await expect(store.inspectModel(MODEL)).resolves.toEqual({ bytes: 7, state: "ready" });
-  });
-});

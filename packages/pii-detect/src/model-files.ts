@@ -49,6 +49,18 @@ const parseJson = (bytes: Uint8Array, url: string): object => {
   return parsed;
 };
 
+const readModelFiles = async (
+  readFile: (name: string) => Promise<Uint8Array>,
+): Promise<ModelFiles> => {
+  const [tokenizer, tokenizerConfig, weights] = await settleAll([
+    readFile("tokenizer.json").then((bytes) => parseJson(bytes, "tokenizer.json")),
+    readFile("tokenizer_config.json").then((bytes) => parseJson(bytes, "tokenizer_config.json")),
+    readFile("model.onnx"),
+  ]);
+
+  return { tokenizer, tokenizerConfig, weights };
+};
+
 const warnSweepFailed = (cause: unknown) => {
   warnRecoverable("Could not clear superseded model weights", cause);
 };
@@ -78,5 +90,5 @@ const openInOrder = async (
   return files;
 };
 
-export { CATALOGUED, downloadInOrder, fileUrls, openInOrder };
+export { CATALOGUED, downloadInOrder, fileUrls, openInOrder, readModelFiles };
 export type { FileProgress, Persistence };

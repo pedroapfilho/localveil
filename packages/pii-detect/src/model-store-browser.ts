@@ -12,7 +12,6 @@ import { settleAll } from "./settle-all";
 
 type BrowserModelStore = ModelStore & {
   openModel: OpenModel;
-  seedModelFile: (url: string, bytes: ArrayBuffer) => Promise<void>;
 };
 
 const CACHE_KEY = "transformers-cache";
@@ -185,23 +184,11 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
       clearWhere((url) => url.startsWith(revisionUrl(model))),
     );
 
-  const seedModelFile = async (url: string, bytes: ArrayBuffer) => {
-    const cache = await openCache();
-
-    await withLock(url, "exclusive", () => keepInCache(cache, url, new Blob([bytes]), "required"));
-  };
-
-  return { downloadModel, inspectModel, openModel, removeModel, seedModelFile };
+  return { downloadModel, inspectModel, openModel, removeModel };
 };
 
-const { downloadModel, inspectModel, openModel, removeModel, seedModelFile } =
-  createBrowserModelStore(createIndexedDbChunkStore());
+const { downloadModel, inspectModel, openModel, removeModel } = createBrowserModelStore(
+  createIndexedDbChunkStore(),
+);
 
-export {
-  createBrowserModelStore,
-  downloadModel,
-  inspectModel,
-  openModel,
-  removeModel,
-  seedModelFile,
-};
+export { createBrowserModelStore, downloadModel, inspectModel, openModel, removeModel };

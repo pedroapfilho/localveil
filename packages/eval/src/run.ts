@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -8,6 +8,7 @@ import {
   isModelId,
   MODELS,
   patternSpans,
+  readModelFiles,
 } from "@repo/pii-detect";
 import type { PiiLabel, Span } from "@repo/redact-core";
 import { analyseUnits, APPLY_SCORE } from "@repo/redact-core";
@@ -112,6 +113,7 @@ const scoreDocument = async (
 const run = async () => {
   const { values } = parseArgs({
     options: {
+      candidate: { type: "string" },
       filter: { type: "string" },
       json: { type: "boolean" },
       model: { type: "string" },
@@ -137,12 +139,19 @@ const run = async () => {
   }
 
   note(
-    `Scoring ${String(chosen.length)} documents with ${model}. The first run downloads the model.`,
+    `Scoring ${String(chosen.length)} documents with ${model}${values.candidate === undefined ? "" : ` from ${values.candidate}`}.`,
   );
 
   const floor = process.env.EVAL_MIN_SCORE;
 
+  const candidate = values.candidate;
+  const files =
+    candidate === undefined
+      ? undefined
+      : await readModelFiles((name) => readFile(path.join(candidate, name)));
+
   const detect = await createDetector({
+    files,
     minScore: floor === undefined ? APPLY_SCORE : Number(floor),
     model,
     onLoad: (event) => {
