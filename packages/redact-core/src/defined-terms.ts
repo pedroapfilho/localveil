@@ -1,4 +1,4 @@
-import { normalise } from "./text";
+import { escapeForRegExp, normalise } from "./text";
 import type { DetectedText, Span } from "./types";
 
 const QUOTE = String.raw`["“”]`;
@@ -20,9 +20,10 @@ const folded = (value: string) => normalise(value).toLowerCase();
 const asTerm = (value: string) => folded(value).replace(LEADING_ARTICLE, "");
 
 const holdsWord = (haystack: string, word: string) =>
-  new RegExp(String.raw`(?<![\p{Letter}\p{Number}])${word}(?![\p{Letter}\p{Number}])`, "iv").test(
-    haystack,
-  );
+  new RegExp(
+    String.raw`(?<![\p{Letter}\p{Number}])${escapeForRegExp(word)}(?![\p{Letter}\p{Number}])`,
+    "iv",
+  ).test(haystack);
 
 /* A contract names a party by role, Zora Labs, Inc. ("Client"), but a person can be aliased the
    same way: Pedro Filho ("Pedro"). Suppressing the second would leak every bare mention of the

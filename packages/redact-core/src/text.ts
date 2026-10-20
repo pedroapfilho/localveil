@@ -2,6 +2,9 @@ const PREVIEW_GRAPHEMES = 80;
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
+const escapeForRegExp = (value: string) =>
+  value.replaceAll(/[$*+.?^\\\/\(\)\[\]\{\|\}]/gv, String.raw`\$&`);
+
 const normalise = (value: string) => value.trim().replaceAll(/\s+/gv, " ");
 
 const preview = (value: string) => {
@@ -17,4 +20,4 @@ const preview = (value: string) => {
     .join("");
 };
 
-export { normalise, preview };
+export { escapeForRegExp, normalise, preview };

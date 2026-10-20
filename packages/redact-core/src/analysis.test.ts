@@ -235,6 +235,37 @@ describe("analyseUnits repeats", () => {
 });
 
 describe("analyseUnits defined terms", () => {
+  it.each(["C++", "[Client", "A.B", "a|b", "price$", String.raw`path\file`, "user?"])(
+    "treats the defined term %s as literal document text",
+    async (term) => {
+      const text = `Ada Lovelace ("${term}") signs. ${term} agrees.`;
+
+      const detect = answering([spanOver(text, "Ada Lovelace"), spanOver(text, term)]);
+
+      expect(await previewsOf(text, detect)).toEqual(["Ada Lovelace"]);
+    },
+  );
+
+  it.each(["C++", "[Ada]", "A.B", "a|b", "price$"])(
+    "keeps the literal alias %s inside a longer detected name",
+    async (term) => {
+      const name = `Ada ${term} Lovelace`;
+      const text = `${name} ("${term}") signs. ${term} agrees.`;
+
+      const detect = answering([spanOver(text, name), spanOver(text, term, { from: name.length })]);
+
+      expect(await previewsOf(text, detect)).toEqual([name, term, term]);
+    },
+  );
+
+  it("does not interpret a dot in a defined term as a wildcard", async () => {
+    const text = 'Ada AxB Lovelace ("A.B") signs. A.B agrees.';
+
+    expect(await previewsOf(text, taggingEvery("Ada AxB Lovelace", "A.B"))).toEqual([
+      "Ada AxB Lovelace",
+    ]);
+  });
+
   it("drops a role the document defined, even where only a repeat found it", async () => {
     const text = 'Zora Labs, Inc. ("Client") engages Pedro Filho. Client will pay Pedro Filho.';
     const detect = answering([spanOver(text, "Client"), spanOver(text, "Pedro Filho")]);
