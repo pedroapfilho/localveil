@@ -1,6 +1,5 @@
-import { readdir, rename, rm, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aborted } from "node:util";
 import { MessageChannel } from "node:worker_threads";
@@ -13,13 +12,12 @@ import {
   isProgressEvent,
   serveDetect,
   toArrayBuffer,
-  uniqueFilename,
 } from "@repo/redact-core";
 import type { Detect, FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
 import type { NodeRedactionOutput } from "@repo/redact-node";
 import workerpool from "workerpool";
 
-const ZIP_NAME = "localveil.zip";
+import { writeArchive } from "./write-archive";
 
 const MAX_JOBS = 4;
 
@@ -86,33 +84,6 @@ const unlessStopped = async (
   }
 
   return signal.aborted ? undefined : loading;
-};
-
-const availableName = async (directory: string): Promise<string> => {
-  const taken = new Set(await readdir(directory));
-
-  return uniqueFilename(ZIP_NAME, taken);
-};
-
-const writeArchive = async (
-  blob: Blob,
-  directory: string,
-  signal: AbortSignal,
-): Promise<string> => {
-  const target = join(directory, await availableName(directory));
-  const temporary = `${target}.${process.pid}.part`;
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-
-  try {
-    await writeFile(temporary, bytes, { signal });
-    signal.throwIfAborted();
-    await rename(temporary, target);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
-
-  return target;
 };
 
 const runRedaction = async ({
