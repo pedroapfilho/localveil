@@ -15,11 +15,13 @@ import {
 } from "./worker-pool-fixture";
 
 vi.mock("./redact-worker.ts?worker&url", () => ({ default: "/redact-worker.js" }));
+
 vi.mock("./model-host", async () => {
   const fixture = await import("./worker-pool-fixture");
 
   return fixture.modelHostDouble;
 });
+
 vi.mock("workerpool", async () => {
   const fixture = await import("./worker-pool-fixture");
 

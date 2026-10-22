@@ -169,6 +169,7 @@ describe("a job's progress", () => {
   it("never runs back, from the first report to the finished file", () => {
     const id = submit();
     const seen: Array<number> = [];
+
     const record = () => {
       seen.push(progressOf(jobWith(id)));
     };

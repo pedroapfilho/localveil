@@ -315,10 +315,12 @@ describe("downloadResumable", () => {
 
   it("refuses to hand back an assembly that is the wrong size", async () => {
     const store = memoryChunks();
+
     const short: ChunkStore = {
       ...store,
       readParts: () => Promise.resolve([new Blob([bodyOf(3)])]),
     };
+
     const { fetchRange } = rangeServer(bodyOf(10));
 
     await expect(run(fetchRange, short)).rejects.toThrow(/chunks are corrupt/v);

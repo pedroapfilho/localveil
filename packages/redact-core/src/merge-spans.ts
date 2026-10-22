@@ -52,4 +52,5 @@ const mergeOverlappingRanges = (spans: Array<Span>): Array<Range> => {
 };
 
 export { absorbNested, mergeOverlappingRanges };
+
 export type { Range };

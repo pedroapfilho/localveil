@@ -110,6 +110,7 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
       },
       signal,
     ));
+
   const codec = createGlinerCodec(spec, loadTokenizer(files));
 
   const device = await pickDevice();
@@ -187,4 +188,5 @@ const createDetector = async ({
 };
 
 export { createDetector };
+
 export type { DetectorOptions };

@@ -66,6 +66,7 @@ const textRedactor: Redactor = {
     }
 
     const masked = maskRanges(reading.text, mergeOverlappingRanges(keptSpans(reading, decisions)));
+
     const warnings = await verifyOutput(
       verifiable(file.name, masked),
       ignoringMasks(detect),

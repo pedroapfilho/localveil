@@ -56,8 +56,10 @@ describe("rendering a PDF through the node canvas", () => {
     await run(IDENTITY_CARD);
 
     const [page] = pages;
+
     const encoded =
       page === undefined ? new Blob() : await page.convertToBlob({ type: "image/png" });
+
     const bytes = new Uint8Array(await encoded.arrayBuffer());
 
     expect(bytes.slice(0, 4)).toEqual(PNG_MAGIC);

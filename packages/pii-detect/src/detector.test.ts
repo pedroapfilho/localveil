@@ -65,6 +65,7 @@ describe("createDetector", () => {
     const { seen } = setup((words) =>
       words[0] === "mail" ? [{ end: 0, prompt: "email", start: 0 }] : [],
     );
+
     const detect = await createDetector();
 
     expect(await detect("mail me")).toEqual([

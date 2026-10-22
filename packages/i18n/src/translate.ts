@@ -30,4 +30,5 @@ const translate = (
 };
 
 export { translate };
+
 export type { PlaceholdersIn, TranslationValues, ValuesFor };

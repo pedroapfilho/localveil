@@ -340,10 +340,12 @@ describe("openModel in the browser", () => {
     const opening = store.openModel(MODEL, ignore);
 
     await started;
+
     const remove = async () => {
       await store.removeModel(MODEL);
       removed = true;
     };
+
     const removing = remove();
 
     // Another model's removal is not held back, so this waits only on the lock under test.
@@ -427,9 +429,11 @@ describe("removeModel in the browser", () => {
 
     expect(keptWhileDownloading).toBe(true);
     await expect(store.inspectModel(MODEL)).resolves.toEqual({ state: "absent" });
+
     for (const url of EVERYTHING) {
       expect(caches.entries.has(url)).toBe(false);
     }
+
     await expect(store.inspectModel(OTHER)).resolves.toMatchObject({ state: "ready" });
   });
 

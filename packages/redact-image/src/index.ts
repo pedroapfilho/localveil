@@ -94,11 +94,13 @@ const createImageRedactor = (read: ReadText): Redactor => ({
     paint(canvas, rects);
 
     const [chosen] = readings;
+
     const warnings = await verifyOutput(
       chosen === undefined ? "" : uncovered(chosen, rects).text,
       detect,
       analysis.warnings,
     );
+
     const blob = await canvas.convertToBlob({
       type: ENCODABLE.has(file.type) ? file.type : "image/png",
     });

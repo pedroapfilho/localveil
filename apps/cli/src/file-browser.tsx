@@ -118,6 +118,7 @@ const FileBrowser = ({
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
+
       return;
     }
 
@@ -127,16 +128,19 @@ const FileBrowser = ({
 
     if (input === "q") {
       onCancel();
+
       return;
     }
 
     if (key.upArrow || input === "k") {
       moveCursor(-1);
+
       return;
     }
 
     if (key.downArrow || input === "j") {
       moveCursor(1);
+
       return;
     }
 
@@ -186,6 +190,7 @@ const FileBrowser = ({
 
     if (focused?.isDirectory === true) {
       openDirectory(focused.path);
+
       return;
     }
 

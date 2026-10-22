@@ -86,6 +86,7 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
     signal,
     store,
   } = options;
+
   const { etag, total } = await probe(url, fetchRange, signal);
   const held = await storedOffsets({ chunkSize, etag, store, total, url });
   const layout = { chunkSize, total };
@@ -171,4 +172,5 @@ const downloadResumable = async (url: string, options: DownloadOptions): Promise
 };
 
 export { bankedBytes, downloadResumable };
+
 export type { DownloadOptions };

@@ -53,7 +53,9 @@ const formatModelTable = (rows: ReadonlyArray<Listed>) => {
     model.languages.join(" "),
     describeStatus(status),
   ]);
+
   const table = [["MODEL", "NAME", "SIZE", "LANGUAGES", "STATUS"], ...cells];
+
   const widths = table.reduce<Array<number>>(
     (widest, row) => row.map((cell, column) => Math.max(widest[column] ?? 0, cell.length)),
     [],

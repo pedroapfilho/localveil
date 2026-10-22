@@ -89,6 +89,7 @@ describe("App", () => {
     renderApp();
 
     const id = drop("notes.txt");
+
     const detection = {
       confidence: 0.9,
       end: 8,

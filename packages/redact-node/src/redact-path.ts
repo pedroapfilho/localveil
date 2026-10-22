@@ -22,6 +22,7 @@ const redactPath = async (
 
   const file = await readFileAsFile(path);
   const redactor = resolveRedactor(file);
+
   const { blob, redactionCount, warnings } = await redactFile({
     detect,
     file,
@@ -33,4 +34,5 @@ const redactPath = async (
 };
 
 export { redactPath };
+
 export type { NodeRedactionOutput, NodeRedactionProgress };

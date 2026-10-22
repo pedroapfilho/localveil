@@ -26,4 +26,5 @@ const redactFile = async ({
 };
 
 export { redactFile };
+
 export type { WholeFile };

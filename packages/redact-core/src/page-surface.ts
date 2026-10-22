@@ -77,4 +77,5 @@ const paint = (canvas: OffscreenCanvas, rects: ReadonlyArray<Rect>) => {
 };
 
 export { contextOf, isPageSurface, paint, rectsFor, surfaceOf, uncovered };
+
 export type { PageSurface };

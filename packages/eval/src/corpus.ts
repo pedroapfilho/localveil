@@ -131,4 +131,5 @@ const loadCorpus = async (directory = CORPUS_DIR): Promise<Array<EvalDocument>> 
 };
 
 export { CORPUS_DIR, loadCorpus, parseMarked };
+
 export type { EvalDocument, LabelledSpan, MarkedDocument };

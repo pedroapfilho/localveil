@@ -173,6 +173,7 @@ describe("textRedactor", () => {
 
   it("leaves the role a contract defined for itself readable", async () => {
     const text = 'Zora Labs, Inc. ("Client") engages Pedro Filho. Client will pay Pedro Filho.';
+
     const at = (value: string, from = 0) => {
       const start = text.indexOf(value, from);
 
@@ -215,6 +216,7 @@ describe("textRedactor", () => {
 
   it("warns instead of failing on an empty file", async () => {
     const detect = vi.fn<Detect>(() => Promise.resolve([]));
+
     const result = await redactFile({
       detect,
       file: file("a.txt", "text/plain", ""),
@@ -230,6 +232,7 @@ describe("textRedactor", () => {
   it("leaves the file untouched when every detection is dismissed", async () => {
     const source = file("a.txt", "text/plain");
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+
     const result = await textRedactor.apply({
       analysis,
       decisions: { covered: [] },
@@ -255,6 +258,7 @@ describe("textRedactor", () => {
   it("covers everything when nothing is dismissed", async () => {
     const source = file("a.txt", "text/plain");
     const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+
     const result = await textRedactor.apply({
       analysis,
       decisions: defaultDecisions(analysis.detections),

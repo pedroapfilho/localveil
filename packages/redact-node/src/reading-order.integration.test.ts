@@ -38,6 +38,7 @@ const writtenTo = async (directory: string, name: string, placed: Array<Placed>)
 
 const readingOf = async (file: string) => {
   const seen: Array<string> = [];
+
   const record: Detect = (text) => {
     seen.push(text);
 

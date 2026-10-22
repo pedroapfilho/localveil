@@ -102,4 +102,5 @@ const tokenizerUrls = (model: ModelSpec): [tokenizer: string, config: string] =>
 ];
 
 export { DEFAULT_MODEL_ID, isModelId, modelById, MODELS, revisionUrl, tokenizerUrls, weightsUrl };
+
 export type { ModelDecoding, ModelId, ModelLanguage, ModelSpec };

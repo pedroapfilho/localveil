@@ -132,6 +132,7 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
      IndexedDB until the last one lands, and they count toward partial. */
   const inspectModel = async (model: ModelSpec): Promise<ModelStatus> => {
     const cache = await openCache();
+
     const [weights, ...tokenizer] = await Promise.all(
       [weightsUrl(model), ...tokenizerUrls(model)].map((url) => cache.match(url)),
     );

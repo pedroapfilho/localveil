@@ -66,6 +66,7 @@ const buildZip = async (files: Array<ZipEntry>): Promise<Blob> => {
     zip(contents, { level: 6 }, (error, data) => {
       if (error) {
         reject(error);
+
         return;
       }
 
@@ -77,4 +78,5 @@ const buildZip = async (files: Array<ZipEntry>): Promise<Blob> => {
 };
 
 export { buildZip, toArrayBuffer, uniqueFilename };
+
 export type { ZipEntry };

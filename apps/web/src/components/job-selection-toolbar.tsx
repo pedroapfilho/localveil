@@ -54,4 +54,5 @@ const JobSelectionToolbar = ({ all, count, onRemove, onToggleAll }: JobSelection
 };
 
 export { JobSelectionToolbar };
+
 export type { JobSelectionToolbarProps };

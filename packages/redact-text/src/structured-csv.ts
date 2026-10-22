@@ -3,6 +3,7 @@ import type { PiiLabel, Span } from "@repo/redact-core";
 import { labelForField } from "./field-labels";
 
 type Cell = { end: number; start: number; value: string };
+
 type Row = { cells: Array<Cell>; end: number };
 
 const DELIMITERS = [",", ";", "\t"] as const;
@@ -27,6 +28,7 @@ const csvRows = function* (text: string, delimiter: string): Generator<Row, void
     String.raw`(?:[^\S${delimiter}\r\n]*"(?:[^"]|"")*"[^\S${delimiter}\r\n]*|[^"${delimiter}\r\n]*)(?<separator>${delimiter}|\r\n|[\r\n]|$)`,
     "gyv",
   );
+
   let cells: Array<Cell> = [];
 
   for (const match of text.matchAll(field)) {

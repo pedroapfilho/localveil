@@ -114,11 +114,13 @@ describe("pickedDirectoryFiles", () => {
 
   it("walks a directory handle and retains its path", async () => {
     const file = textFile("report.txt");
+
     const fileHandle = {
       getFile: () => Promise.resolve(file),
       kind: "file",
       name: "report.txt",
     } as unknown as FileSystemFileHandle;
+
     const nested = {
       kind: "directory",
       name: "august",
@@ -126,6 +128,7 @@ describe("pickedDirectoryFiles", () => {
         yield await Promise.resolve(fileHandle);
       },
     } as unknown as FileSystemDirectoryHandle;
+
     const root = {
       kind: "directory",
       name: "records",

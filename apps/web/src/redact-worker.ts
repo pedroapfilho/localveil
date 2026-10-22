@@ -34,6 +34,7 @@ const guarded = async <T>(
   cancelled = false;
 
   let unwind = noop;
+
   const unwound = new Promise<void>((resolve) => {
     unwind = resolve;
   });

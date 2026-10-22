@@ -167,6 +167,7 @@ const tokenCandidates = ({
   checkBatch(logits, batch, positions * entities * ROLES, item);
 
   const words = Math.min(positions, wordCount);
+
   const scoreOf = (word: number, entity: number, role: number) =>
     scoreAt(logits.data, ((item * positions + word) * entities + entity) * ROLES + role);
 
@@ -336,4 +337,5 @@ const createGlinerCodec = (spec: ModelSpec, tokenizer: Tokenizer): GlinerCodec =
 };
 
 export { createGlinerCodec };
+
 export type { GlinerInput, Logits, SpanWord };

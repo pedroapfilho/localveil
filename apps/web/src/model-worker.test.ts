@@ -25,6 +25,7 @@ const posted: Array<ModelResponse> = [];
 
 const loadWorkerNamed = async (name: string) => {
   const captured: Array<EventListener> = [];
+
   const register = vi.spyOn(globalThis, "addEventListener").mockImplementation((type, listener) => {
     if (type === "message" && typeof listener === "function") {
       captured.push(listener);

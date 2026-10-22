@@ -68,6 +68,7 @@ const byPosition: Identify = (readings, page) => {
         page,
       ),
     );
+
     const kept = absorbNested(
       described,
       (detection) => detection.label,
@@ -130,6 +131,7 @@ const analyseUnits = async <R extends Reading>({ detect, kind, units }: UnitAnal
     const { identify, readings } = isScan(unit)
       ? { identify: byValue, readings: unit.readings }
       : { identify: byPosition, readings: [unit] };
+
     const found: Array<DetectedText> = [];
 
     for (const { text } of readings) {
@@ -203,4 +205,5 @@ const redactionCount = (
 ) => units.reduce((total, readings) => total + countValues(readings, decisions), 0);
 
 export { analyseUnits, isAnalysedReading, keptSpans, redactionCount };
+
 export type { AnalysedReading };

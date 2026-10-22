@@ -46,6 +46,7 @@ const sized = (body: Uint8Array<ArrayBuffer>) =>
 const memoryCaches = () => {
   const entries = new Map<string, Response>();
   const refused = new Set<string>();
+
   const cache = {
     delete: (request: Request) => Promise.resolve(entries.delete(request.url)),
     keys: () => Promise.resolve([...entries.keys()].map((url) => new Request(url))),

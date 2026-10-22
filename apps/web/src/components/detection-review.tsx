@@ -57,14 +57,17 @@ const DetectionReview = ({
   onCoveredChange,
 }: DetectionReviewProps) => {
   const { t } = useTranslations();
+
   const certain = useMemo(
     () => detections.filter((entry) => entry.confidence >= APPLY_SCORE),
     [detections],
   );
+
   const maybe = useMemo(
     () => detections.filter((entry) => entry.confidence < APPLY_SCORE),
     [detections],
   );
+
   const groups = useMemo(() => groupByLabel(certain), [certain]);
   const painting = useMemo(() => new Set(covered), [covered]);
 
