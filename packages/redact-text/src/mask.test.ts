@@ -66,6 +66,7 @@ describe("scale", () => {
   it("masks ten thousand spans over a megabyte without rebuilding the text each time", () => {
     const row = "name,email\n";
     const text = row.repeat(10_000);
+
     const spans = Array.from({ length: 10_000 }, (_entry, index) =>
       span(index * row.length, index * row.length + 4),
     );

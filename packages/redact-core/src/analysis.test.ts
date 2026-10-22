@@ -115,6 +115,7 @@ describe("analyseUnits repeats", () => {
 
   it("carries the label and score of the span a repeat came from", async () => {
     const text = "write to ana@example.com or ana@example.com";
+
     const analysed = await inFile(
       text,
       answering([spanOver(text, "ana@example.com", { label: "private_email", score: 0.8 })]),
@@ -296,6 +297,7 @@ describe("analyseUnits defined terms", () => {
       "This Consulting Agreement (the “ Agreement ”) is made between Zora Labs, Inc., " +
       "a Delaware corporation (“ Client ”) and the consultant named on the signature page " +
       "(“ Consultant ”). Client may issue assignments to Consultant (each, a “ Project Assignment ”).";
+
     const detect = taggingEvery(
       "Agreement",
       "Zora Labs, Inc.",
@@ -309,6 +311,7 @@ describe("analyseUnits defined terms", () => {
 
   it("keeps an alias that shortens the name detected just before it", async () => {
     const text = 'Pedro Filho ("Pedro") will consult. Pedro agreed.';
+
     const detect = answering([
       spanOver(text, "Pedro Filho"),
       spanOver(text, "Pedro", { from: 20 }),
@@ -319,6 +322,7 @@ describe("analyseUnits defined terms", () => {
 
   it("drops a role even when a detected name sits right before it", async () => {
     const text = 'Pedro Filho ("Consultant") will consult. Consultant signs.';
+
     const detect = answering([
       spanOver(text, "Pedro Filho"),
       spanOver(text, "Consultant", { from: 30 }),
@@ -363,6 +367,7 @@ describe("analyseUnits defined terms", () => {
 describe("analyseUnits identity", () => {
   it("keeps one detection when two layers found the same span, at the better confidence", async () => {
     const text = "Signed by Ana Lima today";
+
     const { detections } = await inFile(
       text,
       answering([spanOver(text, "Ana Lima", { score: 0.6 }), spanOver(text, "Ana Lima")]),
@@ -375,6 +380,7 @@ describe("analyseUnits identity", () => {
 
   it("folds a nested span into the one that encloses it, carrying the better score", async () => {
     const text = "Signed by Ana Lima Souza today";
+
     const { detections } = await inFile(
       text,
       answering([
@@ -390,6 +396,7 @@ describe("analyseUnits identity", () => {
 
   it("leaves a partial overlap or a different label as separate detections", async () => {
     const text = "Signed by Ana Lima today";
+
     const { detections } = await inFile(
       text,
       answering([
@@ -470,6 +477,7 @@ describe("analyseUnits scanned pages", () => {
 
   it("uncovers a dismissed value on every pass", async () => {
     const analysed = await inPages([passes], tagging("Ana Lima", "108.467.036-45"));
+
     const decisions = everything({
       detections: analysed.detections.filter(({ preview }) => preview !== "Ana Lima"),
     });
@@ -524,6 +532,7 @@ describe("keptSpans", () => {
       ["Invoice for Ana Lima", "Signed by Rui Costa"],
       tagging("Ana Lima", "Rui Costa"),
     );
+
     const decisions = everything({ detections: detections.filter((entry) => entry.page === 1) });
 
     expect(units.flat().map((reading) => keptSpans(reading, decisions))).toEqual([
@@ -534,10 +543,12 @@ describe("keptSpans", () => {
 
   it("covers the span a nested detection was folded into", async () => {
     const text = "Signed by Ana Lima Souza today";
+
     const analysed = await inFile(
       text,
       answering([spanOver(text, "Ana Lima Souza"), spanOver(text, "Lima Souza")]),
     );
+
     const [reading] = analysed.units.flat();
 
     assert.isDefined(reading);

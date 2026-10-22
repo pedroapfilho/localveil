@@ -77,6 +77,7 @@ describe.each(FIXTURES)("$name", (entry) => {
       onProgress: noProgress,
       redactor: textRedactor,
     });
+
     const redacted = await result.blob.text();
 
     for (const needle of PII) {
@@ -91,6 +92,7 @@ describe.each(FIXTURES)("$name", (entry) => {
       onProgress: noProgress,
       redactor: textRedactor,
     });
+
     const redacted = await result.blob.text();
 
     expect(result.redactionCount).toBeGreaterThan(0);

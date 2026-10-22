@@ -40,6 +40,7 @@ const STOPPED = new Error("stopped at the second stage");
 /* The run stops at the second stage, before any model or recogniser is needed. */
 const stagesOf = async (file: File) => {
   const stages: Array<FileStageKey> = [];
+
   const run = resolveRedactor(file).analyse(
     file,
     () => Promise.resolve([]),

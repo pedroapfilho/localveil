@@ -87,4 +87,5 @@ const recognizeWords = async (
 };
 
 export { recognizeWords };
+
 export type { Recognition };

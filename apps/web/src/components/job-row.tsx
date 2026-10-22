@@ -47,6 +47,7 @@ const PHASES = {
 const JobStatusSummary = ({ job, modelLoading }: { job: Job; modelLoading: boolean }) => {
   const { t } = useTranslations();
   const { label, tone } = PHASES[job.phase];
+
   const describeResult = () => {
     if (job.phase !== "done") {
       return undefined;
@@ -225,4 +226,5 @@ const JobRow = ({
 };
 
 export { JobRow };
+
 export type { JobRowProps };

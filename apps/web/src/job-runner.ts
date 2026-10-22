@@ -235,6 +235,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
 };
 
 export { createJobRunner };
+
 export type {
   ApplyRequest,
   CreatePool,

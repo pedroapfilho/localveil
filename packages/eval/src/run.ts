@@ -129,6 +129,7 @@ const run = async () => {
   }
 
   const corpus = await loadCorpus();
+
   const chosen =
     values.filter === undefined
       ? corpus
@@ -145,6 +146,7 @@ const run = async () => {
   const floor = process.env.EVAL_MIN_SCORE;
 
   const candidate = values.candidate;
+
   const files =
     candidate === undefined
       ? undefined

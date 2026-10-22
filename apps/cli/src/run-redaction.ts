@@ -218,4 +218,5 @@ const runRedaction = async ({
 };
 
 export { runRedaction };
+
 export type { RunResult };

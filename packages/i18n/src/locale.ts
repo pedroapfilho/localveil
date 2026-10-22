@@ -25,4 +25,5 @@ const resolveLocale = (preferred: ReadonlyArray<string>): Locale => {
 };
 
 export { DEFAULT_LOCALE, isLocale, LOCALE_NAMES, LOCALES, resolveLocale };
+
 export type { Locale };

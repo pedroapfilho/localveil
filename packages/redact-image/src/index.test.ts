@@ -127,6 +127,7 @@ describe("imageRedactor", () => {
 
   it("warns when the detector still finds personal data in what stayed visible", async () => {
     const answers = [[], [{ end: 5, label: "private_person" as const, score: 0.9, start: 0 }]];
+
     const { warnings } = await redact(reads(placed("Alice")), () =>
       Promise.resolve(answers.shift() ?? []),
     );

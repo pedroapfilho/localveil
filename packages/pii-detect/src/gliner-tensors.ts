@@ -85,4 +85,5 @@ const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> } | undef
 };
 
 export { toFeeds, toLogits };
+
 export type { MakeTensor };

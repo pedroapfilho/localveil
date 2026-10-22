@@ -169,4 +169,5 @@ const resolveArguments = async (
 };
 
 export { isSupported, parentEntry, readDirectory, resolveArguments };
+
 export type { DirectoryEntry };

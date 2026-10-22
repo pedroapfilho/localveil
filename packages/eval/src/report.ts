@@ -37,4 +37,5 @@ const table = (title: string, rows: Array<Row>) => {
 };
 
 export { table };
+
 export type { Row };

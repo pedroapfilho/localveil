@@ -21,16 +21,20 @@ vi.mock("#model-store", async (importOriginal) => ({
   ...(await importOriginal<typeof NodeStore>()),
   openModel: vi.fn(),
 }));
+
 vi.mock("#ort", () => ({ createModelRunner: vi.fn(), pickDevice: vi.fn() }));
 
 const MODEL = modelById(DEFAULT_MODEL_ID);
 const encoder = new TextEncoder();
+
 const candidate = new Map([
   ["tokenizer.json", encoder.encode(JSON.stringify(MODEL_FILES.tokenizer))],
   ["tokenizer_config.json", encoder.encode(JSON.stringify(MODEL_FILES.tokenizerConfig))],
   ["model.onnx", new Uint8Array([9, 8, 7])],
 ]);
+
 const ignore = () => undefined;
+
 const catalogBody = (url: string) => {
   if (url === tokenizerUrls(MODEL)[0]) {
     return candidate.get("tokenizer.json");
@@ -93,6 +97,7 @@ const prepare = async () => {
     chunks: await chunks.listUrls(),
     node: await nodeSnapshot(),
   });
+
   const before = await snapshot();
 
   const unchanged = async () => {

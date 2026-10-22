@@ -208,4 +208,5 @@ const createIndexedDbChunkStore = (): ChunkStore => {
 };
 
 export { createIndexedDbChunkStore };
+
 export type { ChunkStore, Manifest };

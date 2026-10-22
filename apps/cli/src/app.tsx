@@ -36,6 +36,7 @@ const App = ({ initialDirectory, initialSelection, jobs, model, outputDirectory 
 
     if (files === null || stopping) {
       exit();
+
       return;
     }
 

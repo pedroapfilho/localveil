@@ -138,4 +138,5 @@ const createTextReader =
 const readText = createTextReader(recognizeWords);
 
 export { createTextReader, readText };
+
 export type { ReadText, Recognise, TextReading };

@@ -186,6 +186,7 @@ describe("addCounts", () => {
     const into = new Map<PiiLabel, Counts>([
       ["private_person", { falseNegative: 1, falsePositive: 0, truePositive: 2 }],
     ]);
+
     const from = new Map<PiiLabel, Counts>([
       ["private_person", { falseNegative: 0, falsePositive: 3, truePositive: 1 }],
     ]);

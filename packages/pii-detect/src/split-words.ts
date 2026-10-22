@@ -13,4 +13,5 @@ const splitWords = (text: string): Array<SourceWord> => {
 };
 
 export { splitWords };
+
 export type { SourceWord };

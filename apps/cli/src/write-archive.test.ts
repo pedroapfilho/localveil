@@ -29,6 +29,7 @@ describe("writeArchive", () => {
   it("publishes simultaneous archives without replacing either set of bytes", async () => {
     const signal = new AbortController().signal;
     const contents = ["first archive", "second archive"];
+
     const paths = await Promise.all(
       contents.map((text) => writeArchive(new Blob([text]), directory, signal)),
     );

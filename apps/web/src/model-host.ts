@@ -34,6 +34,7 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
       name: model,
       type: "module",
     });
+
     const listeners = new AbortController();
     const { signal } = listeners;
 
@@ -111,4 +112,5 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
 };
 
 export { createModelHost, MAX_RESPAWNS };
+
 export type { ModelHost, ModelHostOptions };

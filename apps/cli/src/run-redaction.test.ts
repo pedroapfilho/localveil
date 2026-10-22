@@ -64,10 +64,12 @@ describe("runRedaction", () => {
   it("keeps both completed runs when they publish into the same directory", async () => {
     const { directory, first, second } = await makeWorkspace();
     const signal = new AbortController().signal;
+
     const results = await Promise.all([
       runRedaction(runOptions(directory, [first], signal)),
       runRedaction(runOptions(directory, [second], signal)),
     ]);
+
     const paths = results.map((result) => result.zipPath);
 
     expect(new Set(paths).size).toBe(2);

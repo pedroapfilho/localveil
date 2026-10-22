@@ -75,4 +75,5 @@ const NODE_FORMATS: ReadonlyMap<string, string> = new Map(
 );
 
 export { BROWSER_ACCEPT, NODE_FORMATS, redactorFor };
+
 export type { RedactorName };

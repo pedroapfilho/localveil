@@ -94,6 +94,7 @@ const FileDropzone = ({
 
       if (files === undefined) {
         directoryInputRef.current?.click();
+
         return;
       }
 
@@ -201,4 +202,5 @@ const FileDropzone = ({
 };
 
 export { FileDropzone };
+
 export type { FileDropzoneProps };

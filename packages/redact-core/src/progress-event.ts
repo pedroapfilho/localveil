@@ -13,4 +13,5 @@ const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   typeof payload.stage === "string";
 
 export { isProgressEvent };
+
 export type { ProgressEvent };

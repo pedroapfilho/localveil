@@ -285,4 +285,5 @@ const createRedactionPool: CreatePool = (options) => {
 };
 
 export { createRedactionPool };
+
 export type { WorkerTask };

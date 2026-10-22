@@ -174,8 +174,10 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
       onProgress(progress, "stage.extracting");
 
       const known = language;
+
       const scanned = await withPage(pdf, number, async (proxy, viewport) => {
         const content = await proxy.getTextContent();
+
         const layerText = content.items
           .map((item) => ("str" in item ? item.str : ""))
           .join(" ")
@@ -247,6 +249,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
   }
 
   const { pages } = analysis.handle;
+
   const built = await withPdf(file, async (pdf, pdfLib) => {
     const out = await pdfLib.PDFDocument.create();
     const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
@@ -266,6 +269,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
         const from = await (original ??= file
           .arrayBuffer()
           .then((bytes) => pdfLib.PDFDocument.load(bytes)));
+
         const [copied] = await out.copyPages(from, [number - 1]);
 
         out.addPage(copied);
@@ -348,6 +352,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 const createPdfRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
     const { pages, readings, warnings } = await readPages(file, read, onProgress);
+
     const { detections, units } = await analyseUnits({
       detect: detectingReadings(detect, readings, onProgress),
       kind: "pages",

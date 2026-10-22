@@ -20,4 +20,5 @@ type I18nValue = {
 const I18nContext = createContext<I18nValue | undefined>(undefined);
 
 export { I18nContext };
+
 export type { I18nValue };

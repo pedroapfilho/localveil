@@ -45,4 +45,5 @@ const I18nProvider = ({ children }: I18nProviderProps) => {
 };
 
 export { I18nProvider };
+
 export type { I18nProviderProps };

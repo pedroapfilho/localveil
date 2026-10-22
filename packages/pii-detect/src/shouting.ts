@@ -67,4 +67,5 @@ const positionShouted = (
 };
 
 export { collectShouting, positionShouted, titleCased };
+
 export type { Segment, Shouting };

@@ -136,4 +136,5 @@ const languageOf = (text: string): OcrLanguage | undefined => {
 const traineddataFor = (language: OcrLanguage) => TRAINEDDATA[language];
 
 export { languageOf, traineddataFor };
+
 export type { OcrLanguage };

@@ -60,6 +60,7 @@ const GlossaryText = ({ children }: { children: string }) => {
     () => new RegExp(`(${[...named.keys()].map(quote).join("|")})`, "gv"),
     [named],
   );
+
   const occurrences = new Map<GlossaryTermName, number>();
 
   return (
@@ -73,6 +74,7 @@ const GlossaryText = ({ children }: { children: string }) => {
 
         const occurrence = (occurrences.get(name) ?? 0) + 1;
         occurrences.set(name, occurrence);
+
         return <GlossaryTerm key={`${name}-${String(occurrence)}`} label={part} name={name} />;
       })}
     </span>

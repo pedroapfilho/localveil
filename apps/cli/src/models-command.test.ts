@@ -50,6 +50,7 @@ describe("localveil models", () => {
     const { store } = fakeStore({
       "gliner-multi-pii": { bytes: 893_933_650, path: "/x", state: "ready" },
     });
+
     const { code, out } = await run([], store);
 
     expect(code).toBe(0);
@@ -74,6 +75,7 @@ describe("localveil models", () => {
     const { calls, store } = fakeStore({
       "gliner-pii-base": { bytes: 196_757_174, state: "ready" },
     });
+
     const { code, out } = await run(["remove", "gliner-pii-base"], store);
 
     expect(code).toBe(0);

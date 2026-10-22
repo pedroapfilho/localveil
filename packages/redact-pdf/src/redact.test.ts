@@ -436,6 +436,7 @@ describe("a scanned page", () => {
             },
       ),
     );
+
     const detect = naming("Ana Lima");
 
     const { redactionCount, warnings } = await run(detect, createTextReader(recognise));
@@ -461,6 +462,7 @@ describe("a scanned page", () => {
     const detect = naming("Ana Lima");
     const redactor = createPdfRedactor(fixedWords);
     const analysis = await redactor.analyse(file(), detect, () => undefined);
+
     const { redactionCount } = await redactor.apply({
       analysis,
       decisions: { covered: analysis.detections.map(({ id }) => id) },
@@ -483,6 +485,7 @@ describe("a scanned page", () => {
 
     const redactor = createPdfRedactor(fixedWords);
     const analysis = await redactor.analyse(file(), naming("Ana Lima"), () => undefined);
+
     const { redactionCount } = await redactor.apply({
       analysis,
       decisions: { covered: [] },
@@ -620,6 +623,7 @@ describe("the pdf.js resources it holds", () => {
 describe("the handle analysis hands to apply", () => {
   it("keeps only the readings of each analysed page and their word geometry", async () => {
     const analysis = await analyse(naming("Ana"));
+
     const [[first] = []] = (analysis.handle as { pages: Array<Array<Record<string, unknown>>> })
       .pages;
 

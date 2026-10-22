@@ -190,4 +190,5 @@ const pickedDirectoryFiles = async (): Promise<Selection | undefined> => {
 };
 
 export { droppedFiles, MOST_FILES, pickedDirectoryFiles, selectedFiles };
+
 export type { SelectedFile, Selection };

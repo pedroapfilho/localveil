@@ -11,6 +11,7 @@ const entryNames = async (archive: Blob) => {
     unzip(bytes, (error, data) => {
       if (error) {
         reject(error);
+
         return;
       }
 

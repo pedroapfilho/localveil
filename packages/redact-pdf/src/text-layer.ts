@@ -82,8 +82,10 @@ const wordsIn = (
   const width = item.width * pageScale;
   const per = width / glyphs;
   const measured = measure(item.str, style.fontFamily);
+
   const offsetOf = (graphemes: number, text: string) =>
     measured > 0 ? (measure(text, style.fontFamily) / measured) * width : graphemes * per;
+
   const baseline = placed[5];
 
   const words: Array<WordInput> = [];
@@ -140,4 +142,5 @@ const textLayerWords = (
 };
 
 export { textLayerWords };
+
 export type { Layer, MeasureText };

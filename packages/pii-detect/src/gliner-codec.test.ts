@@ -178,6 +178,7 @@ describe("decoding a span-level model", () => {
 
   it("labels a span by the entity its prompt stands for", () => {
     const input = encoded(SPAN_SPEC, "jo", "x", "a@b.co");
+
     const spans = spanDecoded(
       [input],
       [
@@ -193,6 +194,7 @@ describe("decoding a span-level model", () => {
 
   it("lets the strongest of overlapping claims take the words", () => {
     const input = encoded(SPAN_SPEC, "a", "b", "c");
+
     const spans = spanDecoded(
       [input],
       [
@@ -209,6 +211,7 @@ describe("decoding a span-level model", () => {
   it("reads each item of a batch against its own words and ignores its padding", () => {
     const short = encoded(SPAN_SPEC, "a");
     const long = encoded(SPAN_SPEC, "bb", "cc");
+
     const spans = spanDecoded(
       [short, long],
       [
@@ -222,6 +225,7 @@ describe("decoding a span-level model", () => {
 
   it("keeps a span on the line its first word sits on", () => {
     const codec = createGlinerCodec(SPAN_SPEC, tokenizer);
+
     const input = codec.encode([
       { end: 3, line: 0, start: 0, text: "Rua" },
       { end: 20, line: 1, start: 15, text: "Ana" },

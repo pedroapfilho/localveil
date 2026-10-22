@@ -95,6 +95,7 @@ describe("a legible page", () => {
       ["seven", 90],
       ["eight", 90],
     ];
+
     const { legibility, words } = await createTextReader(engine(() => recognised(80, scanned)))(
       page,
     );
@@ -196,6 +197,7 @@ describe("a page that reads badly", () => {
       ["ruido", 10],
       ["texto", 12],
     ]);
+
     const reading = await createTextReader(engine((prepared) => (prepared ? sparse : ILLEGIBLE)))(
       page,
     );
@@ -211,6 +213,7 @@ describe("a page that reads badly", () => {
       ["10846703645", 88],
       ["noise", 8],
     ]);
+
     const reading = await createTextReader(engine((prepared) => (prepared ? steadier : ILLEGIBLE)))(
       page,
     );
@@ -225,6 +228,7 @@ describe("a page that reads badly", () => {
       ["ruido", 10],
       ["texto", 15],
     ]);
+
     const reading = await createTextReader(engine((prepared) => (prepared ? level : ILLEGIBLE)))(
       page,
     );
@@ -259,6 +263,7 @@ describe("the language", () => {
             ["Silva", 88],
           ]),
     );
+
     const { language, words } = await createTextReader(recognise)(page);
 
     expect(passes(recognise)).toEqual([
@@ -277,6 +282,7 @@ describe("the language", () => {
 
       return language === "en" ? recognised(70, [[PORTUGUESE, 80]]) : CLEAR;
     });
+
     const { language } = await createTextReader(recognise)(page);
 
     expect(passes(recognise)).toEqual([

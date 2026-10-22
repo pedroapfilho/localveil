@@ -29,10 +29,12 @@ const inOrder = async <T, R>(
 ) => {
   const [tokenizerUrl, configUrl] = tokenizerUrls(model);
   const tokenizerFile = async (url: string) => readTokenizer(await fetchFile(url, ignore), url);
+
   const [tokenizer, tokenizerConfig] = await settleAll([
     tokenizerFile(tokenizerUrl),
     tokenizerFile(configUrl),
   ]);
+
   // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- the tokenizer is read before the weights are fetched
   const weights = await fetchFile(weightsUrl(model), onProgress);
 
@@ -91,4 +93,5 @@ const openInOrder = async (
 };
 
 export { CATALOGUED, downloadInOrder, fileUrls, openInOrder, readModelFiles };
+
 export type { FileProgress, Persistence };
