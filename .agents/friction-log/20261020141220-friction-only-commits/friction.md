@@ -1,6 +1,7 @@
 ---
 title: 'Friction-only commits fail the formatter pre-commit hook'
 severity: 'minor'
+issue: 'pedroapfilho/localveil#94'
 ---
 
 ## Expected Behavior
