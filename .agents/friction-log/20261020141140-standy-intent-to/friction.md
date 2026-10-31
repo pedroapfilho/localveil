@@ -1,6 +1,7 @@
 ---
 title: 'Standy intent-to-add guidance blocks the pre-commit hook'
 severity: 'minor'
+issue: 'pedroapfilho/localveil#93'
 ---
 
 ## Expected Behavior
