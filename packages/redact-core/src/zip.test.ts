@@ -2,7 +2,7 @@ import type { Unzipped } from "fflate";
 import { unzip } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { buildZip, uniqueFilename } from "./zip";
+import { archiveNames, buildZip, uniqueFilename } from "./zip";
 
 const entryNames = async (archive: Blob) => {
   const bytes = new Uint8Array(await archive.arrayBuffer());
@@ -71,5 +71,13 @@ describe("buildZip", () => {
 
   it("rejects an empty input array rather than producing an empty zip", async () => {
     await expect(buildZip([])).rejects.toThrow(/no files/v);
+  });
+});
+
+describe("archiveNames", () => {
+  it("keeps every entry inside the archive on either separator, and gives twins their own names", () => {
+    expect(
+      archiveNames(["../../evil.txt", "evil.txt", String.raw`..\..\x.txt`, "a/./b.txt"]),
+    ).toEqual(["evil.txt", "evil (2).txt", "x.txt", "a/b.txt"]);
   });
 });

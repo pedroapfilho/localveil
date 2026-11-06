@@ -6,15 +6,10 @@ import path from "node:path";
 import { warnRecoverable } from "@repo/redact-core";
 
 import type { ModelSpec } from "./catalog";
-import { tokenizerUrls, weightsUrl } from "./catalog";
 import type { FileProgress, Persistence } from "./model-files";
-import { CATALOGUED, downloadInOrder, fileUrls, openInOrder } from "./model-files";
-import type { ModelStatus, ModelStore, OpenModel } from "./model-status";
+import { CATALOGUED, downloadInOrder, keptStatus, openInOrder, ownedUrls } from "./model-files";
+import type { ModelStatus, OpenModel, PlatformModelStore } from "./model-status";
 import { settleAll } from "./settle-all";
-
-type NodeModelStore = ModelStore & {
-  openModel: OpenModel;
-};
 
 const MODEL_CACHE_DIR = path.join(homedir(), ".cache", "localveil", "models");
 
@@ -90,7 +85,7 @@ const keepOnDisk = async (file: string, bytes: Uint8Array) => {
   }
 };
 
-const createNodeModelStore = (directory: string): NodeModelStore => {
+const createNodeModelStore = (directory: string): PlatformModelStore => {
   const pathFor = (url: string) => path.join(directory, nameFor(url));
 
   const sizeOnDisk = async (url: string) => {
@@ -157,20 +152,9 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
   };
 
   /* Each file is written whole, through a temporary name and a rename, so a file on disk is either
-     complete or absent. */
-  const inspectModel = async (model: ModelSpec): Promise<ModelStatus> => {
-    const [weights, ...tokenizer] = await Promise.all(
-      [weightsUrl(model), ...tokenizerUrls(model)].map(sizeOnDisk),
-    );
-
-    if (weights === undefined) {
-      return { state: "absent" };
-    }
-
-    return tokenizer.every((size) => size !== undefined)
-      ? { bytes: weights, path: pathFor(weightsUrl(model)), state: "ready" }
-      : { loaded: weights, state: "partial", total: model.bytes };
-  };
+     complete or absent, and nothing is ever banked. */
+  const inspectModel = (model: ModelSpec): Promise<ModelStatus> =>
+    keptStatus(model, sizeOnDisk, () => Promise.resolve(0));
 
   const downloadModel = async (
     model: ModelSpec,
@@ -180,8 +164,6 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
     await downloadInOrder(model, onProgress, (url, progress) =>
       ensureOnDisk(url, "required", progress, signal),
     );
-
-    onProgress(1);
   };
 
   const openModel: OpenModel = (model, onProgress, signal) =>
@@ -193,20 +175,12 @@ const createNodeModelStore = (directory: string): NodeModelStore => {
     );
 
   const removeModel = async (model: ModelSpec): Promise<void> => {
-    await Promise.all(fileUrls(model).map((url) => rm(pathFor(url), { force: true })));
+    await Promise.all(ownedUrls(model).map((url) => rm(pathFor(url), { force: true })));
   };
 
   return { downloadModel, inspectModel, openModel, removeModel };
 };
 
-const { downloadModel, inspectModel, openModel, removeModel } =
-  createNodeModelStore(MODEL_CACHE_DIR);
+const modelStore = createNodeModelStore(MODEL_CACHE_DIR);
 
-export {
-  createNodeModelStore,
-  downloadModel,
-  inspectModel,
-  MODEL_CACHE_DIR,
-  openModel,
-  removeModel,
-};
+export { createNodeModelStore, MODEL_CACHE_DIR, modelStore };

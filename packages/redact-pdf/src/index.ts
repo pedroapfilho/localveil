@@ -1,8 +1,8 @@
-import type { OcrLanguage, ReadText } from "@repo/ocr";
+import type { ReadText } from "@repo/ocr";
 import { languageOf } from "@repo/ocr";
 import type {
-  AnalysedReading,
   Detect,
+  DocumentLanguage,
   FileProgress,
   PageSurface,
   Redactor,
@@ -12,17 +12,13 @@ import type {
 import {
   analyseUnits,
   contextOf,
+  coverUnit,
   inReadingOrder,
-  isAnalysedReading,
-  isPageSurface,
-  keptSpans,
   paint,
-  rectsFor,
-  redactionCount,
+  scanOf,
   surfaceOf,
+  surfaceUnits,
   toArrayBuffer,
-  uncovered,
-  verifyOutput,
   warnRecoverable,
 } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
@@ -41,10 +37,6 @@ const MIN_LAYER_WORDS = 12;
 const READ_SHARE = 0.45;
 
 const DETECT_SHARE = 0.45;
-
-/* Each page holds its readings: a typed page its text layer, a scanned page the pass the reader
-   chose first and then any it passed over. */
-type PdfHandle = { pages: Array<Array<AnalysedReading & PageSurface>> };
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -110,7 +102,11 @@ const withPdf = async <T>(
   try {
     return await work(pdf, pdfLib);
   } finally {
-    await loading.destroy().catch(() => undefined);
+    try {
+      await loading.destroy();
+    } catch (error) {
+      warnRecoverable("Could not release a PDF after reading it", error);
+    }
   }
 };
 
@@ -146,17 +142,6 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
   return canvas;
 };
 
-const isHandle = (value: unknown): value is PdfHandle =>
-  typeof value === "object" &&
-  value !== null &&
-  "pages" in value &&
-  Array.isArray(value.pages) &&
-  value.pages.every(
-    (page) =>
-      Array.isArray(page) &&
-      page.every((reading) => isAnalysedReading(reading) && isPageSurface(reading)),
-  );
-
 const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
   withPdf(file, async (pdf) => {
     onProgress(0, "stage.reading");
@@ -164,7 +149,7 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
     const warnings = new Set<WarningKey>();
     const pages: Array<PageSurface | { readings: Array<PageSurface> }> = [];
 
-    let language: OcrLanguage | undefined;
+    let language: DocumentLanguage | undefined;
     let anyText = false;
     let readings = 0;
 
@@ -209,13 +194,13 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
           warnings.add("warning.lowConfidence");
         }
 
-        const passes = [reading.words, ...reading.alternatives].map(surfaceOf);
+        const scan = scanOf(reading);
 
         return {
           found: reading.legibility !== "blank",
           language: layerLanguage ?? reading.language,
-          page: { readings: passes },
-          readings: passes.length,
+          page: scan,
+          readings: scan.readings.length,
         };
       });
 
@@ -243,18 +228,14 @@ const detectingReadings = (detect: Detect, count: number, onProgress: FileProgre
   };
 };
 
-const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, onProgress }) => {
-  if (!isHandle(analysis.handle)) {
-    throw new TypeError("The PDF analysis carried no recognised pages to paint from");
-  }
-
-  const { pages } = analysis.handle;
+const applyPdf: Redactor["apply"] = async ({ analysis, decisions, file, onProgress }) => {
+  const pages = surfaceUnits(analysis);
 
   const built = await withPdf(file, async (pdf, pdfLib) => {
     const out = await pdfLib.PDFDocument.create();
     const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
 
-    const warnings = new Set<WarningKey>(analysis.warnings);
+    const warnings = new Set<WarningKey>();
     const survived: Array<WordInput> = [];
 
     let original: Promise<PDFDocument> | undefined;
@@ -290,11 +271,9 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
 
       onProgress(progress, "stage.redacting");
 
-      const rects = readings.flatMap((reading) => rectsFor(reading, keptSpans(reading, decisions)));
-      const [chosen] = readings;
-      const showing = chosen === undefined ? [] : uncovered(chosen, rects).words;
+      const { rects, visible } = coverUnit(readings, decisions);
 
-      survived.push(...showing);
+      survived.push(...visible);
 
       if (rects.length === 0 && (await copyPage(number))) {
         continue;
@@ -318,7 +297,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
           y: 0,
         });
 
-        for (const word of showing) {
+        for (const word of visible) {
           try {
             sheet.drawText(word.text, {
               font,
@@ -335,14 +314,10 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, detect, file, 
       });
     }
 
-    const verified = await verifyOutput(surfaceOf(survived).text, detect, warnings);
-
-    onProgress(1, "stage.finished");
-
     return {
       blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
-      redactionCount: redactionCount(pages, decisions),
-      warnings: verified,
+      visible: surfaceOf(survived).text,
+      warnings: [...warnings],
     };
   });
 
@@ -359,9 +334,7 @@ const createPdfRedactor = (read: ReadText): Redactor => ({
       units: pages,
     });
 
-    onProgress(1, "stage.finished");
-
-    return { detections, handle: { pages: units } satisfies PdfHandle, warnings: [...warnings] };
+    return { detections, units, warnings: [...warnings] };
   },
   apply: applyPdf,
 });

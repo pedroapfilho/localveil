@@ -1,3 +1,4 @@
+import { UnsupportedFileError } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
 import { readFileAsFile } from "./read-file";
@@ -19,10 +20,13 @@ describe("readFileAsFile", () => {
     expect(pdf.type).toBe("application/pdf");
   });
 
-  it("leaves the type empty for an extension it does not know", async () => {
-    const file = await readFileAsFile(new URL(import.meta.url).pathname);
-
-    expect(file.type).toBe("");
+  it("refuses a format Node cannot decode before reading it", async () => {
+    await expect(readFileAsFile(`${FIXTURES}photo.heic`)).rejects.toBeInstanceOf(
+      UnsupportedFileError,
+    );
+    await expect(readFileAsFile(new URL(import.meta.url).pathname)).rejects.toBeInstanceOf(
+      UnsupportedFileError,
+    );
   });
 
   it("carries the bytes on disk", async () => {

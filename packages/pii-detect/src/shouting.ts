@@ -1,5 +1,6 @@
 import type { SpanWord } from "./gliner-codec";
 import type { SourceWord } from "./split-words";
+import { splitWords } from "./split-words";
 
 const RUN_OF_CAPITALS = /\p{Lu}{2,}(?:['’]\p{Lu}+)?/gv;
 
@@ -66,6 +67,13 @@ const positionShouted = (
   return positioned;
 };
 
-export { collectShouting, positionShouted, titleCased };
+// A chunk's shouted lines in title case, each word placed back where it sits in the whole text.
+const shoutedWords = (text: string, chunk: { end: number; start: number }): Array<SpanWord> => {
+  const shouting = collectShouting(text.slice(chunk.start, chunk.end));
 
-export type { Segment, Shouting };
+  return shouting.text.length === 0
+    ? []
+    : positionShouted(splitWords(shouting.text), shouting.segments, chunk.start);
+};
+
+export { collectShouting, positionShouted, shoutedWords, titleCased };

@@ -61,7 +61,7 @@ describe("useModelPicker", () => {
   });
 
   it("reads as busy while a file is still reaching the model", () => {
-    useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    useJobStore.getState().addFiles([{ file: new File(["x"], "a.txt"), path: "a.txt" }]);
 
     const { result } = render();
 

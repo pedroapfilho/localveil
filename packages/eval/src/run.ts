@@ -2,17 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import {
-  createDetector,
-  DEFAULT_MODEL_ID,
-  isModelId,
-  MODELS,
-  patternSpans,
-  readModelFiles,
-} from "@repo/pii-detect";
+import { createDetector, patternSpans, readModelFiles } from "@repo/pii-detect";
+import { DEFAULT_MODEL_ID, isModelId, MODELS } from "@repo/pii-detect/models";
 import type { PiiLabel, Span } from "@repo/redact-core";
-import { analyseUnits, APPLY_SCORE } from "@repo/redact-core";
-import { structuralSpans } from "@repo/redact-text";
+import { APPLY_SCORE } from "@repo/redact-core";
+import { TEXT_REDACTORS, withFields } from "@repo/redact-text";
 
 import type { EvalDocument } from "./corpus";
 import { loadCorpus } from "./corpus";
@@ -31,11 +25,6 @@ type DocumentResult = {
   patterns: Map<PiiLabel, Counts>;
   predicted: Array<Span>;
 };
-
-const FORMATS = [".csv", ".json"] as const;
-
-const filenameOf = (id: string) =>
-  `${id}${FORMATS.find((format) => id.endsWith(format.slice(1))) ?? ".txt"}`;
 
 const RESULTS_DIR = path.join(import.meta.dirname, "..", "results");
 
@@ -74,14 +63,13 @@ const rowsByLanguage = (results: Array<DocumentResult>) => {
     .map(([language, counts]) => ({ counts: totalCounts(counts), name: language }));
 };
 
-/* The analysis redact-text runs, fed the detector and the structural layer, so this scores the
-   review list itself rather than a copy of its composition. */
-const analysedSpans = async (text: string, detected: Array<Span>): Promise<Array<Span>> => {
-  const { detections } = await analyseUnits({
-    detect: () => Promise.resolve(detected),
-    kind: "file",
-    units: [{ text }],
-  });
+// The text redactor's own analysis, fed what the model found, so this scores the review list itself.
+const analysedSpans = async (document: EvalDocument, predicted: Array<Span>) => {
+  const { detections } = await TEXT_REDACTORS[document.format].analyse(
+    new File([document.text], document.id),
+    () => Promise.resolve(predicted),
+    () => undefined,
+  );
 
   return detections.map(({ confidence, end, label, start }) => ({
     end,
@@ -95,11 +83,12 @@ const scoreDocument = async (
   document: EvalDocument,
   predicted: Array<Span>,
 ): Promise<DocumentResult> => {
-  const structural = structuralSpans(filenameOf(document.id), document.text);
-  const detected = [...predicted, ...structural];
+  const detected = await withFields(document.format, () => Promise.resolve(predicted))(
+    document.text,
+  );
 
   return {
-    analysed: countMatches(document.spans, await analysedSpans(document.text, detected)),
+    analysed: countMatches(document.spans, await analysedSpans(document, predicted)),
     everything: countMatches(document.spans, detected),
     exact: countMatches(document.spans, predicted, true),
     id: document.id,

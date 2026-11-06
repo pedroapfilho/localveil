@@ -69,7 +69,6 @@ describe("inspectModel on disk", () => {
 
     await expect(store.inspectModel(MODEL)).resolves.toEqual({
       bytes: WEIGHTS_BODY.length,
-      path: weightsPath(MODEL),
       state: "ready",
     });
   });

@@ -1,8 +1,8 @@
 import type { Detect, Span } from "@repo/redact-core";
-import { defaultDecisions, redactFile } from "@repo/redact-core";
+import { applyDecisions, defaultDecisions, redactFile } from "@repo/redact-core";
 import { describe, expect, it, vi } from "vitest";
 
-import { textRedactor } from "./index";
+import { TEXT_REDACTORS } from "./index";
 
 const span = (start: number, end: number): Span => ({
   end,
@@ -27,7 +27,7 @@ const noProgress = () => undefined;
 const file = (name: string, type: string, content = "Hi Ana!") =>
   new File([content], name, { type });
 
-describe("textRedactor", () => {
+describe("the text redactors", () => {
   it.each([
     [
       "csv",
@@ -39,14 +39,14 @@ describe("textRedactor", () => {
       String.raw`{ "na\u006de": "Ana Lima", "accountNumber": -1.234e+5, "sku": "X-1" }`,
       String.raw`{ "na\u006de": "████████", "accountNumber": █████████, "sku": "X-1" }`,
     ],
-  ])(
+  ] as const)(
     "masks lexical values in %s without changing adjacent source bytes",
     async (extension, input, output) => {
       const result = await redactFile({
         detect: detecting([]),
         file: file(`data.${extension}`, "", input),
         onProgress: noProgress,
-        redactor: textRedactor,
+        redactor: TEXT_REDACTORS[extension],
       });
 
       await expect(result.blob.text()).resolves.toBe(output);
@@ -58,7 +58,7 @@ describe("textRedactor", () => {
       detect: detecting([span(3, 6)]),
       file: file("a.txt", "text/plain"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi ███!");
@@ -74,7 +74,7 @@ describe("textRedactor", () => {
       detect,
       file: file("data.csv", "", text),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.csv,
     });
 
     expect(detect.mock.calls.at(-1)).toEqual(["plain,X-1"]);
@@ -85,7 +85,7 @@ describe("textRedactor", () => {
       detect: detecting([]),
       file: file("people.csv", "text/csv", "nome,sku\nAna Lima,X-1"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.csv,
     });
 
     await expect(result.blob.text()).resolves.toBe("nome,sku\n████████,X-1");
@@ -96,18 +96,18 @@ describe("textRedactor", () => {
       detect: detecting([]),
       file: file("payload.json", "application/json", '{"senha": "hunter2"}'),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.json,
     });
 
     await expect(result.blob.text()).resolves.toBe('{"senha": "███████"}');
   });
 
-  it("leaves a log file on the prose path", async () => {
+  it("leaves prose on the prose path", async () => {
     const result = await redactFile({
       detect: detecting([]),
       file: file("app.log", "", "nome,sku\nAna Lima,X-1"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("nome,sku\nAna Lima,X-1");
@@ -118,7 +118,7 @@ describe("textRedactor", () => {
       detect: answering([span(9, 17)], [span(0, 4)]),
       file: file("people.csv", "text/csv", "sku,city\nAna Lima,Recife"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.csv,
     });
 
     expect(result.warnings).toEqual([]);
@@ -129,7 +129,7 @@ describe("textRedactor", () => {
       detect: answering([span(9, 12)], [span(4, 8)]),
       file: file("people.csv", "text/csv", "sku,city\nAna Lima,Recife"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.csv,
     });
 
     expect(result.warnings).toEqual(["warning.notFullyRedacted"]);
@@ -140,7 +140,7 @@ describe("textRedactor", () => {
       detect: answering([span(0, 2)], [span(3, 6)]),
       file: file("a.txt", "text/plain"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("██ Ana!");
@@ -152,7 +152,7 @@ describe("textRedactor", () => {
       detect: answering([span(3, 6)], [span(3, 6)]),
       file: file("a.txt", "text/plain"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi ███!");
@@ -164,7 +164,7 @@ describe("textRedactor", () => {
       detect: answering([span(3, 6), span(7, 12)], [span(3, 12)]),
       file: file("a.txt", "text/plain", "Hi Ana Silva!"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi ███ █████!");
@@ -184,7 +184,7 @@ describe("textRedactor", () => {
       detect: answering([at("Client"), at("Pedro Filho"), at("Client", 30)]),
       file: file("deal.txt", "text/plain", text),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe(
@@ -197,7 +197,7 @@ describe("textRedactor", () => {
       detect: detecting([span(3, 6), span(4, 12)]),
       file: file("a.txt", "text/plain", "Hi Ana Silva!"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     expect(result.redactionCount).toBe(1);
@@ -208,7 +208,7 @@ describe("textRedactor", () => {
       detect: detecting([]),
       file: file("a.csv", "text/csv"),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.csv,
     });
 
     expect(result.blob.type).toBe("text/csv");
@@ -221,7 +221,7 @@ describe("textRedactor", () => {
       detect,
       file: file("a.txt", "text/plain", ""),
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     expect(result.warnings).toEqual(["warning.noText"]);
@@ -231,14 +231,15 @@ describe("textRedactor", () => {
 
   it("leaves the file untouched when every detection is dismissed", async () => {
     const source = file("a.txt", "text/plain");
-    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+    const analysis = await TEXT_REDACTORS.text.analyse(source, detecting([span(3, 6)]), noProgress);
 
-    const result = await textRedactor.apply({
+    const result = await applyDecisions({
       analysis,
       decisions: { covered: [] },
       detect: detecting([]),
       file: source,
       onProgress: noProgress,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi Ana!");
@@ -246,7 +247,7 @@ describe("textRedactor", () => {
   });
 
   it("previews exactly what it would cover", async () => {
-    const analysis = await textRedactor.analyse(
+    const analysis = await TEXT_REDACTORS.text.analyse(
       file("a.txt", "text/plain"),
       detecting([span(3, 6)]),
       noProgress,
@@ -257,21 +258,22 @@ describe("textRedactor", () => {
 
   it("covers everything when nothing is dismissed", async () => {
     const source = file("a.txt", "text/plain");
-    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+    const analysis = await TEXT_REDACTORS.text.analyse(source, detecting([span(3, 6)]), noProgress);
 
-    const result = await textRedactor.apply({
+    const result = await applyDecisions({
       analysis,
       decisions: defaultDecisions(analysis.detections),
       detect: detecting([]),
       file: source,
       onProgress: noProgress,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi ███!");
   });
 
   it("survives a round trip through structuredClone, as the worker boundary requires", async () => {
-    const analysis = await textRedactor.analyse(
+    const analysis = await TEXT_REDACTORS.text.analyse(
       file("a.txt", "text/plain"),
       detecting([span(3, 6)]),
       noProgress,
@@ -289,7 +291,7 @@ describe("textRedactor", () => {
       onProgress: (fraction: number) => {
         seen.push(fraction);
       },
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS.text,
     });
 
     expect(seen.at(0)).toBe(0);
@@ -300,30 +302,32 @@ describe("textRedactor", () => {
 describe("the analysed text snapshot", () => {
   it("refuses to mask when the analysis carried no source text", async () => {
     const source = file("a.txt", "text/plain");
-    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+    const analysis = await TEXT_REDACTORS.text.analyse(source, detecting([span(3, 6)]), noProgress);
 
     await expect(
-      textRedactor.apply({
-        analysis: { ...analysis, handle: undefined },
+      applyDecisions({
+        analysis: { ...analysis, units: [] },
         decisions: defaultDecisions(analysis.detections),
         detect: detecting([]),
         file: source,
         onProgress: noProgress,
+        redactor: TEXT_REDACTORS.text,
       }),
     ).rejects.toThrow(/carried no source text/v);
   });
 
   it("masks the snapshot rather than re-reading a file that has since changed", async () => {
     const source = file("a.txt", "text/plain");
-    const analysis = await textRedactor.analyse(source, detecting([span(3, 6)]), noProgress);
+    const analysis = await TEXT_REDACTORS.text.analyse(source, detecting([span(3, 6)]), noProgress);
     const changed = new File(["Hi Bob!"], "a.txt", { type: "text/plain" });
 
-    const result = await textRedactor.apply({
+    const result = await applyDecisions({
       analysis,
       decisions: defaultDecisions(analysis.detections),
       detect: detecting([]),
       file: changed,
       onProgress: noProgress,
+      redactor: TEXT_REDACTORS.text,
     });
 
     await expect(result.blob.text()).resolves.toBe("Hi ███!");

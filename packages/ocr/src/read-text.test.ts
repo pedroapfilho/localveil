@@ -1,8 +1,8 @@
 import { Canvas } from "@napi-rs/canvas";
-import { contextOf } from "@repo/redact-core";
+import type { DocumentLanguage, PageSurface } from "@repo/redact-core";
+import { contextOf, surfaceOf } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { OcrLanguage } from "./languages";
 import type { Recognise } from "./read-text";
 import { createTextReader } from "./read-text";
 import type { Recognition } from "./recognize";
@@ -25,6 +25,9 @@ const recognised = (confidence: number, scanned: Scanned): Recognition => ({
 const legible = (...texts: Array<string>) =>
   texts.map((text, index) => ({ bbox: boxOf(index), text }));
 
+const wordsOf = (surface: PageSurface | undefined) =>
+  surface?.words.map(({ bbox, text }) => ({ bbox, text })) ?? [];
+
 const ILLEGIBLE = recognised(40, [
   ["CPF", 95],
   ["108.467.036-45", 92],
@@ -44,7 +47,7 @@ let page: OffscreenCanvas;
 
 /* The fake engine answers by which raster it was handed, the page itself or the copy prepared for
    a second pass, and by the language it was asked to read in. */
-const engine = (answer: (prepared: boolean, language: OcrLanguage) => Recognition) =>
+const engine = (answer: (prepared: boolean, language: DocumentLanguage) => Recognition) =>
   vi.fn<Recognise>((image, language) => Promise.resolve(answer(image !== page, language)));
 
 const passes = (recognise: ReturnType<typeof engine>) =>
@@ -76,10 +79,10 @@ describe("a legible page", () => {
     const recognise = engine(() => CLEAR);
 
     expect(await createTextReader(recognise)(page)).toEqual({
-      alternatives: [],
+      chosen: surfaceOf(legible("NOME", "JOSE", "SILVA")),
       language: "en",
       legibility: "legible",
-      words: legible("NOME", "JOSE", "SILVA"),
+      passedOver: [],
     });
     expect(passes(recognise)).toEqual([["page", "en"]]);
   });
@@ -96,12 +99,10 @@ describe("a legible page", () => {
       ["eight", 90],
     ];
 
-    const { legibility, words } = await createTextReader(engine(() => recognised(80, scanned)))(
-      page,
-    );
+    const reading = await createTextReader(engine(() => recognised(80, scanned)))(page);
 
-    expect(legibility).toBe("legible");
-    expect(words.map((word) => word.text)).toEqual([
+    expect(reading.legibility).toBe("legible");
+    expect(wordsOf(reading.chosen).map((word) => word.text)).toEqual([
       "one",
       "two",
       "four",
@@ -164,17 +165,17 @@ describe("a page that reads badly", () => {
   it("is read again when the first pass found no words at all", async () => {
     const recognise = engine((prepared) => (prepared ? CLEAR : EMPTY));
 
-    const { words } = await createTextReader(recognise)(page);
+    const reading = await createTextReader(recognise)(page);
 
-    expect(words).toEqual(legible("NOME", "JOSE", "SILVA"));
+    expect(wordsOf(reading.chosen)).toEqual(legible("NOME", "JOSE", "SILVA"));
   });
 
   it("is called blank when neither pass found a word", async () => {
     expect(await createTextReader(engine(() => EMPTY))(page)).toEqual({
-      alternatives: [[]],
+      chosen: surfaceOf([]),
       language: "en",
       legibility: "blank",
-      words: [],
+      passedOver: [surfaceOf([])],
     });
   });
 
@@ -184,10 +185,10 @@ describe("a page that reads badly", () => {
     );
 
     expect(reading).toEqual({
-      alternatives: [legible("CPF", "108.467.036-45")],
+      chosen: surfaceOf(legible("NOME", "JOSE", "SILVA")),
       language: "en",
       legibility: "legible",
-      words: legible("NOME", "JOSE", "SILVA"),
+      passedOver: [surfaceOf(legible("CPF", "108.467.036-45"))],
     });
   });
 
@@ -202,8 +203,8 @@ describe("a page that reads badly", () => {
       page,
     );
 
-    expect(reading.words).toEqual(legible("CPF", "108.467.036-45"));
-    expect(reading.alternatives).toEqual([legible("CPF")]);
+    expect(wordsOf(reading.chosen)).toEqual(legible("CPF", "108.467.036-45"));
+    expect(wordsOf(reading.passedOver[0])).toEqual(legible("CPF"));
     expect(reading.legibility).toBe("unreadable");
   });
 
@@ -218,7 +219,7 @@ describe("a page that reads badly", () => {
       page,
     );
 
-    expect(reading.words).toEqual(legible("CPF", "10846703645"));
+    expect(wordsOf(reading.chosen)).toEqual(legible("CPF", "10846703645"));
   });
 
   it("keeps the first pass when the retry is no better", async () => {
@@ -233,7 +234,7 @@ describe("a page that reads badly", () => {
       page,
     );
 
-    expect(reading.words).toEqual(legible("CPF", "108.467.036-45"));
+    expect(wordsOf(reading.chosen)).toEqual(legible("CPF", "108.467.036-45"));
   });
 });
 
@@ -264,14 +265,14 @@ describe("the language", () => {
           ]),
     );
 
-    const { language, words } = await createTextReader(recognise)(page);
+    const reading = await createTextReader(recognise)(page);
 
     expect(passes(recognise)).toEqual([
       ["page", "en"],
       ["page", "pt"],
     ]);
-    expect(language).toBe("pt");
-    expect(words).toEqual(legible("Maria", "Silva"));
+    expect(reading.language).toBe("pt");
+    expect(wordsOf(reading.chosen)).toEqual(legible("Maria", "Silva"));
   });
 
   it("works the language out afresh for the second pass", async () => {

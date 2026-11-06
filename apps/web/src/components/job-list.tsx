@@ -25,8 +25,7 @@ type JobListProps = {
   onApply: (id: string, covered: ReadonlyArray<string>) => void;
   onClear: () => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
-  onRemove: (id: string) => void;
-  onRemoveMany: (ids: ReadonlyArray<string>) => void;
+  onRemove: (ids: ReadonlyArray<string>) => void;
 };
 
 const JobList = ({
@@ -36,7 +35,6 @@ const JobList = ({
   onClear,
   onCoveredChange,
   onRemove,
-  onRemoveMany,
 }: JobListProps) => {
   const { t } = useTranslations();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
@@ -66,7 +64,7 @@ const JobList = ({
   };
 
   const handleRemoveSelected = () => {
-    onRemoveMany(selected);
+    onRemove(selected);
     setPicked(new Set());
   };
 
@@ -133,5 +131,3 @@ const JobList = ({
 };
 
 export { JobList };
-
-export type { JobListProps };

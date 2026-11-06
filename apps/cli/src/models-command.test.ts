@@ -48,7 +48,7 @@ const run = async (args: Array<string>, store: ModelStore, isTTY = false) => {
 describe("localveil models", () => {
   it("lists every model with its size and whether it is downloaded", async () => {
     const { store } = fakeStore({
-      "gliner-multi-pii": { bytes: 893_933_650, path: "/x", state: "ready" },
+      "gliner-multi-pii": { bytes: 893_933_650, state: "ready" },
     });
 
     const { code, out } = await run([], store);

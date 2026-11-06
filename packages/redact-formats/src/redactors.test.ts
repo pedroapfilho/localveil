@@ -4,14 +4,17 @@ import type { FileStageKey } from "@repo/redact-core";
 import { UnsupportedFileError } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NODE_FORMATS } from "./formats";
 import { resolveRedactor } from "./redactors";
 
-import { BROWSER_ACCEPT, NODE_FORMATS } from "./index";
+import { BROWSER_ACCEPT } from "./index";
 
 /* What each redactor does once it has the file in hand: text goes straight to the detector, a PDF
    is taken apart page by page, an image goes to the recogniser. */
 const NEXT_STAGE = {
+  csv: "stage.detecting",
   image: "stage.recognising",
+  json: "stage.detecting",
   pdf: "stage.extracting",
   text: "stage.detecting",
 } as const satisfies Record<string, FileStageKey>;
@@ -19,8 +22,8 @@ const NEXT_STAGE = {
 const SAMPLES = [
   { handler: "text", name: "sample.txt", type: "text/plain" },
   { handler: "text", name: "sample.md", type: "text/markdown" },
-  { handler: "text", name: "sample.csv", type: "text/csv" },
-  { handler: "text", name: "sample.json", type: "application/json" },
+  { handler: "csv", name: "sample.csv", type: "text/csv" },
+  { handler: "json", name: "sample.json", type: "application/json" },
   { handler: "text", name: "sample.log", type: "" },
   { handler: "pdf", name: "sample.pdf", type: "application/pdf" },
   { handler: "image", name: "sample.png", type: "image/png" },
@@ -91,14 +94,22 @@ describe("resolveRedactor", () => {
       resolveRedactor(named("sample.txt")),
     );
     expect(resolveRedactor(named("export", "application/json"))).toBe(
-      resolveRedactor(named("sample.txt")),
+      resolveRedactor(named("sample.json")),
     );
+    expect(resolveRedactor(named("export", "text/csv"))).toBe(resolveRedactor(named("sample.csv")));
     expect(resolveRedactor(named("download", "application/pdf"))).toBe(
       resolveRedactor(named("sample.pdf")),
     );
     expect(resolveRedactor(named("photo", "image/heic"))).toBe(
       resolveRedactor(named("sample.png")),
     );
+  });
+
+  it("reads a log as prose, not as the CSV its commas could pass for", () => {
+    expect(resolveRedactor(named("app.log", "text/plain"))).toBe(
+      resolveRedactor(named("sample.txt")),
+    );
+    expect(resolveRedactor(named("app.log"))).not.toBe(resolveRedactor(named("sample.csv")));
   });
 
   it("ignores the case of an extension", () => {
@@ -120,7 +131,7 @@ describe("resolveRedactor", () => {
 describe("the lists drawn from the same declarations", () => {
   it("offers the dropzone every format a redactor declares", () => {
     expect(BROWSER_ACCEPT).toBe(
-      ".csv,.json,.log,.md,.txt,text/*,application/json,.pdf,application/pdf,.avif,.bmp,.gif,.heic,.jpeg,.jpg,.png,.tif,.tiff,.webp,image/*",
+      ".csv,text/csv,.json,application/json,.log,.md,.txt,text/*,.pdf,application/pdf,.avif,.bmp,.gif,.heic,.jpeg,.jpg,.png,.tif,.tiff,.webp,image/*",
     );
   });
 

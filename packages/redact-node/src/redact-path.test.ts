@@ -1,5 +1,5 @@
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/redact-pdf and @repo/redact-image wrap wasm/canvas engines; the module seam is the only practical hermetic substitute */
-import type { Analysis, Detect, RedactionResult, Redactor } from "@repo/redact-core";
+import type { Analysis, Detect, Painted, Redactor } from "@repo/redact-core";
 import { UnsupportedFileError } from "@repo/redact-core";
 import type * as RedactImage from "@repo/redact-image";
 import type * as RedactPdf from "@repo/redact-pdf";
@@ -7,15 +7,15 @@ import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 
-const stubResult = (): Promise<RedactionResult> =>
+const stubResult = (): Promise<Painted> =>
   Promise.resolve({
     blob: new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
-    redactionCount: 7,
-    warnings: ["warning.scannedPages"],
+    visible: "",
+    warnings: ["warning.droppedCharacters"],
   });
 
 const stubAnalysis = (): Promise<Analysis> =>
-  Promise.resolve({ detections: [], handle: undefined, warnings: [] });
+  Promise.resolve({ detections: [], units: [], warnings: [] });
 
 const redactPdf = vi.fn<Redactor["apply"]>(stubResult);
 const redactImage = vi.fn<Redactor["apply"]>(stubResult);
@@ -113,11 +113,11 @@ describe("redactPath", () => {
     );
   });
 
-  it("passes the count and the warnings through as the redactor reported them", async () => {
+  it("passes the warnings painting raised through", async () => {
     const { redactionCount, warnings } = await run("sample.pdf");
 
-    expect(redactionCount).toBe(7);
-    expect(warnings).toEqual(["warning.scannedPages"]);
+    expect(redactionCount).toBe(0);
+    expect(warnings).toEqual(["warning.droppedCharacters"]);
   });
 
   it("hands back bytes rather than a blob, since nothing downstream is a browser", async () => {

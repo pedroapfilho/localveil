@@ -1,9 +1,9 @@
-import type { ModelId, ModelLoadState } from "@repo/pii-detect/models";
+import type { ModelLoadState } from "@repo/pii-detect/models";
 import type { FileStageKey } from "@repo/redact-core";
 import { describeError } from "@repo/redact-core";
 import { useCallback, useRef, useState } from "react";
 
-import type { RunResult } from "./run-redaction";
+import type { RunResult, RunSettings } from "./run-redaction";
 import { runRedaction } from "./run-redaction";
 
 type RunProgressState = {
@@ -14,10 +14,9 @@ type RunProgressState = {
 };
 
 type RedactionRunOptions = {
-  jobs?: number;
-  model?: ModelId;
   onSettled: () => void;
   outputDirectory: string;
+  settings: RunSettings;
 };
 
 const INITIAL: RunProgressState = {
@@ -27,7 +26,7 @@ const INITIAL: RunProgressState = {
   stage: null,
 };
 
-const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionRunOptions) => {
+const useRedactionRun = ({ onSettled, outputDirectory, settings }: RedactionRunOptions) => {
   const [progress, setProgress] = useState(INITIAL);
   const [result, setResult] = useState<RunResult | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -48,14 +47,12 @@ const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionR
         try {
           setResult(
             await runRedaction({
+              ...settings,
               files,
-              jobs,
-              model,
 
               onFileProgress: ({ fraction, index, stage }) => {
                 setProgress((current) => ({ ...current, fileIndex: index, fraction, stage }));
               },
-              // Node has no GPU path to switch to, so the slow-device notice has nothing to tell the CLI.
               onModelLoad: (event) => {
                 if (event.kind !== "slow-device") {
                   setProgress((current) => ({ ...current, model: event }));
@@ -74,7 +71,7 @@ const useRedactionRun = ({ jobs, model, onSettled, outputDirectory }: RedactionR
 
       void execute();
     },
-    [jobs, model, onSettled, outputDirectory],
+    [onSettled, outputDirectory, settings],
   );
 
   return { cancel, failure, progress, result, start };

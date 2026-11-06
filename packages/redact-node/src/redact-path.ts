@@ -1,11 +1,9 @@
-import type { Detect, FileStageKey, WarningKey } from "@repo/redact-core";
+import type { Detect, FileProgress, WarningKey } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import { resolveRedactor } from "@repo/redact-formats/redactors";
 
 import { installCanvas } from "./canvas";
 import { readFileAsFile } from "./read-file";
-
-type NodeRedactionProgress = (fraction: number, stage: FileStageKey) => void;
 
 type NodeRedactionOutput = {
   bytes: Uint8Array;
@@ -16,7 +14,7 @@ type NodeRedactionOutput = {
 const redactPath = async (
   path: string,
   detect: Detect,
-  onProgress: NodeRedactionProgress,
+  onProgress: FileProgress,
 ): Promise<NodeRedactionOutput> => {
   installCanvas();
 
@@ -35,4 +33,4 @@ const redactPath = async (
 
 export { redactPath };
 
-export type { NodeRedactionOutput, NodeRedactionProgress };
+export type { NodeRedactionOutput };

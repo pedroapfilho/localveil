@@ -1,6 +1,6 @@
 import type { ReadText, TextReading } from "@repo/ocr";
 import type { Detect, FileProgress, WordInput } from "@repo/redact-core";
-import { redactFile } from "@repo/redact-core";
+import { applyDecisions, redactFile, surfaceOf } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createImageRedactor } from "./index";
@@ -36,10 +36,20 @@ const placed = (...texts: Array<string>): Array<WordInput> =>
     text,
   }));
 
+type Reading = Omit<Partial<TextReading>, "chosen" | "passedOver"> & {
+  passedOver?: Array<Array<WordInput>>;
+};
+
 /* A fixed-words reader: it hands back the same reading whatever image it is given. */
-const reads = (words: Array<WordInput>, rest: Partial<TextReading> = {}) =>
+const reads = (words: Array<WordInput>, { passedOver = [], ...rest }: Reading = {}) =>
   vi.fn<ReadText>(() =>
-    Promise.resolve({ alternatives: [], language: "en", legibility: "legible", words, ...rest }),
+    Promise.resolve({
+      chosen: surfaceOf(words),
+      language: "en",
+      legibility: "legible",
+      passedOver: passedOver.map(surfaceOf),
+      ...rest,
+    }),
   );
 
 const naming =
@@ -115,7 +125,7 @@ describe("imageRedactor", () => {
 
   it("paints over a value only a reading the reader passed over could see", async () => {
     const read = reads(placed("NOME", "JOSE", "SILVA"), {
-      alternatives: [placed("CPF", "108.467.036-45")],
+      passedOver: [placed("CPF", "108.467.036-45")],
     });
 
     const { redactionCount } = await redact(read, naming("108.467.036-45"));
@@ -148,12 +158,13 @@ describe("imageRedactor", () => {
     const redactor = createImageRedactor(reads(placed("Alice")));
     const analysis = await redactor.analyse(file(), naming("Alice"), onProgress);
 
-    const result = await redactor.apply({
+    const result = await applyDecisions({
       analysis,
       decisions: { covered: [] },
       detect: nothing,
       file: file(),
       onProgress,
+      redactor,
     });
 
     expect(painter()).not.toHaveBeenCalled();
@@ -178,29 +189,31 @@ describe("imageRedactor", () => {
     CanvasStub.contextless = true;
 
     await expect(
-      redactor.apply({
+      applyDecisions({
         analysis,
         decisions: { covered: [] },
         detect: nothing,
         file: file(),
         onProgress,
+        redactor,
       }),
     ).rejects.toThrow(/no 2d canvas/v);
     expect(bitmap.close).toHaveBeenCalled();
   });
 
-  it("refuses a handle whose readings carry no words", async () => {
+  it("refuses an analysis whose readings carry no words", async () => {
     const redactor = createImageRedactor(reads(placed("Ana")));
     const analysis = await redactor.analyse(file(), nothing, onProgress);
 
     await expect(
-      redactor.apply({
-        analysis: { ...analysis, handle: { readings: [{ marks: [], text: "Ana" }] } },
+      applyDecisions({
+        analysis: { ...analysis, units: [[{ marks: [], text: "Ana" }]] },
         decisions: { covered: [] },
         detect: nothing,
         file: file(),
         onProgress,
+        redactor,
       }),
-    ).rejects.toThrow(/no recognised readings/v);
+    ).rejects.toThrow(/no recognised words/v);
   });
 });

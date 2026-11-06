@@ -23,8 +23,14 @@ const loadThrough = (events: ReadonlyArray<ModelLoadEvent>) => {
   );
 };
 
+const NO_SETTINGS = {};
+
 const Run = () => {
-  const { progress, start } = useRedactionRun({ onSettled: () => undefined, outputDirectory: "." });
+  const { progress, start } = useRedactionRun({
+    onSettled: () => undefined,
+    outputDirectory: ".",
+    settings: NO_SETTINGS,
+  });
 
   useEffect(() => {
     start(["one.txt"]);

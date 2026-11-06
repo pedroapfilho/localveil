@@ -25,7 +25,7 @@ const ANA: Detection = {
 const setup = (job: Job, { modelLoading = false, selected = false } = {}) => {
   const onApply = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
-  const onRemove = vi.fn<(id: string) => void>();
+  const onRemove = vi.fn<(ids: ReadonlyArray<string>) => void>();
   const onSelect = vi.fn<(id: string, next: boolean) => void>();
 
   const view = renderWithI18n(
@@ -112,7 +112,7 @@ describe("JobRow", () => {
   it("applies the covered set the review shows", () => {
     const { onApply } = setup(
       text({
-        analysis: { detections: [ANA], handle: undefined, warnings: [] },
+        analysis: { detections: [ANA], units: [], warnings: [] },
         covered: ["a"],
         phase: "reviewing",
         progress: 0.5,

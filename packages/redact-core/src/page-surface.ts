@@ -1,7 +1,21 @@
+import { isAnalysedReading, keptSpans } from "./analysis";
 import { extentOf, runsOf, unitOf } from "./reading-order";
-import type { Bbox, PositionedWord, Rect, Span, WordInput } from "./types";
+import type {
+  AnalysedReading,
+  Analysis,
+  Bbox,
+  Decisions,
+  PositionedWord,
+  Rect,
+  Span,
+  WordInput,
+} from "./types";
 
 type PageSurface = { text: string; words: Array<PositionedWord> };
+
+type SurfaceReading = AnalysedReading & PageSurface;
+
+type Passes = { chosen: PageSurface; passedOver: ReadonlyArray<PageSurface> };
 
 const JOINER = " ";
 
@@ -17,13 +31,21 @@ const surfaceOf = (words: ReadonlyArray<WordInput>): PageSurface => {
   return { text: words.map((word) => word.text).join(JOINER), words: positioned };
 };
 
-const isPageSurface = (value: unknown): value is PageSurface =>
-  typeof value === "object" &&
-  value !== null &&
-  "text" in value &&
-  typeof value.text === "string" &&
-  "words" in value &&
-  Array.isArray(value.words);
+const isSurfaceReading = (value: unknown): value is SurfaceReading =>
+  isAnalysedReading(value) && "words" in value && Array.isArray(value.words);
+
+/* An analysis comes back from the review as plain data, so a redactor that paints checks it still
+   carries the words it placed its boxes by. */
+const surfaceUnits = (analysis: Analysis): Array<Array<SurfaceReading>> =>
+  analysis.units.map((readings) =>
+    readings.map((reading) => {
+      if (!isSurfaceReading(reading)) {
+        throw new TypeError("The analysis carried no recognised words to paint from");
+      }
+
+      return reading;
+    }),
+  );
 
 const rectOf = ({ x0, x1, y0, y1 }: Bbox): Rect => ({
   height: y1 - y0,
@@ -56,6 +78,17 @@ const overlaps = (bbox: Bbox, rect: Rect) =>
 const uncovered = (surface: PageSurface, rects: ReadonlyArray<Rect>): PageSurface =>
   surfaceOf(surface.words.filter((word) => !rects.some((rect) => overlaps(word.bbox, rect))));
 
+const scanOf = ({ chosen, passedOver }: Passes) => ({ readings: [chosen, ...passedOver] });
+
+/* Every reading of a unit paints, since a value only one OCR pass read is still on the page, but
+   only the chosen reading, which scanOf puts first, says what stays visible. */
+const coverUnit = (readings: ReadonlyArray<SurfaceReading>, decisions: Decisions) => {
+  const rects = readings.flatMap((reading) => rectsFor(reading, keptSpans(reading, decisions)));
+  const [chosen] = readings;
+
+  return { rects, visible: chosen === undefined ? [] : uncovered(chosen, rects).words };
+};
+
 const contextOf = (canvas: OffscreenCanvas) => {
   const context = canvas.getContext("2d");
 
@@ -76,6 +109,6 @@ const paint = (canvas: OffscreenCanvas, rects: ReadonlyArray<Rect>) => {
   }
 };
 
-export { contextOf, isPageSurface, paint, rectsFor, surfaceOf, uncovered };
+export { contextOf, coverUnit, paint, rectsFor, scanOf, surfaceOf, surfaceUnits, uncovered };
 
 export type { PageSurface };

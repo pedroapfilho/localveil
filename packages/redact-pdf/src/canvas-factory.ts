@@ -40,5 +40,3 @@ class OffscreenCanvasFactory {
 }
 
 export { OffscreenCanvasFactory };
-
-export type { CanvasEntry };

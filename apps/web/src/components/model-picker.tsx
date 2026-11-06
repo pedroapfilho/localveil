@@ -1,4 +1,3 @@
-import type { MessageKey } from "@repo/i18n";
 import { useTranslations } from "@repo/i18n";
 import type { ModelId, ModelSpec } from "@repo/pii-detect/models";
 import {
@@ -31,12 +30,6 @@ import {
 } from "lucide-react";
 
 import type { ModelEntry } from "../model-library";
-
-const SUMMARY_KEYS = {
-  "gliner-multi-pii": "models.summary.gliner-multi-pii",
-  "gliner-pii-base": "models.summary.gliner-pii-base",
-  "gliner-pii-edge": "models.summary.gliner-pii-edge",
-} as const satisfies Record<ModelId, MessageKey>;
 
 const MEGABYTE = 1_000_000;
 
@@ -140,7 +133,7 @@ const ModelRow = ({
           </span>
 
           <span className="text-muted-foreground mt-0.5 block text-xs text-pretty">
-            {t(SUMMARY_KEYS[id])}
+            {t(`models.summary.${id}`)}
           </span>
 
           <span className="text-muted-foreground mt-1 block text-xs tabular-nums">

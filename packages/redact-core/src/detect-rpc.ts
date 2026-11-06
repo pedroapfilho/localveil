@@ -137,4 +137,4 @@ const createDetectClient = (port: EventPort): Detect => {
 
 export { createDetectClient, serialiseDetect, serveDetect };
 
-export type { DetectRequest, DetectResponse, EventPort };
+export type { EventPort };

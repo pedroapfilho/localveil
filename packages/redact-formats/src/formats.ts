@@ -5,16 +5,18 @@ type Format = {
   redactor: string;
 };
 
+/* The first format to accept a file takes it, so CSV and JSON come before the text/* that would
+   otherwise read them as prose. */
 const FORMATS = [
+  { extensions: { ".csv": "text/csv" }, mimeTypes: ["text/csv"], redactor: "csv" },
   {
-    extensions: {
-      ".csv": "text/csv",
-      ".json": "application/json",
-      ".log": "text/plain",
-      ".md": "text/markdown",
-      ".txt": "text/plain",
-    },
-    mimeTypes: ["text/*", "application/json"],
+    extensions: { ".json": "application/json" },
+    mimeTypes: ["application/json"],
+    redactor: "json",
+  },
+  {
+    extensions: { ".log": "text/plain", ".md": "text/markdown", ".txt": "text/plain" },
+    mimeTypes: ["text/*"],
     redactor: "text",
   },
   {
@@ -74,6 +76,9 @@ const NODE_FORMATS: ReadonlyMap<string, string> = new Map(
   ),
 );
 
-export { BROWSER_ACCEPT, NODE_FORMATS, redactorFor };
+// The type a file read off a disk under Node takes from its name; undefined when Node cannot redact it.
+const nodeTypeOf = (name: string) => NODE_FORMATS.get(extensionOf(name));
+
+export { BROWSER_ACCEPT, NODE_FORMATS, nodeTypeOf, redactorFor };
 
 export type { RedactorName };

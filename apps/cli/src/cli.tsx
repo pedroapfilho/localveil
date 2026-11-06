@@ -19,15 +19,14 @@ const resolveOrExit = async (args: ReadonlyArray<string>) => {
 };
 
 const redact = async (args: ReadonlyArray<string>) => {
-  const { directory, jobs, model, selection } = await resolveOrExit(args);
+  const { directory, selection, settings } = await resolveOrExit(args);
 
   const instance = render(
     <App
       initialDirectory={directory}
       initialSelection={selection}
-      jobs={jobs}
-      model={model}
       outputDirectory={workingDirectory}
+      settings={settings}
     />,
     { exitOnCtrlC: false },
   );

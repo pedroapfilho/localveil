@@ -1,22 +1,17 @@
 import { warnRecoverable } from "@repo/redact-core";
 
 import type { ModelSpec } from "./catalog";
-import { revisionUrl, tokenizerUrls, weightsUrl } from "./catalog";
+import { HUB, revisionUrl, weightsUrl } from "./catalog";
 import type { ChunkStore } from "./chunk-store";
 import { createIndexedDbChunkStore } from "./chunk-store";
 import type { FileProgress, Persistence } from "./model-files";
-import { CATALOGUED, downloadInOrder, openInOrder } from "./model-files";
-import type { ModelStatus, ModelStore, OpenModel } from "./model-status";
+import { CATALOGUED, downloadInOrder, keptStatus, openInOrder, ownedUrls } from "./model-files";
+import type { ModelStatus, OpenModel, PlatformModelStore } from "./model-status";
 import { bankedBytes, downloadResumable } from "./resumable-download";
 import { settleAll } from "./settle-all";
 
-type BrowserModelStore = ModelStore & {
-  openModel: OpenModel;
-};
-
 const CACHE_KEY = "transformers-cache";
 const CHUNK_SIZE = 8 * 1024 * 1024;
-const MODEL_HOST = "huggingface.co";
 
 const lockManagerOf = ({ locks }: { locks?: LockManager }) => locks;
 
@@ -49,13 +44,13 @@ const sizeOf = (response: Response) => Number(response.headers.get("content-leng
 
 const bytesOf = async (response: Response) => new Uint8Array(await response.arrayBuffer());
 
-const isStale = (url: string) => url.includes(MODEL_HOST) && !CATALOGUED.has(url);
+const isStale = (url: string) => url.startsWith(HUB) && !CATALOGUED.has(url);
 
 const warnStorageFailed = (url: string, cause: unknown) => {
   warnRecoverable(`Could not keep ${url} in the browser cache`, cause);
 };
 
-const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
+const createBrowserModelStore = (chunks: ChunkStore): PlatformModelStore => {
   const keepInCache = async (cache: Cache, url: string, blob: Blob, persistence: Persistence) => {
     try {
       await cache.put(url, sized(blob));
@@ -128,24 +123,19 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
     ]);
   };
 
-  /* Ready needs every file in Cache Storage. Chunks banked by an interrupted download sit in
-     IndexedDB until the last one lands, and they count toward partial. */
+  // Chunks banked by an interrupted download sit in IndexedDB until the last one lands.
   const inspectModel = async (model: ModelSpec): Promise<ModelStatus> => {
     const cache = await openCache();
 
-    const [weights, ...tokenizer] = await Promise.all(
-      [weightsUrl(model), ...tokenizerUrls(model)].map((url) => cache.match(url)),
+    return keptStatus(
+      model,
+      async (url) => {
+        const hit = await cache.match(url);
+
+        return hit === undefined ? undefined : sizeOf(hit);
+      },
+      () => bankedBytes(chunks, weightsUrl(model)),
     );
-
-    if (weights === undefined) {
-      const loaded = await bankedBytes(chunks, weightsUrl(model));
-
-      return loaded > 0 ? { loaded, state: "partial", total: model.bytes } : { state: "absent" };
-    }
-
-    return tokenizer.every((hit) => hit !== undefined)
-      ? { bytes: sizeOf(weights), state: "ready" }
-      : { loaded: sizeOf(weights), state: "partial", total: model.bytes };
   };
 
   const downloadModel = async (
@@ -162,8 +152,6 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
         ),
       signal,
     );
-
-    onProgress(1);
   };
 
   const openModel: OpenModel = (model, onProgress, signal) =>
@@ -180,16 +168,15 @@ const createBrowserModelStore = (chunks: ChunkStore): BrowserModelStore => {
       signal,
     );
 
-  const removeModel = (model: ModelSpec): Promise<void> =>
-    withLock(revisionUrl(model), "exclusive", () =>
-      clearWhere((url) => url.startsWith(revisionUrl(model))),
-    );
+  const removeModel = (model: ModelSpec): Promise<void> => {
+    const owned = new Set(ownedUrls(model));
+
+    return withLock(revisionUrl(model), "exclusive", () => clearWhere((url) => owned.has(url)));
+  };
 
   return { downloadModel, inspectModel, openModel, removeModel };
 };
 
-const { downloadModel, inspectModel, openModel, removeModel } = createBrowserModelStore(
-  createIndexedDbChunkStore(),
-);
+const modelStore = createBrowserModelStore(createIndexedDbChunkStore());
 
-export { createBrowserModelStore, downloadModel, inspectModel, openModel, removeModel };
+export { createBrowserModelStore, modelStore };

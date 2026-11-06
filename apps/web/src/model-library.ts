@@ -1,12 +1,10 @@
 import type { ModelId, ModelStatus, ModelStore } from "@repo/pii-detect/models";
 import {
   DEFAULT_MODEL_ID,
-  downloadModel,
-  inspectModel,
   isModelId,
   modelById,
   MODELS,
-  removeModel,
+  modelStore,
 } from "@repo/pii-detect/models";
 import { warnRecoverable } from "@repo/redact-core";
 import { create } from "zustand";
@@ -60,9 +58,7 @@ const writeStoredModel = (id: ModelId) => {
   }
 };
 
-const BROWSER_STORE: ModelStore = { downloadModel, inspectModel, removeModel };
-
-const createModelLibrary = (store: ModelStore = BROWSER_STORE) =>
+const createModelLibrary = (store: ModelStore = modelStore) =>
   create<ModelLibrary>((set, get) => {
     const downloads = new Map<ModelId, PickerDownload>();
     const workerProgress = new Map<ModelId, number>();

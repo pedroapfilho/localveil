@@ -2,7 +2,7 @@ import { warnRecoverable } from "@repo/redact-core";
 
 import type { ModelSpec } from "./catalog";
 import { MODELS, tokenizerUrls, weightsUrl } from "./catalog";
-import type { ModelFiles } from "./model-status";
+import type { ModelFiles, ModelStatus } from "./model-status";
 import { settleAll } from "./settle-all";
 
 type FileProgress = (fraction: number) => void;
@@ -14,6 +14,13 @@ type Persistence = "required" | "best-effort";
 const ignore = () => undefined;
 
 const fileUrls = (model: ModelSpec) => [...tokenizerUrls(model), weightsUrl(model)];
+
+// Two exports of one revision share its tokenizer, so removing one leaves what the other needs.
+const ownedUrls = (model: ModelSpec) => {
+  const shared = new Set(MODELS.flatMap((other) => (other.id === model.id ? [] : fileUrls(other))));
+
+  return fileUrls(model).filter((url) => !shared.has(url));
+};
 
 /* Anything else a store holds is a superseded revision or an export the app stopped using, and at
    hundreds of megabytes it is not left behind. */
@@ -73,6 +80,28 @@ const downloadInOrder = async <T>(
   keepFile: FetchFile<T>,
 ): Promise<void> => {
   await inOrder(model, onProgress, keepFile, ignore);
+
+  onProgress(1);
+};
+
+const keptStatus = async (
+  model: ModelSpec,
+  sizeOf: (url: string) => Promise<number | undefined>,
+  banked: () => Promise<number>,
+): Promise<ModelStatus> => {
+  const urls = fileUrls(model);
+  const sizes = await Promise.all(urls.map(sizeOf));
+  const weights = sizes[urls.indexOf(weightsUrl(model))];
+
+  if (weights === undefined) {
+    const loaded = await banked();
+
+    return loaded > 0 ? { loaded, state: "partial", total: model.bytes } : { state: "absent" };
+  }
+
+  return sizes.every((size) => size !== undefined)
+    ? { bytes: weights, state: "ready" }
+    : { loaded: weights, state: "partial", total: model.bytes };
 };
 
 const openInOrder = async (
@@ -92,6 +121,6 @@ const openInOrder = async (
   return files;
 };
 
-export { CATALOGUED, downloadInOrder, fileUrls, openInOrder, readModelFiles };
+export { CATALOGUED, downloadInOrder, keptStatus, openInOrder, ownedUrls, readModelFiles };
 
 export type { FileProgress, Persistence };

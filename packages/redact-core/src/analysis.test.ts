@@ -1,8 +1,8 @@
 import { assert, describe, expect, it, vi } from "vitest";
 
-import type { AnalysedReading } from "./analysis";
 import { analyseUnits, isAnalysedReading, keptSpans, redactionCount } from "./analysis";
-import type { Decisions, Detect, Detection, PiiLabel, Span } from "./types";
+import type { PiiLabel } from "./labels";
+import type { AnalysedReading, Decisions, Detect, Detection, Span } from "./types";
 
 type Tag = { from?: number; label?: PiiLabel; score?: number };
 

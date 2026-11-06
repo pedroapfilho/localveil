@@ -1,9 +1,7 @@
 import { link, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { uniqueFilename } from "@repo/redact-core";
-
-const ZIP_NAME = "localveil.zip";
+import { ARCHIVE_NAME, uniqueFilename } from "@repo/redact-core";
 
 const writeArchive = async (
   blob: Blob,
@@ -18,7 +16,7 @@ const writeArchive = async (
 
     for (;;) {
       signal.throwIfAborted();
-      const name = uniqueFilename(ZIP_NAME, taken);
+      const name = uniqueFilename(ARCHIVE_NAME, taken);
       const target = join(directory, name);
 
       try {

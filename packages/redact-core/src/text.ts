@@ -1,5 +1,7 @@
 const PREVIEW_GRAPHEMES = 80;
 
+const MASK = "█";
+
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 const escapeForRegExp = (value: string) =>
@@ -20,4 +22,4 @@ const preview = (value: string) => {
     .join("");
 };
 
-export { escapeForRegExp, normalise, preview };
+export { escapeForRegExp, MASK, normalise, preview };

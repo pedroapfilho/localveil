@@ -1,3 +1,4 @@
+import type { DocumentLanguage } from "./languages";
 import { escapeForRegExp, normalise } from "./text";
 import type { DetectedText, Span } from "./types";
 
@@ -12,8 +13,13 @@ const DEFINITION = new RegExp(
 
 const ALIAS_WINDOW = 80;
 
-/* Matches the same three languages patterns.ts writes its month names in. */
-const LEADING_ARTICLE = /^(?:the|an?|os?|as|un[ao]?|el|l[ao]s?)\s+/iv;
+const ARTICLES = {
+  en: "the|an?",
+  es: "el|l[ao]s?|un[ao]?",
+  pt: "[ao]s?",
+} satisfies Record<DocumentLanguage, string>;
+
+const LEADING_ARTICLE = new RegExp(String.raw`^(?:${Object.values(ARTICLES).join("|")})\s+`, "iv");
 
 const folded = (value: string) => normalise(value).toLowerCase();
 

@@ -340,6 +340,8 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 | `pnpm clean`         | Clean all build artifacts.                 |
 | `pnpm fallow:dead`   | Find unused exports.                       |
 
+Two suites need the real model weights or Tesseract's language data, so they run only when asked: `PII_MODEL_TEST=1 pnpm --filter @repo/pii-detect test` and `OCR_PIPELINE_TEST=1 pnpm --filter @repo/redact-node test`.
+
 ## Limits
 
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.

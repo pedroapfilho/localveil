@@ -1,10 +1,20 @@
 import type { GlinerInput, Logits } from "./gliner-codec";
+import type { RunModel } from "./model-runtime";
 
 type MakeTensor<T> = (
   type: "bool" | "int64",
   data: BigInt64Array | Uint8Array,
   dims: Array<number>,
 ) => T;
+
+type OutputTensor = { data: unknown; dims: ReadonlyArray<number> };
+
+// What onnxruntime-node and onnxruntime-web both hand back from InferenceSession.create.
+type Session<T> = {
+  inputNames: ReadonlyArray<string>;
+  outputNames: ReadonlyArray<string>;
+  run: (feeds: Record<string, T>) => Promise<Record<string, OutputTensor>>;
+};
 
 const toBigInts = (values: Array<number>) => BigInt64Array.from(values, BigInt);
 
@@ -72,7 +82,7 @@ const isNumberArray = (value: unknown): value is ArrayLike<number> => {
   return length === 0 || ("0" in value && typeof value[0] === "number");
 };
 
-const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> } | undefined): Logits => {
+const toLogits = (tensor: OutputTensor | undefined): Logits => {
   if (tensor === undefined) {
     throw new TypeError("The model returned no logits");
   }
@@ -84,6 +94,18 @@ const toLogits = (tensor: { data: unknown; dims: ReadonlyArray<number> } | undef
   return { data: tensor.data, dims: [...tensor.dims] };
 };
 
-export { toFeeds, toLogits };
+const sessionRunner = <T>(session: Session<T>, tensor: MakeTensor<T>): RunModel => {
+  const output = session.outputNames.at(0);
 
-export type { MakeTensor };
+  if (output === undefined) {
+    throw new TypeError("The model session reports no outputs");
+  }
+
+  return async (inputs) => {
+    const results = await session.run(toFeeds(inputs, tensor, session.inputNames));
+
+    return toLogits(results[output]);
+  };
+};
+
+export { sessionRunner, toFeeds, toLogits };

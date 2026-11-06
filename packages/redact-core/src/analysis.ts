@@ -2,7 +2,15 @@ import { definedTerms, dropDefinedTerms } from "./defined-terms";
 import { absorbNested, mergeOverlappingRanges } from "./merge-spans";
 import { spansForTokens, tokensFromSpans } from "./repeats";
 import { preview } from "./text";
-import type { Decisions, Detect, DetectedText, Detection, Span } from "./types";
+import type {
+  AnalysedReading,
+  Decisions,
+  Detect,
+  DetectedText,
+  Detection,
+  Mark,
+  Span,
+} from "./types";
 
 /* A file is one unit read whole and pages are the parts of one document, so only a page's
    detections say where in the document they sit. */
@@ -16,10 +24,6 @@ type Reading = { text: string };
 type Scan<R extends Reading> = { readings: ReadonlyArray<R> };
 
 type Unit<R extends Reading> = R | Scan<R>;
-
-type Mark = Span & { id: string };
-
-type AnalysedReading = { marks: Array<Mark>; text: string };
 
 type UnitAnalysis<R extends Reading> = {
   detect: Detect;
@@ -60,21 +64,16 @@ const byPosition: Identify = (readings, page) => {
   const detections: Array<Detection> = [];
 
   const marks = readings.map(({ spans, text }) => {
-    const described = spans.map((span) =>
-      describe(
-        span,
-        text,
-        `${scopeOf(page)}:${String(span.start)}-${String(span.end)}:${span.label}`,
-        page,
-      ),
-    );
-
-    const kept = absorbNested(
-      described,
-      (detection) => detection.label,
-      (detection) => detection.confidence,
-      (detection, confidence) => ({ ...detection, confidence }),
-    ).toSorted((left, right) => left.start - right.start);
+    const kept = absorbNested(spans)
+      .toSorted((left, right) => left.start - right.start)
+      .map((span) =>
+        describe(
+          span,
+          text,
+          `${scopeOf(page)}:${String(span.start)}-${String(span.end)}:${span.label}`,
+          page,
+        ),
+      );
 
     detections.push(...kept);
 
@@ -205,5 +204,3 @@ const redactionCount = (
 ) => units.reduce((total, readings) => total + countValues(readings, decisions), 0);
 
 export { analyseUnits, isAnalysedReading, keptSpans, redactionCount };
-
-export type { AnalysedReading };

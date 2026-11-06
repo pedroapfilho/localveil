@@ -4,11 +4,10 @@ import type { Analysis, ProgressEvent, RedactionResult } from "@repo/redact-core
 import { vi } from "vitest";
 
 import type { ModelHostOptions } from "./model-host";
-import type { WorkerTask } from "./worker-pool";
 
 type ExecOptions = { on: (payload: unknown) => void; transfer: Array<unknown> };
 
-class FakeTask implements WorkerTask {
+class FakeTask {
   cancelled = false;
 
   private onDone?: (result: Analysis | RedactionResult) => void;
@@ -77,7 +76,7 @@ type Reported = {
   done: Array<string>;
   failed: Array<{ cause: unknown; id: string }>;
   model: Array<ModelLoadEvent>;
-  modelLost: Array<{ failedBefore: number; fatal: boolean; reason: string }>;
+  modelLost: Array<{ failedBefore: number; fatal: boolean; reason: string; restarted: boolean }>;
   progress: Array<{ fraction: number; id: string }>;
 };
 
@@ -156,8 +155,8 @@ const poolOptions = () => ({
   onModelLoad: (event: ModelLoadEvent) => {
     reported.model.push(event);
   },
-  onModelLost: (reason: string, fatal: boolean) => {
-    reported.modelLost.push({ failedBefore: reported.failed.length, fatal, reason });
+  onModelLost: (reason: string, fatal: boolean, restarted: boolean) => {
+    reported.modelLost.push({ failedBefore: reported.failed.length, fatal, reason, restarted });
   },
   onProgress: (id: string, fraction: number) => {
     reported.progress.push({ fraction, id });
