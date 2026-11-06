@@ -38,5 +38,3 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
 };
 
 export { DownloadPanel };
-
-export type { DownloadPanelProps };

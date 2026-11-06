@@ -1,6 +1,6 @@
 import type { ReadText } from "@repo/ocr";
 import type { Detect } from "@repo/redact-core";
-import { redactFile } from "@repo/redact-core";
+import { redactFile, surfaceOf } from "@repo/redact-core";
 import { createPdfRedactor } from "@repo/redact-pdf";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -17,7 +17,12 @@ const pages: Array<OffscreenCanvas> = [];
 const recordingPages: ReadText = (page) => {
   pages.push(page);
 
-  return Promise.resolve({ alternatives: [], language: "en", legibility: "blank", words: [] });
+  return Promise.resolve({
+    chosen: surfaceOf([]),
+    language: "en",
+    legibility: "blank",
+    passedOver: [],
+  });
 };
 
 const nothing: Detect = () => Promise.resolve([]);

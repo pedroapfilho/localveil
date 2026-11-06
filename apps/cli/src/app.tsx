@@ -1,32 +1,30 @@
 import { basename } from "node:path";
 
-import type { ModelId } from "@repo/pii-detect/models";
 import { Box, Text, useApp, useInput } from "ink";
 import { useState } from "react";
 
 import { FileBrowser } from "./file-browser";
 import { ProgressView } from "./progress-view";
+import type { RunSettings } from "./run-redaction";
 import { SummaryView } from "./summary-view";
 import { useRedactionRun } from "./use-redaction-run";
 
 type Props = {
   initialDirectory: string;
   initialSelection?: ReadonlyArray<string>;
-  jobs?: number;
-  model?: ModelId;
   outputDirectory: string;
+  settings: RunSettings;
 };
 
-const App = ({ initialDirectory, initialSelection, jobs, model, outputDirectory }: Props) => {
+const App = ({ initialDirectory, initialSelection, outputDirectory, settings }: Props) => {
   const { exit } = useApp();
   const [files, setFiles] = useState<ReadonlyArray<string> | null>(null);
   const [stopping, setStopping] = useState(false);
 
   const { cancel, failure, progress, result, start } = useRedactionRun({
-    jobs,
-    model,
     onSettled: exit,
     outputDirectory,
+    settings,
   });
 
   useInput((input, key) => {

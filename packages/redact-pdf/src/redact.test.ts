@@ -1,8 +1,8 @@
 /* oxlint-disable anti-slop/no-module-mocking -- pdfjs-dist and pdf-lib are the wasm/canvas engines this redactor drives; the module seam is the only practical hermetic substitute */
-import type { OcrLanguage, ReadText, Recognise, TextReading } from "@repo/ocr";
+import type { ReadText, Recognise, TextReading } from "@repo/ocr";
 import { createTextReader } from "@repo/ocr";
-import type { Detect, FileProgress, FileStageKey } from "@repo/redact-core";
-import { redactFile } from "@repo/redact-core";
+import type { Detect, DocumentLanguage, FileProgress, FileStageKey } from "@repo/redact-core";
+import { applyDecisions, redactFile, surfaceOf } from "@repo/redact-core";
 import type { PDFDocument } from "pdf-lib";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +11,7 @@ type FakePage = {
   layout?: Array<[x: number, y: number]>;
   legibility?: TextReading["legibility"];
   passedOver?: Array<string>;
-  readsAs?: OcrLanguage;
+  readsAs?: DocumentLanguage;
   scanned: Array<string>;
 };
 
@@ -166,10 +166,10 @@ const fixedWords = vi.fn<ReadText>((canvas) => {
   assert.isDefined(page, "the reader was handed a canvas pdf.js never rendered");
 
   return Promise.resolve({
-    alternatives: page.passedOver === undefined ? [] : [placed(page.passedOver)],
+    chosen: surfaceOf(placed(page.scanned)),
     language: page.readsAs ?? "en",
     legibility: page.legibility ?? (page.scanned.length === 0 ? "blank" : "legible"),
-    words: placed(page.scanned),
+    passedOver: page.passedOver === undefined ? [] : [surfaceOf(placed(page.passedOver))],
   });
 });
 
@@ -463,12 +463,13 @@ describe("a scanned page", () => {
     const redactor = createPdfRedactor(fixedWords);
     const analysis = await redactor.analyse(file(), detect, () => undefined);
 
-    const { redactionCount } = await redactor.apply({
+    const { redactionCount } = await applyDecisions({
       analysis,
       decisions: { covered: analysis.detections.map(({ id }) => id) },
       detect,
       file: file(),
       onProgress: () => undefined,
+      redactor,
     });
 
     expect(analysis.detections.map((detection) => [detection.page, detection.preview])).toEqual([
@@ -486,12 +487,13 @@ describe("a scanned page", () => {
     const redactor = createPdfRedactor(fixedWords);
     const analysis = await redactor.analyse(file(), naming("Ana Lima"), () => undefined);
 
-    const { redactionCount } = await redactor.apply({
+    const { redactionCount } = await applyDecisions({
       analysis,
       decisions: { covered: [] },
       detect: naming(),
       file: file(),
       onProgress: () => undefined,
+      redactor,
     });
 
     expect(state.painted).toEqual([]);
@@ -620,12 +622,11 @@ describe("the pdf.js resources it holds", () => {
   });
 });
 
-describe("the handle analysis hands to apply", () => {
+describe("the units analysis hands to apply", () => {
   it("keeps only the readings of each analysed page and their word geometry", async () => {
     const analysis = await analyse(naming("Ana"));
 
-    const [[first] = []] = (analysis.handle as { pages: Array<Array<Record<string, unknown>>> })
-      .pages;
+    const [[first] = []] = analysis.units;
 
     assert.isDefined(first);
 
@@ -636,13 +637,14 @@ describe("the handle analysis hands to apply", () => {
     const analysis = await analyse(naming("Ana"));
 
     await expect(
-      createPdfRedactor(fixedWords).apply({
-        analysis: { ...analysis, handle: { pages: [[{ marks: [], text: "Ana" }]] } },
+      applyDecisions({
+        analysis: { ...analysis, units: [[{ marks: [], text: "Ana" }]] },
         decisions: { covered: [] },
         detect: naming(),
         file: file(),
         onProgress: () => undefined,
+        redactor: createPdfRedactor(fixedWords),
       }),
-    ).rejects.toThrow(/no recognised pages/v);
+    ).rejects.toThrow(/no recognised words/v);
   });
 });

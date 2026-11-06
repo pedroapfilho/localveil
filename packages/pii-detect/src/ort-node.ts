@@ -1,25 +1,14 @@
 import * as ort from "onnxruntime-node";
 
-import { toFeeds, toLogits } from "./gliner-tensors";
-import type { ModelDevice, RunModel } from "./model-runtime";
+import { sessionRunner } from "./gliner-tensors";
+import type { ModelRuntime } from "./model-runtime";
 
-const pickDevice = (): Promise<ModelDevice> => Promise.resolve("wasm");
+const pickDevice: ModelRuntime["pickDevice"] = () => Promise.resolve("cpu");
 
-const createModelRunner = async (bytes: Uint8Array, _device: ModelDevice): Promise<RunModel> => {
-  const session = await ort.InferenceSession.create(bytes);
-  const output = session.outputNames.at(0);
-
-  if (output === undefined) {
-    throw new TypeError("The model session reports no outputs");
-  }
-
-  return async (inputs) => {
-    const results = await session.run(
-      toFeeds(inputs, (type, data, dims) => new ort.Tensor(type, data, dims), session.inputNames),
-    );
-
-    return toLogits(results[output]);
-  };
-};
+const createModelRunner: ModelRuntime["createModelRunner"] = async (bytes) =>
+  sessionRunner(
+    await ort.InferenceSession.create(bytes),
+    (type, data, dims) => new ort.Tensor(type, data, dims),
+  );
 
 export { createModelRunner, pickDevice };

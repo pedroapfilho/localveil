@@ -100,25 +100,15 @@ describe("createRedactionPool", () => {
     const pool = build();
 
     pool.submit(job("a"));
-    taskAt(0).finish({ detections: [], handle: undefined, warnings: [] });
+    taskAt(0).finish({ detections: [], units: [], warnings: [] });
 
     expect(reported.analysed).toEqual(["a"]);
     expect(pooled.disconnected).toEqual(pooled.connected);
   });
 
-  it("refuses a payload that is not the shape the phase asked for", () => {
-    const pool = build();
-
-    pool.submit(job("a"));
-    taskAt(0).finish(redacted);
-
-    expect(reported.analysed).toEqual([]);
-    expect(failures()[0]?.message).toMatch(/not an analysis/v);
-  });
-
   it("finishes the file once its decisions are applied, on a channel of its own", () => {
     const pool = build();
-    const analysis = { detections: [], handle: undefined, warnings: [] };
+    const analysis = { detections: [], units: [], warnings: [] };
 
     pool.submit(job("a"));
     taskAt(0).finish(analysis);
@@ -298,7 +288,7 @@ describe("when a worker goes quiet", () => {
 
     pool.submit(job("a"));
     taskAt(0).progress();
-    taskAt(0).finish({ detections: [], handle: undefined, warnings: [] });
+    taskAt(0).finish({ detections: [], units: [], warnings: [] });
     waitOutTheSilence();
 
     expect(reported.failed).toEqual([]);
@@ -345,7 +335,12 @@ describe("when the model is lost", () => {
     modelHost().onLost("The detection model stopped answering", true);
 
     expect(reported.modelLost).toEqual([
-      { failedBefore: 1, fatal: true, reason: "The detection model stopped answering" },
+      {
+        failedBefore: 1,
+        fatal: true,
+        reason: "The detection model stopped answering",
+        restarted: false,
+      },
     ]);
   });
 
@@ -358,7 +353,12 @@ describe("when the model is lost", () => {
     modelHost().onLost("The detection model stopped answering", false);
 
     expect(reported.modelLost).toEqual([
-      { failedBefore: 1, fatal: false, reason: "The detection model stopped answering" },
+      {
+        failedBefore: 1,
+        fatal: false,
+        reason: "The detection model stopped answering",
+        restarted: true,
+      },
     ]);
     expect(pooled.tasks).toHaveLength(3);
   });

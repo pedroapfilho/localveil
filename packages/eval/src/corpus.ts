@@ -2,25 +2,16 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { DocumentLanguage, PiiLabel } from "@repo/redact-core";
-
-const LABELS = new Set<string>([
-  "account_number",
-  "private_address",
-  "private_date",
-  "private_email",
-  "private_person",
-  "private_phone",
-  "private_url",
-  "secret",
-]);
-
-const LANGUAGES = new Set<string>(["en", "es", "pt"]);
+import { isDocumentLanguage, isPiiLabel } from "@repo/redact-core";
+import type { TextFormat } from "@repo/redact-text";
+import { isTextFormat } from "@repo/redact-text";
 
 const MARK = /\[\[(?<label>[a-z_]+)\|(?<value>[^\]]*)\]\]/gv;
 
 type LabelledSpan = { end: number; label: PiiLabel; start: number };
 
 type EvalDocument = {
+  format: TextFormat;
   id: string;
   language: DocumentLanguage;
   source: "handwritten" | "synthetic";
@@ -28,19 +19,7 @@ type EvalDocument = {
   text: string;
 };
 
-type MarkedDocument = {
-  id: string;
-  language: DocumentLanguage;
-  marked: string;
-  source: "handwritten" | "synthetic";
-};
-
 const CORPUS_DIR = path.join(import.meta.dirname, "..", "corpus");
-
-const isLabel = (value: string): value is PiiLabel => LABELS.has(value);
-
-const isLanguage = (value: unknown): value is DocumentLanguage =>
-  typeof value === "string" && LANGUAGES.has(value);
 
 const parseMarked = (marked: string, id: string) => {
   const spans: Array<LabelledSpan> = [];
@@ -51,7 +30,7 @@ const parseMarked = (marked: string, id: string) => {
     const label = match.groups?.label ?? "";
     const value = match.groups?.value ?? "";
 
-    if (!isLabel(label)) {
+    if (!isPiiLabel(label)) {
       throw new TypeError(`${id} marks a span as "${label}", which is not a PII label`);
     }
 
@@ -79,12 +58,13 @@ const toDocument = (json: string, file: string): EvalDocument => {
   const language: unknown = "language" in raw ? raw.language : undefined;
   const marked: unknown = "marked" in raw ? raw.marked : undefined;
   const source: unknown = "source" in raw ? raw.source : undefined;
+  const format: unknown = "format" in raw ? raw.format : "text";
 
   if (typeof id !== "string" || id.length === 0) {
     throw new TypeError(`${file} has no id`);
   }
 
-  if (!isLanguage(language)) {
+  if (!isDocumentLanguage(language)) {
     throw new TypeError(`${id} declares no supported language`);
   }
 
@@ -96,24 +76,20 @@ const toDocument = (json: string, file: string): EvalDocument => {
     throw new TypeError(`${id} declares no source`);
   }
 
-  const { spans, text } = parseMarked(marked, id);
-
-  for (const span of spans) {
-    if (span.start < 0 || span.end > text.length || span.start >= span.end) {
-      throw new RangeError(`${id} places a span at ${span.start}-${span.end}, outside its text`);
-    }
+  if (!isTextFormat(format)) {
+    throw new TypeError(`${id} declares a format no text redactor reads`);
   }
 
-  return { id, language, source, spans, text };
+  return { format, id, language, source, ...parseMarked(marked, id) };
 };
 
-const loadCorpus = async (directory = CORPUS_DIR): Promise<Array<EvalDocument>> => {
-  const entries = await readdir(directory);
+const loadCorpus = async (): Promise<Array<EvalDocument>> => {
+  const entries = await readdir(CORPUS_DIR);
   const files = entries.filter((name) => name.endsWith(".json")).toSorted();
 
   const documents = await Promise.all(
     files.map(async (name) => {
-      return toDocument(await readFile(path.join(directory, name), "utf8"), name);
+      return toDocument(await readFile(path.join(CORPUS_DIR, name), "utf8"), name);
     }),
   );
 
@@ -130,6 +106,6 @@ const loadCorpus = async (directory = CORPUS_DIR): Promise<Array<EvalDocument>> 
   return documents;
 };
 
-export { CORPUS_DIR, loadCorpus, parseMarked };
+export { loadCorpus, parseMarked };
 
-export type { EvalDocument, LabelledSpan, MarkedDocument };
+export type { EvalDocument, LabelledSpan };

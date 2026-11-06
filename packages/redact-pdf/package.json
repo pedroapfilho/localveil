@@ -9,6 +9,7 @@
       "default": "pdfjs-dist"
     },
     "#pdfjs-worker": {
+      "types": "./src/pdfjs-worker.d.ts",
       "node": "pdfjs-dist/legacy/build/pdf.worker.mjs",
       "default": "pdfjs-dist/build/pdf.worker.mjs"
     },

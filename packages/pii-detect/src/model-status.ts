@@ -6,7 +6,7 @@ import type { ModelSpec } from "./catalog";
 type ModelStatus =
   | { state: "absent" }
   | { loaded: number; state: "partial"; total: number }
-  | { bytes: number; path?: string; state: "ready" };
+  | { bytes: number; state: "ready" };
 
 type ModelFiles = { tokenizer: object; tokenizerConfig: object; weights: Uint8Array };
 
@@ -26,4 +26,7 @@ type OpenModel = (
   signal?: AbortSignal,
 ) => Promise<ModelFiles>;
 
-export type { ModelFiles, ModelStatus, ModelStore, OpenModel };
+// The detector opens a model through the same store the apps download and remove it through.
+type PlatformModelStore = ModelStore & { openModel: OpenModel };
+
+export type { ModelFiles, ModelStatus, ModelStore, OpenModel, PlatformModelStore };

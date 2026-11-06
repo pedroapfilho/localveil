@@ -1,5 +1,5 @@
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect and workerpool wrap the model runtime and worker threads; the module seam is the only practical hermetic substitute */
-import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -99,6 +99,25 @@ describe("runRedaction", () => {
     const archive = await readFile(join(directory, "localveil.zip"));
 
     expect(archive.subarray(0, 2)).toStrictEqual(Buffer.from("PK"));
+  });
+
+  it("names each warning after the archive entry it belongs to", async () => {
+    const { directory, first } = await makeWorkspace();
+    const twin = join(directory, "nested", "one.txt");
+
+    await mkdir(join(directory, "nested"));
+    await writeFile(twin, "Grace Hopper");
+    redactFile.mockResolvedValue({
+      bytes: REDACTED,
+      redactionCount: 1,
+      warnings: ["warning.notFullyRedacted"],
+    });
+
+    const result = await runRedaction(
+      runOptions(directory, [first, twin], new AbortController().signal),
+    );
+
+    expect(result.warnings.map((entry) => entry.name)).toEqual(["one.txt", "one (2).txt"]);
   });
 
   it("adds up the redactions across every file it handled", async () => {

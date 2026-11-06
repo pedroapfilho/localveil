@@ -1,4 +1,4 @@
 {
   "extends": "@repo/typescript-config/library.json",
-  "include": ["src/**/*.ts", "vitest.config.ts", "../redact-pdf/src/*.d.ts"]
+  "include": ["src/**/*.ts", "vitest.config.ts"]
 }

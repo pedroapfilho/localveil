@@ -1,19 +1,8 @@
 import { patternSpans } from "@repo/pii-detect";
-import type { PiiLabel } from "@repo/redact-core";
+import { PII_LABELS } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
 import { loadCorpus, parseMarked } from "./corpus";
-
-const LABELS: Array<PiiLabel> = [
-  "account_number",
-  "private_address",
-  "private_date",
-  "private_email",
-  "private_person",
-  "private_phone",
-  "private_url",
-  "secret",
-];
 
 const corpus = await loadCorpus();
 
@@ -83,7 +72,7 @@ describe("the corpus", () => {
   it("uses every label at least three times", () => {
     const counted = corpus.flatMap((document) => document.spans);
 
-    for (const label of LABELS) {
+    for (const label of PII_LABELS) {
       expect(counted.filter((span) => span.label === label).length).toBeGreaterThanOrEqual(3);
     }
   });
@@ -93,7 +82,7 @@ describe("the corpus", () => {
       .filter((document) => document.language === "pt")
       .flatMap((document) => document.spans);
 
-    for (const label of LABELS) {
+    for (const label of PII_LABELS) {
       expect(counted.filter((span) => span.label === label).length).toBeGreaterThanOrEqual(1);
     }
   });

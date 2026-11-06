@@ -1,4 +1,3 @@
-import type { MessageKey } from "@repo/i18n";
 import { useTranslations } from "@repo/i18n";
 import type { Detection, PiiLabel } from "@repo/redact-core";
 import { APPLY_SCORE } from "@repo/redact-core";
@@ -6,17 +5,6 @@ import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";
 import { ScrollArea } from "@repo/ui/components/scroll-area";
 import { useMemo } from "react";
-
-const LABEL_KEYS = {
-  account_number: "label.account_number",
-  private_address: "label.private_address",
-  private_date: "label.private_date",
-  private_email: "label.private_email",
-  private_person: "label.private_person",
-  private_phone: "label.private_phone",
-  private_url: "label.private_url",
-  secret: "label.secret",
-} as const satisfies Record<PiiLabel, MessageKey>;
 
 type DetectionReviewProps = {
   covered: ReadonlyArray<string>;
@@ -26,6 +14,35 @@ type DetectionReviewProps = {
 };
 
 type Group = { detections: Array<Detection>; label: PiiLabel };
+
+type DetectionToggleProps = {
+  checked: boolean;
+  detail: string;
+  detection: Detection;
+  onToggle: (id: string) => void;
+};
+
+const DetectionToggle = ({ checked, detail, detection, onToggle }: DetectionToggleProps) => {
+  const { t } = useTranslations();
+
+  return (
+    <label
+      aria-label={t("review.toggle", { preview: detection.preview })}
+      className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={() => {
+          onToggle(detection.id);
+        }}
+      />
+      <span className="truncate font-mono text-xs">{detection.preview}</span>
+      <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">{detail}</span>
+    </label>
+  );
+};
+
+const percentOf = (detection: Detection) => `${(detection.confidence * 100).toFixed(0)}%`;
 
 type Row = { group: Group; kind: "header" } | { detection: Detection; kind: "row" };
 
@@ -113,7 +130,7 @@ const DetectionReview = ({
           className="bg-background/95 flex items-center justify-between gap-2 py-1"
           key={`header-${row.group.label}`}
         >
-          <span className="text-xs font-medium">{t(LABEL_KEYS[row.group.label])}</span>
+          <span className="text-xs font-medium">{t(`label.${row.group.label}`)}</span>
           <Button
             onClick={() => {
               dismissGroup(row.group);
@@ -121,7 +138,7 @@ const DetectionReview = ({
             size="sm"
             variant="ghost"
           >
-            {t("review.dismissGroup", { label: t(LABEL_KEYS[row.group.label]) })}
+            {t("review.dismissGroup", { label: t(`label.${row.group.label}`) })}
           </Button>
         </div>
       );
@@ -129,26 +146,19 @@ const DetectionReview = ({
 
     const { detection } = row;
 
+    const page =
+      detection.page === undefined
+        ? ""
+        : `${t("review.page", { number: String(detection.page + 1) })} · `;
+
     return (
-      <label
-        aria-label={t("review.toggle", { preview: detection.preview })}
-        className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+      <DetectionToggle
+        checked={painting.has(detection.id)}
+        detail={`${page}${percentOf(detection)}`}
+        detection={detection}
         key={detection.id}
-      >
-        <Checkbox
-          checked={painting.has(detection.id)}
-          onCheckedChange={() => {
-            toggle(detection.id);
-          }}
-        />
-        <span className="truncate font-mono text-xs">{detection.preview}</span>
-        <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
-          {detection.page === undefined
-            ? null
-            : `${t("review.page", { number: String(detection.page + 1) })} · `}
-          {(detection.confidence * 100).toFixed(0)}%
-        </span>
-      </label>
+        onToggle={toggle}
+      />
     );
   };
 
@@ -172,22 +182,13 @@ const DetectionReview = ({
 
           <div className="flex flex-col">
             {maybe.map((detection) => (
-              <label
-                aria-label={t("review.toggle", { preview: detection.preview })}
-                className="hover:bg-muted/60 flex min-h-6 cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-sm"
+              <DetectionToggle
+                checked={painting.has(detection.id)}
+                detail={`${t(`label.${detection.label}`)} · ${percentOf(detection)}`}
+                detection={detection}
                 key={detection.id}
-              >
-                <Checkbox
-                  checked={painting.has(detection.id)}
-                  onCheckedChange={() => {
-                    toggle(detection.id);
-                  }}
-                />
-                <span className="truncate font-mono text-xs">{detection.preview}</span>
-                <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
-                  {t(LABEL_KEYS[detection.label])} · {(detection.confidence * 100).toFixed(0)}%
-                </span>
-              </label>
+                onToggle={toggle}
+              />
             ))}
           </div>
         </details>

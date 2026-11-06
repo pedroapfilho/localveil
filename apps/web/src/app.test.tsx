@@ -104,7 +104,7 @@ describe("App", () => {
           { ...detection, id: "a" },
           { ...detection, id: "b", preview: "Joao Reis" },
         ],
-        handle: undefined,
+        units: [],
         warnings: [],
       });
     });

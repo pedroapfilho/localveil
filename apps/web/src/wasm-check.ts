@@ -1,4 +1,5 @@
-import { createDetector, DEFAULT_MODEL_ID, isModelId, readModelFiles } from "@repo/pii-detect";
+import { createDetector, readModelFiles } from "@repo/pii-detect";
+import { DEFAULT_MODEL_ID, isModelId } from "@repo/pii-detect/models";
 
 const asked = new URLSearchParams(location.search).get("model") ?? DEFAULT_MODEL_ID;
 const MODEL = isModelId(asked) ? asked : DEFAULT_MODEL_ID;

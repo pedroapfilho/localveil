@@ -1,6 +1,4 @@
-import type { PiiLabel } from "@repo/redact-core";
-
-const PII_LABELS: ReadonlyArray<PiiLabel> = [
+const PII_LABELS = [
   "account_number",
   "private_address",
   "private_date",
@@ -9,9 +7,13 @@ const PII_LABELS: ReadonlyArray<PiiLabel> = [
   "private_phone",
   "private_url",
   "secret",
-];
+] as const;
+
+type PiiLabel = (typeof PII_LABELS)[number];
 
 const isPiiLabel = (value: string): value is PiiLabel =>
   PII_LABELS.some((label) => label === value);
 
 export { isPiiLabel, PII_LABELS };
+
+export type { PiiLabel };

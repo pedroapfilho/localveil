@@ -1,6 +1,11 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
-import { defaultDecisions, describeError, isUnsupportedFile } from "@repo/redact-core";
+import {
+  defaultDecisions,
+  describeError,
+  isUnsupportedFile,
+  overallProgress,
+} from "@repo/redact-core";
 
 import { useModelLibrary } from "./model-library";
 import type { JobInput, JobState } from "./store";
@@ -16,7 +21,7 @@ type RedactionPoolOptions = {
   onDone: (id: string, result: RedactionResult) => void;
   onFailed: (id: string, cause: unknown) => void;
   onModelLoad: (event: ModelLoadEvent) => void;
-  onModelLost: (reason: string, fatal: boolean) => void;
+  onModelLost: (reason: string, fatal: boolean, restarted: boolean) => void;
   onProgress: (id: string, fraction: number, stage: FileStageKey) => void;
 };
 
@@ -49,27 +54,15 @@ type JobRunner = {
   submit: (files: Array<JobInput>) => void;
 };
 
-// Analysis fills the first half of a file's bar and applying the second, so the bar never runs back.
-const SHARES = {
-  analysing: { from: 0, to: 0.5 },
-  applying: { from: 0.5, to: 1 },
-} as const;
-
-const advance = (current: number, phase: keyof typeof SHARES, fraction: number) => {
-  const { from, to } = SHARES[phase];
-
-  return Math.max(current, from + (to - from) * Math.min(Math.max(fraction, 0), 1));
-};
-
 const findJob = (id: string) => useJobStore.getState().jobs.find((job) => job.id === id);
 
 const moveJob = (id: string, state: JobState) => {
   useJobStore.getState().setState(id, state);
 };
 
-const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner => {
-  let model = useModelLibrary.getState().selected;
+const selected = () => useModelLibrary.getState().selected;
 
+const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner => {
   // Only a load that downloads is announced; a model already kept comes ready without a word.
   let announced = false;
   let warnedSlow = false;
@@ -80,8 +73,8 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
 
     announced = false;
     useJobStore.setState({ modelLoading: false });
-    reportWorkerProgress(model, undefined);
-    void refresh(model);
+    reportWorkerProgress(selected(), undefined);
+    void refresh(selected());
 
     return wasAnnounced;
   };
@@ -93,7 +86,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       return;
     }
 
-    useModelLibrary.getState().reportWorkerProgress(model, downloaded);
+    useModelLibrary.getState().reportWorkerProgress(selected(), downloaded);
 
     if (!announced) {
       announced = true;
@@ -102,7 +95,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
   };
 
   const pool = createPool({
-    model,
+    model: selected(),
     onAnalysed: (id, analysis) => {
       const job = findJob(id);
 
@@ -114,7 +107,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
         analysis,
         covered: defaultDecisions(analysis.detections).covered,
         phase: "reviewing",
-        progress: SHARES.analysing.to,
+        progress: overallProgress("analysing", 1),
       });
     },
     onDone: (id, result) => {
@@ -136,24 +129,44 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       });
     },
     onModelLoad: (event) => {
-      if (event.kind === "loading") {
-        loading(event.downloaded);
-      } else if (event.kind === "slow-device") {
-        if (!warnedSlow) {
-          warnedSlow = true;
-          onNotice({ kind: "slow-device" });
+      switch (event.kind) {
+        case "loading": {
+          loading(event.downloaded);
+          break;
         }
-      } else if (event.kind === "failed") {
-        endLoad();
-        onNotice({ kind: "model-failed" });
-      } else if (endLoad()) {
-        onNotice({ kind: "model-ready" });
+
+        case "slow-device": {
+          if (!warnedSlow) {
+            warnedSlow = true;
+            onNotice({ kind: "slow-device" });
+          }
+
+          break;
+        }
+
+        case "failed": {
+          endLoad();
+          onNotice({ kind: "model-failed" });
+          break;
+        }
+
+        case "ready": {
+          if (endLoad()) {
+            onNotice({ kind: "model-ready" });
+          }
+
+          break;
+        }
+
+        default: {
+          event satisfies never;
+        }
       }
     },
-    /* A file still in flight after a loss is on the respawned model, and its new load reports
-       itself. With none left, nothing will ever load there, so the load that was under way ends. */
-    onModelLost: (reason, fatal) => {
-      if (!fatal && holdsModel(useJobStore.getState().jobs)) {
+    /* A file restarted after a loss is on the respawned model, and its new load reports itself.
+       With none restarted, nothing will ever load there, so the load that was under way ends. */
+    onModelLost: (reason, fatal, restarted) => {
+      if (restarted) {
         return;
       }
 
@@ -169,13 +182,13 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       if (job?.phase === "queued" || job?.phase === "analysing") {
         moveJob(id, {
           phase: "analysing",
-          progress: advance(progressOf(job), "analysing", fraction),
+          progress: Math.max(progressOf(job), fraction),
           stage,
         });
       } else if (job?.phase === "applying") {
         moveJob(id, {
           phase: "applying",
-          progress: advance(job.progress, "applying", fraction),
+          progress: Math.max(job.progress, fraction),
           stage,
         });
       }
@@ -213,7 +226,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       useJobStore.getState().removeJobs(ids);
     },
     selectModel: (next) => {
-      if (next === model || holdsModel(useJobStore.getState().jobs)) {
+      if (next === selected() || holdsModel(useJobStore.getState().jobs)) {
         return;
       }
 
@@ -222,7 +235,6 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
         onNotice({ kind: "model-dropped" });
       }
 
-      model = next;
       useModelLibrary.getState().select(next);
       pool.setModel(next);
     },

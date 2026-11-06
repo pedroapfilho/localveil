@@ -2,6 +2,8 @@ import { zip } from "fflate";
 
 type ZipEntry = { blob: Blob; name: string };
 
+const ARCHIVE_NAME = "localveil.zip";
+
 const splitExtension = (name: string) => {
   const dot = name.lastIndexOf(".");
 
@@ -27,6 +29,25 @@ const uniqueFilename = (name: string, taken: Set<string>): string => {
   return `${base} (${counter})${extension}`;
 };
 
+/* Entry names come from paths somebody picked, so no name may climb out of the folder it is
+   unpacked into, on either kind of separator, and no two files may share one. */
+const archiveNames = (names: ReadonlyArray<string>): Array<string> => {
+  const taken = new Set<string>();
+
+  return names.map((name) => {
+    const clean = name
+      .split(/[\\\/]/v)
+      .filter((segment) => segment !== "" && segment !== "." && segment !== "..")
+      .join("/");
+
+    const unique = uniqueFilename(clean || "file", taken);
+
+    taken.add(unique);
+
+    return unique;
+  });
+};
+
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const { buffer, byteLength, byteOffset } = bytes;
 
@@ -42,15 +63,8 @@ const buildZip = async (files: Array<ZipEntry>): Promise<Blob> => {
     throw new RangeError("Cannot build an archive with no files");
   }
 
-  const taken = new Set<string>();
-
-  const named = files.map((file) => {
-    const name = uniqueFilename(file.name, taken);
-
-    taken.add(name);
-
-    return { blob: file.blob, name };
-  });
+  const names = archiveNames(files.map((file) => file.name));
+  const named = files.map((file, at) => ({ blob: file.blob, name: names[at] ?? file.name }));
 
   const entries = await Promise.all(
     named.map(async (file) => {
@@ -77,6 +91,6 @@ const buildZip = async (files: Array<ZipEntry>): Promise<Blob> => {
   return new Blob([toArrayBuffer(bytes)], { type: "application/zip" });
 };
 
-export { buildZip, toArrayBuffer, uniqueFilename };
+export { ARCHIVE_NAME, archiveNames, buildZip, toArrayBuffer, uniqueFilename };
 
 export type { ZipEntry };

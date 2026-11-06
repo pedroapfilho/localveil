@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { openModel } from "#model-store";
+import { modelStore } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
 
 import { DEFAULT_MODEL_ID, modelById, tokenizerUrls, weightsUrl } from "./catalog";
@@ -19,7 +19,7 @@ import { createNodeModelStore } from "./model-store-node";
 
 vi.mock("#model-store", async (importOriginal) => ({
   ...(await importOriginal<typeof NodeStore>()),
-  openModel: vi.fn(),
+  modelStore: { openModel: vi.fn() },
 }));
 
 vi.mock("#ort", () => ({ createModelRunner: vi.fn(), pickDevice: vi.fn() }));
@@ -53,7 +53,9 @@ beforeEach(async () => {
   await Promise.all(
     [...candidate].map(([name, bytes]) => writeFile(path.join(candidateDirectory, name), bytes)),
   );
-  vi.mocked(openModel).mockReset().mockRejectedValue(new Error("candidate accessed catalog"));
+  vi.mocked(modelStore.openModel)
+    .mockReset()
+    .mockRejectedValue(new Error("candidate accessed catalog"));
   vi.mocked(pickDevice).mockReset().mockResolvedValue("wasm");
   vi.mocked(createModelRunner)
     .mockReset()
@@ -101,7 +103,7 @@ const prepare = async () => {
   const before = await snapshot();
 
   const unchanged = async () => {
-    expect(openModel).not.toHaveBeenCalled();
+    expect(modelStore.openModel).not.toHaveBeenCalled();
     expect(await snapshot()).toEqual(before);
     await expect(node.openModel(MODEL, ignore)).resolves.toMatchObject({
       weights: new Uint8Array([1, 2, 3]),

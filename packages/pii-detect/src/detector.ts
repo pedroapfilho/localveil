@@ -2,7 +2,7 @@ import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, Span } from "@repo/redact-core";
 import { absorbNested, describeError, serialiseDetect, warnRecoverable } from "@repo/redact-core";
 
-import { openModel } from "#model-store";
+import { modelStore } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
 
 import { batchInputs } from "./batch-inputs";
@@ -15,7 +15,7 @@ import type { ModelLoadEvent } from "./model-lifecycle";
 import type { ModelDevice } from "./model-runtime";
 import type { ModelFiles } from "./model-status";
 import { patternSpans } from "./patterns";
-import { collectShouting, positionShouted } from "./shouting";
+import { shoutedWords } from "./shouting";
 import { splitWords } from "./split-words";
 import { tightenToVerified } from "./tighten";
 
@@ -29,15 +29,9 @@ const BATCH_TOKENS = 4096;
 
 const MIN_SCORE = 0.15;
 
-/* Overlapping chunks and the shouted pass read the same words more than once, so a span nested in
-   another of its label is folded into it, which keeps the stronger of the two scores. */
+// Overlapping chunks and the shouted pass read the same words more than once.
 const mergeChunkSpans = (spans: Array<Span>) =>
-  absorbNested(
-    spans,
-    (span) => span.label,
-    (span) => span.score,
-    (span, score) => ({ ...span, score }),
-  ).toSorted((left, right) => left.start - right.start || left.end - right.end);
+  absorbNested(spans).toSorted((left, right) => left.start - right.start || left.end - right.end);
 
 type ReportLoad = (event: ModelLoadEvent) => void;
 
@@ -69,7 +63,7 @@ const loadRunner = async (
   try {
     return await createModelRunner(bytes, device);
   } catch (firstError) {
-    if (device === "wasm") {
+    if (device !== "webgpu") {
       throw firstError;
     }
 
@@ -103,7 +97,7 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
 
   const files =
     suppliedFiles ??
-    (await openModel(
+    (await modelStore.openModel(
       spec,
       (downloaded) => {
         report({ downloaded, kind: "loading" });
@@ -116,7 +110,7 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
   const device = await pickDevice();
   const batching = batchSize ?? (device === "webgpu" ? GPU_BATCH : CPU_BATCH);
 
-  if (device !== "webgpu") {
+  if (device === "wasm") {
     report({ kind: "slow-device" });
   }
 
@@ -137,15 +131,7 @@ const buildDetector = async (options: DetectorOptions, report: ReportLoad): Prom
         jobs.push(encoded);
       }
 
-      const shouting = collectShouting(text.slice(chunk.start, chunk.end));
-
-      if (shouting.text.length === 0) {
-        continue;
-      }
-
-      const shouted = codec.encode(
-        positionShouted(splitWords(shouting.text), shouting.segments, chunk.start),
-      );
+      const shouted = codec.encode(shoutedWords(text, chunk));
 
       if (shouted !== undefined) {
         jobs.push(shouted);
@@ -188,5 +174,3 @@ const createDetector = async ({
 };
 
 export { createDetector };
-
-export type { DetectorOptions };

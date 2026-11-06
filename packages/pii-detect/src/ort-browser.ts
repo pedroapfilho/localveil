@@ -1,9 +1,9 @@
 import * as ort from "onnxruntime-web/webgpu";
 
-import { toFeeds, toLogits } from "./gliner-tensors";
-import type { ModelDevice, RunModel } from "./model-runtime";
+import { sessionRunner } from "./gliner-tensors";
+import type { ModelRuntime } from "./model-runtime";
 
-const pickDevice = async (): Promise<ModelDevice> => {
+const pickDevice: ModelRuntime["pickDevice"] = async () => {
   if (!("gpu" in navigator)) {
     return "wasm";
   }
@@ -29,21 +29,10 @@ const pickDevice = async (): Promise<ModelDevice> => {
   }
 };
 
-const createModelRunner = async (bytes: Uint8Array, device: ModelDevice): Promise<RunModel> => {
-  const session = await ort.InferenceSession.create(bytes, { executionProviders: [device] });
-  const output = session.outputNames.at(0);
-
-  if (output === undefined) {
-    throw new TypeError("The model session reports no outputs");
-  }
-
-  return async (inputs) => {
-    const results = await session.run(
-      toFeeds(inputs, (type, data, dims) => new ort.Tensor(type, data, dims), session.inputNames),
-    );
-
-    return toLogits(results[output]);
-  };
-};
+const createModelRunner: ModelRuntime["createModelRunner"] = async (bytes, device) =>
+  sessionRunner(
+    await ort.InferenceSession.create(bytes, { executionProviders: [device] }),
+    (type, data, dims) => new ort.Tensor(type, data, dims),
+  );
 
 export { createModelRunner, pickDevice };

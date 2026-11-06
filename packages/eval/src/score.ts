@@ -146,4 +146,4 @@ const scoreOf = (counts: Counts): LabelScore => {
 
 export { addCounts, countMatches, emptyCounts, mergeSpans, scoreOf, totalCounts };
 
-export type { Counts, LabelScore };
+export type { Counts };

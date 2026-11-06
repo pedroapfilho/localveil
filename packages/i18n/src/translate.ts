@@ -1,3 +1,7 @@
+import type { Locale } from "./locale";
+import type { EnglishMessages, MessageKey } from "./messages/en";
+import { CATALOGUES } from "./messages/index";
+
 type TranslationValues = Record<string, number | string>;
 
 type PlaceholdersIn<Message extends string> =
@@ -29,6 +33,20 @@ const translate = (
   });
 };
 
-export { translate };
+// A key whose message has placeholders cannot be called without their values.
+type Translate = <Key extends MessageKey>(
+  key: Key,
+  ...values: [PlaceholdersIn<EnglishMessages[Key]>] extends [never]
+    ? []
+    : [ValuesFor<EnglishMessages[Key]>]
+) => string;
 
-export type { PlaceholdersIn, TranslationValues, ValuesFor };
+const translator = (locale: Locale): Translate => {
+  const messages = CATALOGUES[locale];
+
+  return (key: MessageKey, values?: TranslationValues) => translate(messages, key, values);
+};
+
+export { translate, translator };
+
+export type { Translate };

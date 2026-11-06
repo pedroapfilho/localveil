@@ -47,7 +47,7 @@ uv venv --python 3.12 .venv
 From the repo root, select the candidate's catalogue vocabulary:
 
 ```bash
-pnpm --filter @repo/eval exec tsx -e 'import { writeFileSync } from "node:fs"; import { modelById } from "@repo/pii-detect"; writeFileSync("../../tools/model-export/prompts.json", JSON.stringify(modelById("gliner-multi-pii").prompts.map(({ prompt }) => prompt), null, 2) + "\n")'
+pnpm --filter @repo/eval exec tsx -e 'import { writeFileSync } from "node:fs"; import { modelById } from "@repo/pii-detect/models"; writeFileSync("../../tools/model-export/prompts.json", JSON.stringify(modelById("gliner-multi-pii").prompts.map(({ prompt }) => prompt), null, 2) + "\n")'
 ```
 
 From `tools/model-export`:
@@ -99,9 +99,10 @@ unpinned tokenizer request.
 
 The winner goes to a Hugging Face repo the project controls, with
 `urchade/gliner_multi_pii-v1` named as the source (Apache 2.0), the recipe recorded, and the eval
-table in the card. Update the model's `repo`, `revision` and `file` in
-`packages/pii-detect/src/catalog.ts`, pinned to a commit SHA. Publish the matching
-`tokenizer.json` and `tokenizer_config.json` at that same revision.
+table in the card. Update the model's `repo`, `revision`, `file` and `bytes` in
+`packages/pii-detect/src/catalog.ts`, pinned to a commit SHA. The weights go under `onnx/`, where
+the catalogue looks for them, and `bytes` is the size both apps show and count a partial download
+against. Publish the matching `tokenizer.json` and `tokenizer_config.json` at that same revision.
 
 A fourth interface language later means re-running the trim with that language's script in the
 keep set, or its text tokenizes to `UNK` and detection looks broken for a reason nothing in the

@@ -73,14 +73,20 @@ describe("resolveArguments", () => {
   it("takes a job count either way round", async () => {
     const directory = await makeDirectory();
 
-    await expect(resolveArguments(["--jobs", "3"], directory)).resolves.toMatchObject({ jobs: 3 });
-    await expect(resolveArguments(["--jobs=3"], directory)).resolves.toMatchObject({ jobs: 3 });
+    await expect(resolveArguments(["--jobs", "3"], directory)).resolves.toMatchObject({
+      settings: { jobs: 3 },
+    });
+    await expect(resolveArguments(["--jobs=3"], directory)).resolves.toMatchObject({
+      settings: { jobs: 3 },
+    });
   });
 
   it("leaves the job count out when nobody asked for one", async () => {
     const directory = await makeDirectory();
 
-    await expect(resolveArguments([], directory)).resolves.not.toHaveProperty("jobs");
+    const { settings } = await resolveArguments([], directory);
+
+    expect(settings).not.toHaveProperty("jobs");
   });
 
   it("refuses a job count that is not a whole number of one or more", async () => {
@@ -96,9 +102,9 @@ describe("resolveArguments", () => {
 
     await expect(
       resolveArguments(["--model", "gliner-pii-base"], directory),
-    ).resolves.toMatchObject({ model: "gliner-pii-base" });
+    ).resolves.toMatchObject({ settings: { model: "gliner-pii-base" } });
     await expect(resolveArguments(["--model=gliner-pii-base"], directory)).resolves.toMatchObject({
-      model: "gliner-pii-base",
+      settings: { model: "gliner-pii-base" },
     });
   });
 
@@ -117,6 +123,7 @@ describe("resolveArguments", () => {
     await expect(resolveArguments([], directory)).resolves.toStrictEqual({
       directory,
       selection: [],
+      settings: {},
     });
   });
 
@@ -125,7 +132,11 @@ describe("resolveArguments", () => {
 
     const point = await resolveArguments(["notes.txt"], directory);
 
-    expect(point).toStrictEqual({ directory, selection: [join(directory, "notes.txt")] });
+    expect(point).toStrictEqual({
+      directory,
+      selection: [join(directory, "notes.txt")],
+      settings: {},
+    });
   });
 
   it("leaves out a named file the redactor cannot read", async () => {
@@ -149,6 +160,10 @@ describe("resolveArguments", () => {
 
     const point = await resolveArguments(["photos"], directory);
 
-    expect(point).toStrictEqual({ directory: join(directory, "photos"), selection: [] });
+    expect(point).toStrictEqual({
+      directory: join(directory, "photos"),
+      selection: [],
+      settings: {},
+    });
   });
 });

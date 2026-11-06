@@ -1,7 +1,7 @@
+import type { DocumentLanguage } from "@repo/redact-core";
+
 import type { EntityPrompt } from "./gliner-labels";
 import { MULTI_PII_PROMPTS, PII_BASE_PROMPTS } from "./gliner-labels";
-
-type ModelLanguage = "en" | "es" | "pt";
 
 type ModelDecoding = "span" | "token";
 
@@ -11,7 +11,7 @@ type ModelSpec<Id extends string = ModelId> = {
   decoding: ModelDecoding;
   file: string;
   id: Id;
-  languages: ReadonlyArray<ModelLanguage>;
+  languages: ReadonlyArray<DocumentLanguage>;
   maxPrompts: number;
   maxWidth: number;
   name: string;
@@ -101,6 +101,15 @@ const tokenizerUrls = (model: ModelSpec): [tokenizer: string, config: string] =>
   `${revisionUrl(model)}tokenizer_config.json`,
 ];
 
-export { DEFAULT_MODEL_ID, isModelId, modelById, MODELS, revisionUrl, tokenizerUrls, weightsUrl };
+export {
+  DEFAULT_MODEL_ID,
+  HUB,
+  isModelId,
+  modelById,
+  MODELS,
+  revisionUrl,
+  tokenizerUrls,
+  weightsUrl,
+};
 
-export type { ModelDecoding, ModelId, ModelLanguage, ModelSpec };
+export type { ModelDecoding, ModelId, ModelSpec };

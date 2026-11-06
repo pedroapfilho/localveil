@@ -3,12 +3,10 @@ import { homedir } from "node:os";
 import type { ModelId, ModelSpec, ModelStatus, ModelStore } from "@repo/pii-detect/models";
 import {
   DEFAULT_MODEL_ID,
-  downloadModel,
-  inspectModel,
   isModelId,
   modelById,
   MODELS,
-  removeModel,
+  modelStore,
 } from "@repo/pii-detect/models";
 import { MODEL_CACHE_DIR } from "@repo/pii-detect/node";
 
@@ -24,8 +22,6 @@ const USAGE = `Usage:
   localveil models remove <id>      delete a downloaded model
   localveil --model <id> [paths]    redact with a model other than the default
 `;
-
-const NODE_STORE: ModelStore = { downloadModel, inspectModel, removeModel };
 
 const MEGABYTE = 1_000_000;
 
@@ -81,7 +77,7 @@ const idFrom = (value: string | undefined, io: ModelsIo): ModelId | undefined =>
   return undefined;
 };
 
-const list = async ({ out, store = NODE_STORE }: ModelsIo) => {
+const list = async ({ out, store = modelStore }: ModelsIo) => {
   const rows = await Promise.all(
     MODELS.map(async (model) => ({ model, status: await store.inspectModel(model) })),
   );
@@ -92,7 +88,7 @@ const list = async ({ out, store = NODE_STORE }: ModelsIo) => {
 };
 
 const download = async (id: ModelId, io: ModelsIo) => {
-  const { err, out, store = NODE_STORE } = io;
+  const { err, out, store = modelStore } = io;
   const model = modelById(id);
   let shown = -1;
 
@@ -115,7 +111,7 @@ const download = async (id: ModelId, io: ModelsIo) => {
 };
 
 const remove = async (id: ModelId, io: ModelsIo) => {
-  const { out, store = NODE_STORE } = io;
+  const { out, store = modelStore } = io;
   const model = modelById(id);
   const before = await store.inspectModel(model);
 

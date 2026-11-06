@@ -7,6 +7,7 @@ import { MessageChannel } from "node:worker_threads";
 import { createDetector } from "@repo/pii-detect";
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 import {
+  archiveNames,
   buildZip,
   describeError,
   isProgressEvent,
@@ -14,9 +15,9 @@ import {
   toArrayBuffer,
 } from "@repo/redact-core";
 import type { Detect, FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
-import type { NodeRedactionOutput } from "@repo/redact-node";
 import workerpool from "workerpool";
 
+import type { FileWorker } from "./file-worker";
 import { writeArchive } from "./write-archive";
 
 const MAX_JOBS = 4;
@@ -28,6 +29,8 @@ const defaultJobs = () => {
 };
 
 const workerUrl = new URL("file-worker.ts", import.meta.url);
+
+const REDACT = "redact" satisfies keyof FileWorker;
 const WORKER_SCRIPT = fileURLToPath(workerUrl);
 
 type FileFailure = {
@@ -59,10 +62,11 @@ type RunResult = {
   zipPath: string | null;
 };
 
-type RunOptions = {
+// What the command line can set for a run.
+type RunSettings = { jobs?: number; model?: ModelId };
+
+type RunOptions = RunSettings & {
   files: ReadonlyArray<string>;
-  jobs?: number;
-  model?: ModelId;
   onFileProgress: (progress: RunProgress) => void;
   onModelLoad: (event: ModelLoadEvent) => void;
   outputDirectory: string;
@@ -133,7 +137,7 @@ const runRedaction = async ({
   signal.addEventListener("abort", stop, { once: true });
 
   const redactOne = (file: string, index: number) =>
-    pool.exec<(path: string) => NodeRedactionOutput>("redact", [file], {
+    pool.exec<FileWorker[typeof REDACT]>(REDACT, [file], {
       // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; isProgressEvent parses them
       on: (payload: unknown) => {
         if (isProgressEvent(payload)) {
@@ -172,25 +176,28 @@ const runRedaction = async ({
         };
   });
 
+  const failures: Array<FileFailure> = cancelled
+    ? []
+    : outcomes.flatMap((outcome) =>
+        outcome.kind === "failed" ? [{ name: outcome.name, reason: outcome.reason }] : [],
+      );
+
+  const done = outcomes.filter((outcome) => outcome.kind === "done");
+
+  // The summary names each file the way the archive does, so a warning points at one entry.
+  const names = archiveNames(done.map((outcome) => outcome.name));
   const entries: Array<ZipEntry> = [];
-  const failures: Array<FileFailure> = [];
   const warnings: Array<FileWarnings> = [];
   let redactionCount = 0;
 
-  for (const outcome of outcomes) {
-    if (outcome.kind === "failed") {
-      if (!cancelled) {
-        failures.push({ name: outcome.name, reason: outcome.reason });
-      }
+  for (const [at, outcome] of done.entries()) {
+    const name = names[at] ?? outcome.name;
 
-      continue;
-    }
-
-    entries.push({ blob: outcome.blob, name: outcome.name });
+    entries.push({ blob: outcome.blob, name });
     redactionCount += outcome.redactionCount;
 
     if (outcome.warnings.length > 0) {
-      warnings.push({ keys: outcome.warnings, name: outcome.name });
+      warnings.push({ keys: outcome.warnings, name });
     }
   }
 
@@ -219,4 +226,4 @@ const runRedaction = async ({
 
 export { runRedaction };
 
-export type { RunResult };
+export type { RunResult, RunSettings };

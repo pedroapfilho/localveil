@@ -20,7 +20,7 @@ const CERTAIN: Detection = {
 
 const UNSURE: Detection = { ...CERTAIN, confidence: 0.2, id: "b", preview: "Maybe Name" };
 
-const ANALYSIS: Analysis = { detections: [CERTAIN, UNSURE], handle: undefined, warnings: [] };
+const ANALYSIS: Analysis = { detections: [CERTAIN, UNSURE], units: [], warnings: [] };
 
 const REDACTED: RedactionResult = { blob: new Blob(["x"]), redactionCount: 1, warnings: [] };
 
@@ -43,7 +43,7 @@ const jobWith = (id: string) => {
 };
 
 const submit = (name = "a.txt") => {
-  runner.submit([new File(["x"], name, { type: "text/plain" })]);
+  runner.submit([{ file: new File(["x"], name, { type: "text/plain" }), path: name }]);
 
   const job = jobs().at(-1);
 
@@ -119,7 +119,7 @@ describe("a job's lifecycle", () => {
   it("starts analysing once its worker reports, in the first half of the bar", () => {
     const id = submit();
 
-    workers().onProgress(id, 0.5, "stage.detecting");
+    workers().onProgress(id, 0.25, "stage.detecting");
 
     expect(jobWith(id)).toMatchObject({
       phase: "analysing",
@@ -174,7 +174,7 @@ describe("a job's progress", () => {
       seen.push(progressOf(jobWith(id)));
     };
 
-    for (const fraction of [0, 0.4, 0.3, 1]) {
+    for (const fraction of [0, 0.2, 0.15, 0.45]) {
       workers().onProgress(id, fraction, "stage.rendering");
       record();
     }
@@ -184,7 +184,7 @@ describe("a job's progress", () => {
     runner.apply(id, ["a"]);
     record();
 
-    for (const fraction of [0, 0.45, 0.9, 1]) {
+    for (const fraction of [0.5, 0.95, 0.9, 1]) {
       workers().onProgress(id, fraction, "stage.redacting");
       record();
     }
@@ -365,7 +365,7 @@ describe("losing the model", () => {
 
     workers().onModelLoad({ downloaded: 0.4, kind: "loading" });
     workers().onFailed(id, new Error(LOST));
-    workers().onModelLost(LOST, false);
+    workers().onModelLost(LOST, false, false);
 
     expect(notices).toEqual([
       { kind: "model-downloading" },
@@ -382,21 +382,21 @@ describe("losing the model", () => {
     submit("b.txt");
     workers().onModelLoad({ downloaded: 0.4, kind: "loading" });
     workers().onFailed(started, new Error(LOST));
-    workers().onModelLost(LOST, false);
+    workers().onModelLost(LOST, false, true);
 
     expect(notices.map((notice) => notice.kind)).toEqual(["model-downloading", "file-failed"]);
     expect(useJobStore.getState().modelLoading).toBe(true);
   });
 
   it("says why once the model is beyond recovery", () => {
-    workers().onModelLost(LOST, true);
+    workers().onModelLost(LOST, true, false);
 
     expect(notices).toEqual([{ kind: "model-lost", reason: LOST }]);
   });
 
   it("turns a download into the failure once the model is beyond recovery", () => {
     workers().onModelLoad({ downloaded: 0.4, kind: "loading" });
-    workers().onModelLost(LOST, true);
+    workers().onModelLost(LOST, true, false);
 
     expect(notices).toEqual([{ kind: "model-downloading" }, { kind: "model-failed" }]);
   });

@@ -2,6 +2,12 @@ import type { FileStageKey } from "./types";
 
 type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
 
+const progressEvent = (fraction: number, stage: FileStageKey): ProgressEvent => ({
+  fraction,
+  stage,
+  type: "progress",
+});
+
 const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   typeof payload === "object" &&
   payload !== null &&
@@ -12,6 +18,6 @@ const isProgressEvent = (payload: unknown): payload is ProgressEvent =>
   "stage" in payload &&
   typeof payload.stage === "string";
 
-export { isProgressEvent };
+export { isProgressEvent, progressEvent };
 
 export type { ProgressEvent };

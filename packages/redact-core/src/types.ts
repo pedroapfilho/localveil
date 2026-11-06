@@ -1,20 +1,10 @@
-type PiiLabel =
-  | "account_number"
-  | "private_address"
-  | "private_date"
-  | "private_email"
-  | "private_person"
-  | "private_phone"
-  | "private_url"
-  | "secret";
+import type { PiiLabel } from "./labels";
 
 type Span = { end: number; label: PiiLabel; score: number; start: number };
 
 type Detect = (text: string) => Promise<Array<Span>>;
 
 type DetectedText = { spans: Array<Span>; text: string };
-
-type DocumentLanguage = "en" | "es" | "pt";
 
 type FileStageKey =
   | "stage.assembling"
@@ -51,9 +41,16 @@ type Detection = {
   start: number;
 };
 
+type Mark = Span & { id: string };
+
+type AnalysedReading = { marks: Array<Mark>; text: string };
+
+/* A unit is one surface the file was read from: a whole text, an image, a page. It holds every
+   reading of that surface, and only a scan has more than one: the pass the reader chose first,
+   then the passes it passed over. */
 type Analysis = {
   detections: Array<Detection>;
-  handle: unknown;
+  units: Array<Array<AnalysedReading>>;
   warnings: Array<WarningKey>;
 };
 
@@ -62,14 +59,16 @@ type Decisions = { covered: ReadonlyArray<string> };
 type ApplyRequest = {
   analysis: Analysis;
   decisions: Decisions;
-  detect: Detect;
   file: File;
   onProgress: FileProgress;
 };
 
+// What painting leaves: the file, the text still readable in it, and what painting had to give up.
+type Painted = { blob: Blob; visible: string; warnings: Array<WarningKey> };
+
 type Redactor = {
   analyse: (file: File, detect: Detect, onProgress: FileProgress) => Promise<Analysis>;
-  apply: (request: ApplyRequest) => Promise<RedactionResult>;
+  apply: (request: ApplyRequest) => Promise<Painted>;
 };
 
 type Bbox = { x0: number; x1: number; y0: number; y1: number };
@@ -81,6 +80,7 @@ type PositionedWord = { bbox: Bbox; charEnd: number; charStart: number; text: st
 type Rect = { height: number; width: number; x: number; y: number };
 
 export type {
+  AnalysedReading,
   Analysis,
   ApplyRequest,
   Bbox,
@@ -88,10 +88,10 @@ export type {
   Detect,
   DetectedText,
   Detection,
-  DocumentLanguage,
   FileProgress,
   FileStageKey,
-  PiiLabel,
+  Mark,
+  Painted,
   PositionedWord,
   Rect,
   RedactionResult,
