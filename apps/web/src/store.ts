@@ -1,7 +1,5 @@
-import type { Analysis, FileStageKey, WarningKey } from "@repo/redact-core";
+import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact-core";
 import { create } from "zustand";
-
-type JobResult = { blob: Blob; redactionCount: number; warnings: Array<WarningKey> };
 
 type JobSource = {
   file: File;
@@ -14,7 +12,7 @@ type JobState =
   | { error: string; phase: "error" }
   | { phase: "analysing"; progress: number; stage: FileStageKey }
   | { phase: "applying"; progress: number; stage?: FileStageKey }
-  | { phase: "done"; result: JobResult }
+  | { phase: "done"; result: RedactionResult }
   | { phase: "queued" };
 
 type JobPhase = JobState["phase"];
@@ -31,12 +29,7 @@ type JobStore = {
   setState: (id: string, state: JobState) => void;
 };
 
-type JobInput = File | { file: File; path: string };
-
-const sourceOf = (input: JobInput) =>
-  input instanceof File
-    ? { file: input, path: input.webkitRelativePath || input.name }
-    : { file: input.file, path: input.path };
+type JobInput = Omit<JobSource, "id">;
 
 const justTheSource = ({ file, id, path }: Job): JobSource => ({ file, id, path });
 
@@ -47,11 +40,12 @@ const useJobStore = create<JobStore>((set) => {
 
   return {
     addFiles: (files) => {
-      const created = files.map((input): Job => {
-        const { file, path } = sourceOf(input);
-
-        return { file, id: crypto.randomUUID(), path, phase: "queued" };
-      });
+      const created = files.map(({ file, path }): Job => ({
+        file,
+        id: crypto.randomUUID(),
+        path,
+        phase: "queued",
+      }));
 
       set((state) => ({ jobs: [...state.jobs, ...created] }));
 
@@ -76,14 +70,23 @@ const useJobStore = create<JobStore>((set) => {
   };
 });
 
-type CompletedJob = Job & { phase: "done"; result: JobResult };
+type CompletedJob = Job & { phase: "done"; result: RedactionResult };
 
-const isInFlight = (job: Job) =>
-  job.phase === "queued" || job.phase === "analysing" || job.phase === "applying";
+// In flight: still reaching a worker. Working: a worker has it now. Finished: nothing left to do.
+const PHASE_TRAITS = {
+  analysing: { finished: false, inFlight: true, working: true },
+  applying: { finished: false, inFlight: true, working: true },
+  done: { finished: true, inFlight: false, working: false },
+  error: { finished: true, inFlight: false, working: false },
+  queued: { finished: false, inFlight: true, working: false },
+  reviewing: { finished: false, inFlight: false, working: false },
+} as const satisfies Record<JobPhase, { finished: boolean; inFlight: boolean; working: boolean }>;
 
-const isWorking = (job: Job) => job.phase === "analysing" || job.phase === "applying";
+const isInFlight = (job: Job) => PHASE_TRAITS[job.phase].inFlight;
 
-const isFinished = (job: Job) => job.phase === "done" || job.phase === "error";
+const isWorking = (job: Job) => PHASE_TRAITS[job.phase].working;
+
+const isFinished = (job: Job) => PHASE_TRAITS[job.phase].finished;
 
 /* Files already in review keep the analysis their model gave them; only work still reaching the
    model would be split across two of them, so that is what holds a model switch back. */
@@ -126,4 +129,4 @@ export {
   useJobStore,
 };
 
-export type { CompletedJob, Job, JobInput, JobPhase, JobResult, JobSource, JobState };
+export type { CompletedJob, Job, JobInput, JobPhase, JobSource, JobState };

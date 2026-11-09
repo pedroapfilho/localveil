@@ -1,4 +1,4 @@
-import type { PiiLabel, Span } from "@repo/redact-core";
+import type { DocumentLanguage, PiiLabel, Span } from "@repo/redact-core";
 import { absorbNested } from "@repo/redact-core";
 
 type Pattern = {
@@ -117,10 +117,13 @@ const isYearRange = (value: string) => /^(?:19|20)\d{2}-(?:19|20)\d{2}$/v.test(v
 
 const startsWithAYear = (value: string) => /^(?:19|20)\d{2}[\s\-]/v.test(value);
 
-const MONTHS =
-  "january|february|march|april|may|june|july|august|september|october|november|december|" +
-  "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|" +
-  "enero|febrero|marzo|mayo|junio|julio|septiembre|setiembre|octubre|noviembre|diciembre";
+const MONTH_NAMES = {
+  en: "january|february|march|april|may|june|july|august|september|october|november|december",
+  es: "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre",
+  pt: "janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro",
+} satisfies Record<DocumentLanguage, string>;
+
+const MONTHS = Object.values(MONTH_NAMES).join("|");
 
 const WRITTEN_DATE = new RegExp(
   `\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:de\\s+)?(?:${MONTHS})\\b(?:\\s+(?:de\\s+)?(?:19|20)\\d{2})?`,
@@ -224,12 +227,7 @@ const patternSpans = (text: string): Array<Span> => {
     }
   }
 
-  return absorbNested(
-    found,
-    (span) => span.label,
-    (span) => span.score,
-    (span) => span,
-  ).toSorted((left, right) => left.start - right.start);
+  return absorbNested(found).toSorted((left, right) => left.start - right.start);
 };
 
 export { isCnpj, isCpf, isIban, luhn, patternSpans };

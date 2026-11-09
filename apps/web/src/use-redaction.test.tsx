@@ -17,7 +17,7 @@ const submitted = (name: string) => {
   const { result } = render();
 
   act(() => {
-    result.current.submit([new File(["x"], name, { type: "text/plain" })]);
+    result.current.submit([{ file: new File(["x"], name, { type: "text/plain" }), path: name }]);
   });
 
   const [job] = useJobStore.getState().jobs;
@@ -63,14 +63,14 @@ describe("useRedaction", () => {
     const { id, result } = submitted("a.txt");
 
     play(() => {
-      memory.workers().onAnalysed(id, { detections: [], handle: undefined, warnings: [] });
+      memory.workers().onAnalysed(id, { detections: [], units: [], warnings: [] });
       result.current.apply(id, ["a"]);
     });
 
     expect(memory.applied[0]?.decisions).toEqual({ covered: ["a"] });
 
     play(() => {
-      result.current.remove(id);
+      result.current.remove([id]);
     });
 
     expect(memory.cancelled).toEqual([id]);
@@ -156,7 +156,7 @@ describe("what the runner reports", () => {
     render();
 
     play(() => {
-      memory.workers().onModelLost("The detection model stopped answering", true);
+      memory.workers().onModelLost("The detection model stopped answering", true, false);
     });
 
     expect(toast.error).toHaveBeenCalledExactlyOnceWith("The detection model stopped answering");

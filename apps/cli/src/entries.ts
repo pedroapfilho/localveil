@@ -1,9 +1,11 @@
 import { readdir, stat } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
-import type { ModelId } from "@repo/pii-detect/models";
 import { isModelId, MODELS } from "@repo/pii-detect/models";
-import { NODE_FORMATS } from "@repo/redact-formats";
+import { nodeTypeOf } from "@repo/redact-formats";
+
+import type { RunSettings } from "./run-redaction";
 
 const PARENT_NAME = "..";
 
@@ -14,68 +16,47 @@ type DirectoryEntry = {
   supported: boolean;
 };
 
-type StartingPoint = {
-  directory: string;
-  jobs?: number;
-  model?: ModelId;
-  selection: Array<string>;
-};
+type StartingPoint = { directory: string; selection: Array<string>; settings: RunSettings };
 
-type ParsedFlags = { jobs?: number; model?: ModelId; paths: Array<string> };
+type ParsedFlags = { paths: Array<string>; settings: RunSettings };
 
-const valueOf = (arg: string, rest: Iterator<string, undefined>, name: string) => {
-  if (arg === `--${name}`) {
-    return { value: rest.next().value };
-  }
-
-  const prefix = `--${name}=`;
-
-  return arg.startsWith(prefix) ? { value: arg.slice(prefix.length) } : undefined;
-};
+const named = (value: string | boolean | undefined) =>
+  typeof value === "string" ? value : "nothing";
 
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
-  const paths: Array<string> = [];
-  let jobs: number | undefined;
-  let model: ModelId | undefined;
+  const { positionals, values } = parseArgs({
+    allowPositionals: true,
+    args: [...args],
+    options: { jobs: { type: "string" }, model: { type: "string" } },
+    strict: false,
+  });
 
-  const rest = args.values();
+  const settings: RunSettings = {};
 
-  for (const arg of rest) {
-    const parallel = valueOf(arg, rest, "jobs");
+  if (values.jobs !== undefined) {
+    const count = typeof values.jobs === "string" ? Number(values.jobs) : Number.NaN;
 
-    if (parallel !== undefined) {
-      const count = Number(parallel.value);
-
-      if (!Number.isInteger(count) || count < 1) {
-        throw new RangeError(
-          `--jobs takes a whole number of 1 or more, not ${parallel.value ?? "nothing"}`,
-        );
-      }
-
-      jobs = count;
-      continue;
+    if (!Number.isInteger(count) || count < 1) {
+      throw new RangeError(`--jobs takes a whole number of 1 or more, not ${named(values.jobs)}`);
     }
 
-    const chosen = valueOf(arg, rest, "model");
-
-    if (chosen !== undefined) {
-      if (chosen.value === undefined || !isModelId(chosen.value)) {
-        throw new RangeError(
-          `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${chosen.value ?? "nothing"}`,
-        );
-      }
-
-      model = chosen.value;
-      continue;
-    }
-
-    paths.push(arg);
+    settings.jobs = count;
   }
 
-  return { jobs, model, paths };
+  if (values.model !== undefined) {
+    if (typeof values.model !== "string" || !isModelId(values.model)) {
+      throw new RangeError(
+        `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${named(values.model)}`,
+      );
+    }
+
+    settings.model = values.model;
+  }
+
+  return { paths: positionals, settings };
 };
 
-const isSupported = (name: string): boolean => NODE_FORMATS.has(extname(name).toLowerCase());
+const isSupported = (name: string): boolean => nodeTypeOf(name) !== undefined;
 
 const byKind = (left: DirectoryEntry, right: DirectoryEntry): number => {
   if (left.isDirectory !== right.isDirectory) {
@@ -122,15 +103,10 @@ const resolveArguments = async (
   args: ReadonlyArray<string>,
   workingDirectory: string,
 ): Promise<StartingPoint> => {
-  const { jobs, model, paths } = parseFlags(args);
+  const { paths, settings } = parseFlags(args);
 
   if (paths.length === 0) {
-    return {
-      directory: workingDirectory,
-      ...(jobs !== undefined && { jobs }),
-      ...(model !== undefined && { model }),
-      selection: [],
-    };
+    return { directory: workingDirectory, selection: [], settings };
   }
 
   const settled = await Promise.allSettled(
@@ -160,12 +136,7 @@ const resolveArguments = async (
   const first = selection.at(0);
   const directory = first === undefined ? (directories[0] ?? workingDirectory) : dirname(first);
 
-  return {
-    directory,
-    ...(jobs !== undefined && { jobs }),
-    ...(model !== undefined && { model }),
-    selection,
-  };
+  return { directory, selection, settings };
 };
 
 export { isSupported, parentEntry, readDirectory, resolveArguments };

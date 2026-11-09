@@ -1,7 +1,7 @@
 /* oxlint-disable anti-slop/no-module-mocking -- the ONNX runtime is a wasm engine and the model store holds the weights; the module seams are the only practical hermetic substitute */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { openModel } from "#model-store";
+import { modelStore } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
 
 import type { ModelId } from "./catalog";
@@ -12,7 +12,7 @@ import type { Respond } from "./model-run-fixture";
 import { fakeModelRun, MODEL_FILES } from "./model-run-fixture";
 
 vi.mock("#model-store", () => ({
-  openModel: vi.fn(),
+  modelStore: { openModel: vi.fn() },
 }));
 
 vi.mock("#ort", () => ({
@@ -20,7 +20,7 @@ vi.mock("#ort", () => ({
   pickDevice: vi.fn(),
 }));
 
-const openedRepos = () => vi.mocked(openModel).mock.calls.map(([model]) => model.repo);
+const openedRepos = () => vi.mocked(modelStore.openModel).mock.calls.map(([model]) => model.repo);
 
 const recordLoad = () => {
   const events: Array<ModelLoadEvent> = [];
@@ -36,7 +36,7 @@ const setup = (respond: Respond = () => [], model: ModelId = DEFAULT_MODEL_ID) =
   const fake = fakeModelRun(modelById(model), respond);
 
   vi.mocked(pickDevice).mockResolvedValue("webgpu");
-  vi.mocked(openModel).mockResolvedValue(MODEL_FILES);
+  vi.mocked(modelStore.openModel).mockResolvedValue(MODEL_FILES);
   vi.mocked(createModelRunner).mockResolvedValue(fake.run);
 
   return fake;
@@ -44,7 +44,7 @@ const setup = (respond: Respond = () => [], model: ModelId = DEFAULT_MODEL_ID) =
 
 beforeEach(() => {
   vi.mocked(createModelRunner).mockReset();
-  vi.mocked(openModel).mockReset();
+  vi.mocked(modelStore.openModel).mockReset();
   vi.mocked(pickDevice).mockReset();
 });
 
@@ -148,7 +148,7 @@ describe("createDetector", () => {
 
     await createDetector({ onLoad });
 
-    expect(openModel).toHaveBeenCalledOnce();
+    expect(modelStore.openModel).toHaveBeenCalledOnce();
     expect(vi.mocked(createModelRunner).mock.calls).toEqual([
       [MODEL_FILES.weights, "webgpu"],
       [MODEL_FILES.weights, "wasm"],
@@ -170,7 +170,7 @@ describe("createDetector", () => {
 describe("the model load", () => {
   it("carries the fraction downloaded while a fresh model arrives, then comes ready", async () => {
     setup();
-    vi.mocked(openModel).mockImplementation((_model, onProgress) => {
+    vi.mocked(modelStore.openModel).mockImplementation((_model, onProgress) => {
       onProgress(0.25);
       onProgress(1);
 
@@ -207,9 +207,20 @@ describe("the model load", () => {
     expect(events).toEqual([{ kind: "loading" }, { kind: "slow-device" }, { kind: "ready" }]);
   });
 
+  it("runs on a native CPU without calling it a slow device or falling back", async () => {
+    setup();
+    vi.mocked(pickDevice).mockResolvedValue("cpu");
+    vi.mocked(createModelRunner).mockReset().mockRejectedValueOnce(new Error("no session"));
+    const { events, onLoad } = recordLoad();
+
+    await expect(createDetector({ onLoad })).rejects.toThrow(/no session/v);
+    expect(vi.mocked(createModelRunner).mock.calls).toEqual([[MODEL_FILES.weights, "cpu"]]);
+    expect(events).toEqual([{ kind: "loading" }, { kind: "failed", reason: "no session" }]);
+  });
+
   it("fails with the reason, and rejects rather than detecting nothing", async () => {
     setup();
-    vi.mocked(openModel).mockRejectedValue(new Error("network down"));
+    vi.mocked(modelStore.openModel).mockRejectedValue(new Error("network down"));
     const { events, onLoad } = recordLoad();
 
     await expect(createDetector({ onLoad })).rejects.toThrow(/network down/v);
@@ -220,14 +231,14 @@ describe("the model load", () => {
     setup();
     const controller = new AbortController();
 
-    vi.mocked(openModel).mockImplementation(() => {
+    vi.mocked(modelStore.openModel).mockImplementation(() => {
       controller.abort();
 
       return Promise.resolve(MODEL_FILES);
     });
 
     await expect(createDetector({ signal: controller.signal })).rejects.toThrow(/abort/iv);
-    expect(vi.mocked(openModel).mock.calls[0]?.[2]).toBe(controller.signal);
+    expect(vi.mocked(modelStore.openModel).mock.calls[0]?.[2]).toBe(controller.signal);
     expect(createModelRunner).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import type { PiiLabel } from "./labels";
 import type { Span } from "./types";
 
 type Range = { end: number; start: number };
@@ -7,27 +8,22 @@ const widestFirst = (left: Range, right: Range) => left.start - right.start || r
 const encloses = (outer: Range, inner: Range) =>
   outer.start <= inner.start && outer.end >= inner.end;
 
-const absorbNested = <T extends Range>(
-  items: ReadonlyArray<T>,
-  groupOf: (item: T) => string,
-  scoreOf: (item: T) => number,
-  rescore: (item: T, score: number) => T,
-): Array<T> => {
-  const kept: Array<T> = [];
-  const containers = new Map<string, number>();
+// A span nested in another of its label folds into it, and the container keeps the stronger score.
+const absorbNested = (spans: ReadonlyArray<Span>): Array<Span> => {
+  const kept: Array<Span> = [];
+  const containers = new Map<PiiLabel, number>();
 
-  for (const item of items.toSorted(widestFirst)) {
-    const group = groupOf(item);
-    const at = containers.get(group);
+  for (const span of spans.toSorted(widestFirst)) {
+    const at = containers.get(span.label);
     const container = at === undefined ? undefined : kept[at];
 
-    if (at !== undefined && container !== undefined && encloses(container, item)) {
-      kept[at] = rescore(container, Math.max(scoreOf(container), scoreOf(item)));
+    if (at !== undefined && container !== undefined && encloses(container, span)) {
+      kept[at] = { ...container, score: Math.max(container.score, span.score) };
       continue;
     }
 
-    containers.set(group, kept.length);
-    kept.push(item);
+    containers.set(span.label, kept.length);
+    kept.push(span);
   }
 
   return kept;

@@ -96,7 +96,7 @@ type JobRowProps = {
   modelLoading: boolean;
   onApply: (id: string, covered: ReadonlyArray<string>) => void;
   onCoveredChange: (id: string, covered: ReadonlyArray<string>) => void;
-  onRemove: (id: string) => void;
+  onRemove: (ids: ReadonlyArray<string>) => void;
   onSelect: (id: string, selected: boolean) => void;
   selected: boolean;
 };
@@ -124,7 +124,7 @@ const JobRow = ({
   const open = chosen ?? (failure || reviewing);
 
   const handleRemove = () => {
-    onRemove(id);
+    onRemove([id]);
   };
 
   const handleSelect = () => {
@@ -226,5 +226,3 @@ const JobRow = ({
 };
 
 export { JobRow };
-
-export type { JobRowProps };

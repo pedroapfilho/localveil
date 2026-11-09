@@ -143,4 +143,4 @@ const textLayerWords = (
 
 export { textLayerWords };
 
-export type { Layer, MeasureText };
+export type { MeasureText };

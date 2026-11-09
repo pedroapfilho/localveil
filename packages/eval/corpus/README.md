@@ -26,13 +26,14 @@ offsets are never written by hand and cannot drift when the surrounding text is 
 
 `label` is one of the eight in `PiiLabel`. `language` is `en`, `es` or `pt`. `source` is
 `synthetic` for generated material and `handwritten` for documents written to probe a specific
-failure.
+failure. `format` is `csv` or `json` for a document the structural layer should read by its
+fields, and is left out for prose.
 
 ## Adding a document
 
 1. Write the file, wrapping each span in `[[label|value]]`. A value may not contain `]`.
 2. If it needs a CPF, CNPJ, IBAN or card number, generate one whose check digits agree. The
-   verifiers are exported from `packages/redact-core/src/patterns.ts`.
+   verifiers are exported from `packages/pii-detect/src/patterns.ts`.
 3. Run `pnpm --filter @repo/eval test`. The suite asserts every span is in bounds, every label
    is used enough, and that nothing the pattern layer finds is left unlabelled.
 4. Run `pnpm --filter @repo/eval start` to see what it does to the scores.

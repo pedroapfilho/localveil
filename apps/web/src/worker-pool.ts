@@ -1,5 +1,4 @@
 import type { ModelId } from "@repo/pii-detect/models";
-import type { Analysis, RedactionResult } from "@repo/redact-core";
 import { isProgressEvent, warnRecoverable } from "@repo/redact-core";
 import workerpool from "workerpool";
 
@@ -9,15 +8,11 @@ import { createModelHost } from "./model-host";
 import { probeCapacity } from "./probe-capacity";
 // oxlint-disable-next-line import/default -- Vite's ?worker&url query resolves to a default-exported URL the resolver cannot see
 import redactWorkerUrl from "./redact-worker.ts?worker&url";
-import type { AnalyseTask, ApplyTask } from "./worker-protocol";
+import type { RedactWorker } from "./worker-protocol";
 
 const SILENCE_LIMIT = 120_000;
 
-type PooledTask = {
-  cancel: () => void;
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
-  settle: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
-};
+type Task<T> = workerpool.Promise<T>;
 
 // A file has started once its worker first reports progress; until then it is waiting for a worker.
 type LiveJob = {
@@ -25,48 +20,8 @@ type LiveJob = {
   id: string;
   restart: () => void;
   started: boolean;
-  task: PooledTask;
+  task: Task<unknown>;
   watchdog?: ReturnType<typeof setTimeout>;
-};
-
-const isAnalysis = (value: unknown): value is Analysis =>
-  typeof value === "object" &&
-  value !== null &&
-  "detections" in value &&
-  Array.isArray(value.detections);
-
-const isResult = (value: unknown): value is RedactionResult =>
-  typeof value === "object" && value !== null && "blob" in value && value.blob instanceof Blob;
-
-type WorkerTask = {
-  cancel: () => void;
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
-  then: (onDone: (value: unknown) => void, onFail: (cause: unknown) => void) => void;
-};
-
-const isWorkerTask = (task: unknown): task is WorkerTask =>
-  typeof task === "object" &&
-  task !== null &&
-  "cancel" in task &&
-  typeof task.cancel === "function" &&
-  "then" in task &&
-  typeof task.then === "function";
-
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool's exec result is untyped; this function is its parser
-const asPooledTask = (task: unknown): PooledTask => {
-  if (!isWorkerTask(task)) {
-    throw new TypeError("workerpool returned a task that cannot be cancelled or settled");
-  }
-
-  return {
-    cancel: () => {
-      task.cancel();
-    },
-    settle: (onDone, onFail) => {
-      // oxlint-disable-next-line promise/catch-or-return, promise/prefer-catch, promise/prefer-await-to-then -- workerpool's task is a thenable, not a Promise; then(onDone, onFail) is its settle contract
-      task.then(onDone, onFail);
-    },
-  };
 };
 
 const shutDownWith = async (pool: { terminate: (force: boolean) => Promise<void> }) => {
@@ -126,7 +81,6 @@ const createRedactionPool: CreatePool = (options) => {
 
         onModelLoad(event);
       },
-      // Every file is failed or restarted before the loss is reported, since the runner reads what is left.
       onLost: (reason, fatal) => {
         const waiting = [...jobs.values()].filter((job) => !job.started);
         const failing = [...jobs.values()].filter((job) => job.started || fatal);
@@ -143,7 +97,7 @@ const createRedactionPool: CreatePool = (options) => {
           }
         }
 
-        onModelLost(reason, fatal);
+        onModelLost(reason, fatal, !fatal && waiting.length > 0);
       },
     });
 
@@ -169,12 +123,18 @@ const createRedactionPool: CreatePool = (options) => {
     onProgress(id, payload.fraction, payload.stage);
   };
 
-  const start = (
+  const call = <Name extends keyof RedactWorker>(
+    id: string,
+    name: Name,
+    params: Parameters<RedactWorker[Name]>,
+    port: MessagePort,
+  ) => pool.exec<RedactWorker[Name]>(name, params, { on: watching(id), transfer: [port] });
+
+  const start = <T>(
     id: string,
     restart: () => void,
-    run: (port: MessagePort) => object,
-    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool settles with untyped values; isAnalysis/isResult parse them
-    settled: (value: unknown) => void,
+    run: (port: MessagePort) => Task<T>,
+    settled: (value: T) => void,
   ) => {
     const channel = crypto.randomUUID();
     const wire = new MessageChannel();
@@ -186,24 +146,26 @@ const createRedactionPool: CreatePool = (options) => {
     }
 
     try {
-      const task = asPooledTask(run(wire.port2));
+      const task = run(wire.port2);
       const live: LiveJob = { channel, id, restart, started: false, task };
 
       release(jobs.get(id))?.task.cancel();
       jobs.set(id, live);
 
-      task.settle(
-        (value) => {
-          if (release(live) !== undefined) {
-            settled(value);
-          }
-        },
-        (error) => {
-          if (release(live) !== undefined) {
-            onFailed(id, error);
-          }
-        },
-      );
+      const done = (value: T) => {
+        if (release(live) !== undefined) {
+          settled(value);
+        }
+      };
+
+      const failed = (error: Error) => {
+        if (release(live) !== undefined) {
+          onFailed(id, error);
+        }
+      };
+
+      // oxlint-disable-next-line promise/catch-or-return, promise/no-callback-in-promise, promise/prefer-catch, promise/prefer-await-to-then -- workerpool's task is a thenable, not a Promise; then(onDone, onFail) is its settle contract
+      task.then(done, failed);
     } catch (error) {
       host.disconnect(channel);
       onFailed(id, error);
@@ -216,19 +178,9 @@ const createRedactionPool: CreatePool = (options) => {
       () => {
         submit(job);
       },
-      (port) =>
-        pool.exec<AnalyseTask>("analyse", [job.file, port], {
-          on: watching(job.id),
-          transfer: [port],
-        }),
-      (value) => {
-        if (isAnalysis(value)) {
-          onAnalysed(job.id, value);
-
-          return;
-        }
-
-        onFailed(job.id, new Error("The worker returned something that is not an analysis"));
+      (port) => call(job.id, "analyse", [job.file, port], port),
+      (analysis) => {
+        onAnalysed(job.id, analysis);
       },
     );
   };
@@ -240,22 +192,14 @@ const createRedactionPool: CreatePool = (options) => {
         apply(request);
       },
       (port) =>
-        pool.exec<ApplyTask>(
+        call(
+          request.id,
           "apply",
           [request.file, { analysis: request.analysis, decisions: request.decisions }, port],
-          { on: watching(request.id), transfer: [port] },
+          port,
         ),
-      (value) => {
-        if (isResult(value)) {
-          onDone(request.id, value);
-
-          return;
-        }
-
-        onFailed(
-          request.id,
-          new Error("The worker returned something that is not a redacted file"),
-        );
+      (result) => {
+        onDone(request.id, result);
       },
     );
   };
@@ -285,5 +229,3 @@ const createRedactionPool: CreatePool = (options) => {
 };
 
 export { createRedactionPool };
-
-export type { WorkerTask };

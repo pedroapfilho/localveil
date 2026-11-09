@@ -1,7 +1,7 @@
 import { workerData } from "node:worker_threads";
 
-import type { EventPort, ProgressEvent } from "@repo/redact-core";
-import { createDetectClient } from "@repo/redact-core";
+import type { EventPort } from "@repo/redact-core";
+import { createDetectClient, progressEvent } from "@repo/redact-core";
 import type { NodeRedactionOutput } from "@repo/redact-node";
 import { redactPath } from "@repo/redact-node";
 import workerpool from "workerpool";
@@ -19,7 +19,18 @@ const detect = createDetectClient(workerData.port);
 
 const redact = (path: string): Promise<NodeRedactionOutput> =>
   redactPath(path, detect, (fraction, stage) => {
-    workerpool.workerEmit({ fraction, stage, type: "progress" } satisfies ProgressEvent);
+    workerpool.workerEmit(progressEvent(fraction, stage));
   });
 
-workerpool.worker({ redact });
+const methods = { redact };
+
+// workerpool settles a call with what the method resolves to.
+type FileWorker = {
+  [Name in keyof typeof methods]: (
+    ...args: Parameters<(typeof methods)[Name]>
+  ) => Awaited<ReturnType<(typeof methods)[Name]>>;
+};
+
+workerpool.worker(methods);
+
+export type { FileWorker };

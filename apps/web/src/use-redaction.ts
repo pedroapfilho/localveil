@@ -12,35 +12,51 @@ const MODEL_TOAST = "model-load";
 
 type Translate = I18nValue["t"];
 
-type ModelNotice = Exclude<JobNotice["kind"], "file-failed" | "file-unsupported" | "model-lost">;
-
-const MODEL_TOASTS = {
-  "model-downloading": (t) => {
-    toast.loading(t("model.downloading"), { id: MODEL_TOAST });
-  },
-  "model-dropped": () => {
-    toast.dismiss(MODEL_TOAST);
-  },
-  "model-failed": (t) => {
-    toast.error(t("model.failed"), { id: MODEL_TOAST });
-  },
-  "model-ready": (t) => {
-    toast.success(t("model.ready"), { id: MODEL_TOAST });
-  },
-  "slow-device": (t) => {
-    toast.warning(t("model.slowDevice"));
-  },
-} satisfies Record<ModelNotice, (t: Translate) => void>;
-
 const show = (notice: JobNotice, t: Translate) => {
-  if (notice.kind === "file-failed" || notice.kind === "file-unsupported") {
-    const message = notice.kind === "file-failed" ? "toast.failed" : "toast.unsupported";
+  switch (notice.kind) {
+    case "file-failed": {
+      toast.error(t("toast.failed", { name: notice.name }));
+      break;
+    }
 
-    toast.error(t(message, { name: notice.name }));
-  } else if (notice.kind === "model-lost") {
-    toast.error(notice.reason);
-  } else {
-    MODEL_TOASTS[notice.kind](t);
+    case "file-unsupported": {
+      toast.error(t("toast.unsupported", { name: notice.name }));
+      break;
+    }
+
+    case "model-downloading": {
+      toast.loading(t("model.downloading"), { id: MODEL_TOAST });
+      break;
+    }
+
+    case "model-dropped": {
+      toast.dismiss(MODEL_TOAST);
+      break;
+    }
+
+    case "model-failed": {
+      toast.error(t("model.failed"), { id: MODEL_TOAST });
+      break;
+    }
+
+    case "model-lost": {
+      toast.error(notice.reason);
+      break;
+    }
+
+    case "model-ready": {
+      toast.success(t("model.ready"), { id: MODEL_TOAST });
+      break;
+    }
+
+    case "slow-device": {
+      toast.warning(t("model.slowDevice"));
+      break;
+    }
+
+    default: {
+      notice satisfies never;
+    }
   }
 };
 
@@ -77,10 +93,7 @@ const useRedaction = (createPool: CreatePool) => {
       clear: () => {
         runnerRef.current?.clear();
       },
-      remove: (id: string) => {
-        runnerRef.current?.remove([id]);
-      },
-      removeMany: (ids: ReadonlyArray<string>) => {
+      remove: (ids: ReadonlyArray<string>) => {
         runnerRef.current?.remove(ids);
       },
       selectModel: (model: ModelId) => {

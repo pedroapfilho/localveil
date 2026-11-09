@@ -6,6 +6,10 @@ import { describeKey } from "./messages";
 import { ProgressBar } from "./progress-bar";
 import { truncateEnd } from "./text";
 
+const STOP_HINT = "Press Ctrl+C to stop. Nothing leaves this machine.";
+
+const STOPPING = "Stopping now, so no archive will be written.";
+
 const BAR_MAX = 40;
 const BAR_MIN = 10;
 
@@ -47,7 +51,7 @@ const ProgressView = ({ fileIndex, fileName, fraction, model, stage, stopping, t
         <ProgressBar fraction={fraction} width={barWidth} />
       </Box>
 
-      <Text dimColor>{describeKey(stopping ? "cli.stopping" : "cli.stopHint")}</Text>
+      <Text dimColor>{stopping ? STOPPING : STOP_HINT}</Text>
     </Box>
   );
 };

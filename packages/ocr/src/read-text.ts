@@ -1,7 +1,6 @@
-import type { WordInput } from "@repo/redact-core";
-import { contextOf } from "@repo/redact-core";
+import type { DocumentLanguage, PageSurface, WordInput } from "@repo/redact-core";
+import { contextOf, surfaceOf } from "@repo/redact-core";
 
-import type { OcrLanguage } from "./languages";
 import { languageOf } from "./languages";
 import type { Recognition } from "./recognize";
 import { recognizeWords } from "./recognize";
@@ -9,17 +8,22 @@ import { recognizeWords } from "./recognize";
 type Legibility = "blank" | "legible" | "unreadable";
 
 type TextReading = {
-  alternatives: Array<Array<WordInput>>;
-  language: OcrLanguage;
+  chosen: PageSurface;
+  language: DocumentLanguage;
+  legibility: Legibility;
+  passedOver: Array<PageSurface>;
+};
+
+type ReadText = (page: OffscreenCanvas, known?: DocumentLanguage) => Promise<TextReading>;
+
+type Recognise = (page: OffscreenCanvas, language: DocumentLanguage) => Promise<Recognition>;
+
+type Pass = {
+  confidence: number;
+  language: DocumentLanguage;
   legibility: Legibility;
   words: Array<WordInput>;
 };
-
-type ReadText = (page: OffscreenCanvas, known?: OcrLanguage) => Promise<TextReading>;
-
-type Recognise = (page: OffscreenCanvas, language: OcrLanguage) => Promise<Recognition>;
-
-type Pass = Omit<TextReading, "alternatives"> & { confidence: number };
 
 const PROBE = "en";
 
@@ -37,7 +41,7 @@ const legibilityOf = (read: number, legible: number): Legibility => {
   return (read - legible) / read > UNREADABLE_SHARE ? "unreadable" : "legible";
 };
 
-const assess = ({ confidence, words }: Recognition, language: OcrLanguage): Pass => {
+const assess = ({ confidence, words }: Recognition, language: DocumentLanguage): Pass => {
   const legible: Array<WordInput> = [];
 
   for (const { bbox, confidence: wordConfidence, text } of words) {
@@ -61,7 +65,7 @@ const textOf = ({ words }: Recognition) => words.map((word) => word.text).join("
 const recogniseIn = async (
   recognise: Recognise,
   page: OffscreenCanvas,
-  known: OcrLanguage | undefined,
+  known: DocumentLanguage | undefined,
 ) => {
   if (known !== undefined) {
     return assess(await recognise(page, known), known);
@@ -108,14 +112,11 @@ const isBetter = (candidate: Pass, kept: Pass) =>
     ? candidate.confidence > kept.confidence
     : candidate.words.length > kept.words.length;
 
-const readingOf = (
-  { language, legibility, words }: Pass,
-  passedOver: ReadonlyArray<Pass>,
-): TextReading => ({
-  alternatives: passedOver.map((other) => other.words),
-  language,
-  legibility,
-  words,
+const readingOf = (chosen: Pass, passedOver: ReadonlyArray<Pass>): TextReading => ({
+  chosen: surfaceOf(chosen.words),
+  language: chosen.language,
+  legibility: chosen.legibility,
+  passedOver: passedOver.map((pass) => surfaceOf(pass.words)),
 });
 
 /* A faint scan or a photographed card can come back mostly unreadable, and thresholding it to black

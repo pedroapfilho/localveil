@@ -1,13 +1,23 @@
-type OcrLanguage = "en" | "es" | "pt";
+import type { DocumentLanguage } from "@repo/redact-core";
+import { DOCUMENT_LANGUAGES } from "@repo/redact-core";
 
 const TRAINEDDATA = {
   en: "eng",
   es: "spa",
   pt: "por",
-} satisfies Record<OcrLanguage, string>;
+} satisfies Record<DocumentLanguage, string>;
+
+const WORD = /[\p{Letter}']+/gv;
+const COMBINING_MARK = /\p{Mark}/gv;
+
+const normalise = (text: string) =>
+  text.normalize("NFD").replaceAll(COMBINING_MARK, "").toLowerCase();
+
+// Tokens are folded before they are counted, so the stopwords are folded the same way.
+const stopwords = (words: ReadonlyArray<string>) => new Set(words.map(normalise));
 
 const STOPWORDS = {
-  en: new Set([
+  en: stopwords([
     "and",
     "are",
     "at",
@@ -30,7 +40,7 @@ const STOPWORDS = {
     "was",
     "with",
   ]),
-  es: new Set([
+  es: stopwords([
     "del",
     "el",
     "ella",
@@ -55,7 +65,7 @@ const STOPWORDS = {
     "validez",
     "ya",
   ]),
-  pt: new Set([
+  pt: stopwords([
     "ao",
     "aos",
     "assinatura",
@@ -88,25 +98,19 @@ const STOPWORDS = {
     "validade",
     "voce",
   ]),
-};
-
-const LANGUAGES: ReadonlyArray<OcrLanguage> = ["en", "es", "pt"];
+} satisfies Record<DocumentLanguage, ReadonlySet<string>>;
 
 const MIN_HITS = 5;
 
 const MIN_CONFIDENCE = 0.5;
 
-const WORD = /[\p{Letter}']+/gv;
-const COMBINING_MARK = /\p{Mark}/gv;
-
-const normalise = (text: string) =>
-  text.normalize("NFD").replaceAll(COMBINING_MARK, "").toLowerCase();
-
 const tally = (tokens: Array<string>) => {
-  const scores = new Map<OcrLanguage, number>(LANGUAGES.map((language) => [language, 0]));
+  const scores = new Map<DocumentLanguage, number>(
+    DOCUMENT_LANGUAGES.map((language) => [language, 0]),
+  );
 
   for (const token of tokens) {
-    for (const language of LANGUAGES) {
+    for (const language of DOCUMENT_LANGUAGES) {
       if (STOPWORDS[language].has(token)) {
         scores.set(language, (scores.get(language) ?? 0) + 1);
       }
@@ -118,7 +122,7 @@ const tally = (tokens: Array<string>) => {
 
 /* A language is named only when its stopwords outvote every other's and there are enough of them
    to trust: a few stray hits name nothing, and the caller reads in its default instead. */
-const languageOf = (text: string): OcrLanguage | undefined => {
+const languageOf = (text: string): DocumentLanguage | undefined => {
   const tokens = normalise(text).match(WORD) ?? [];
   const scores = tally([...tokens]);
   const [top, second] = [...scores.entries()].toSorted(([, left], [, right]) => right - left);
@@ -133,8 +137,6 @@ const languageOf = (text: string): OcrLanguage | undefined => {
   return confidence >= MIN_CONFIDENCE ? top[0] : undefined;
 };
 
-const traineddataFor = (language: OcrLanguage) => TRAINEDDATA[language];
+const traineddataFor = (language: DocumentLanguage) => TRAINEDDATA[language];
 
 export { languageOf, traineddataFor };
-
-export type { OcrLanguage };

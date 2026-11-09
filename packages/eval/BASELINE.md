@@ -91,7 +91,7 @@ TOTAL            100.0   59.3   74.4     83      0     57
 ## Detection plus the structural layer, overlap matching
 
 The CSV and JSON field-name layer from `@repo/redact-text`, scored on top of detection. It
-only applies to documents whose id ends in `csv` or `json`, so most rows are unchanged.
+only applies to documents that declare a `format`, so most rows are unchanged.
 
 ```
 label             prec    rec     f1     tp     fp     fn

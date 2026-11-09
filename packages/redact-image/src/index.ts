@@ -1,25 +1,16 @@
 import type { ReadText, TextReading } from "@repo/ocr";
-import type { AnalysedReading, PageSurface, Redactor, WarningKey } from "@repo/redact-core";
+import type { Redactor, WarningKey } from "@repo/redact-core";
 import {
   analyseUnits,
   contextOf,
-  isAnalysedReading,
-  isPageSurface,
-  keptSpans,
+  coverUnit,
   paint,
-  rectsFor,
-  redactionCount,
+  scanOf,
   surfaceOf,
-  uncovered,
-  verifyOutput,
+  surfaceUnits,
 } from "@repo/redact-core";
 
 const ENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
-
-type Reading = AnalysedReading & PageSurface;
-
-/* The first reading is the one the reader chose; the rest are the passes it passed over. */
-type ImageHandle = { readings: Array<Reading> };
 
 const canvasOf = async (file: Blob) => {
   const bitmap = await createImageBitmap(file);
@@ -43,13 +34,6 @@ const warningsFor = ({ legibility }: TextReading): Array<WarningKey> => {
   return legibility === "unreadable" ? ["warning.lowConfidence"] : [];
 };
 
-const isHandle = (value: unknown): value is ImageHandle =>
-  typeof value === "object" &&
-  value !== null &&
-  "readings" in value &&
-  Array.isArray(value.readings) &&
-  value.readings.every((reading) => isAnalysedReading(reading) && isPageSurface(reading));
-
 const createImageRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
     onProgress(0, "stage.reading");
@@ -62,52 +46,29 @@ const createImageRedactor = (read: ReadText): Redactor => ({
 
     onProgress(0.6, "stage.detecting");
 
-    const {
-      detections,
-      units: [readings = []],
-    } = await analyseUnits({
+    const { detections, units } = await analyseUnits({
       detect,
       kind: "file",
-      units: [{ readings: [reading.words, ...reading.alternatives].map(surfaceOf) }],
+      units: [scanOf(reading)],
     });
 
-    onProgress(1, "stage.finished");
-
-    return {
-      detections,
-      handle: { readings } satisfies ImageHandle,
-      warnings: warningsFor(reading),
-    };
+    return { detections, units, warnings: warningsFor(reading) };
   },
-  apply: async ({ analysis, decisions, detect, file, onProgress }) => {
-    if (!isHandle(analysis.handle)) {
-      throw new TypeError("The image analysis carried no recognised readings to paint from");
-    }
-
-    const { readings } = analysis.handle;
+  apply: async ({ analysis, decisions, file, onProgress }) => {
+    const [readings = []] = surfaceUnits(analysis);
 
     onProgress(0.85, "stage.redacting");
 
-    const rects = readings.flatMap((reading) => rectsFor(reading, keptSpans(reading, decisions)));
+    const { rects, visible } = coverUnit(readings, decisions);
     const canvas = await canvasOf(file);
 
     paint(canvas, rects);
-
-    const [chosen] = readings;
-
-    const warnings = await verifyOutput(
-      chosen === undefined ? "" : uncovered(chosen, rects).text,
-      detect,
-      analysis.warnings,
-    );
 
     const blob = await canvas.convertToBlob({
       type: ENCODABLE.has(file.type) ? file.type : "image/png",
     });
 
-    onProgress(1, "stage.finished");
-
-    return { blob, redactionCount: redactionCount([readings], decisions), warnings };
+    return { blob, visible: surfaceOf(visible).text, warnings: [] };
   },
 });
 

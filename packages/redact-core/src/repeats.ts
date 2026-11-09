@@ -1,6 +1,7 @@
 import { APPLY_SCORE } from "./detections";
+import type { PiiLabel } from "./labels";
 import { escapeForRegExp, normalise } from "./text";
-import type { DetectedText, PiiLabel, Span } from "./types";
+import type { DetectedText, Span } from "./types";
 
 type PiiToken = { label: PiiLabel; score: number; text: string };
 

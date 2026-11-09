@@ -1,11 +1,13 @@
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import type { Analysis, Decisions, RedactionResult } from "@repo/redact-core";
 
-type AnalyseTask = (file: File, port: MessagePort) => Analysis;
-
 type ApplyWork = { analysis: Analysis; decisions: Decisions };
 
-type ApplyTask = (file: File, work: ApplyWork, port: MessagePort) => RedactionResult;
+// workerpool settles a call with what the method resolves to, so each is typed by that value.
+type RedactWorker = {
+  analyse: (file: File, port: MessagePort) => Analysis;
+  apply: (file: File, work: ApplyWork, port: MessagePort) => RedactionResult;
+};
 
 type ConnectRequest = { channel: string; port: MessagePort; type: "connect" };
 
@@ -16,11 +18,10 @@ type ModelRequest = ConnectRequest | DisconnectRequest;
 type ModelResponse = { event: ModelLoadEvent; type: "model-load" };
 
 export type {
-  AnalyseTask,
-  ApplyTask,
   ApplyWork,
   ConnectRequest,
   DisconnectRequest,
   ModelRequest,
   ModelResponse,
+  RedactWorker,
 };

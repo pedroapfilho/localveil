@@ -1,18 +1,17 @@
 import { readFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename } from "node:path";
 
-import { NODE_FORMATS } from "@repo/redact-formats";
+import { toArrayBuffer, UnsupportedFileError } from "@repo/redact-core";
+import { nodeTypeOf } from "@repo/redact-formats";
 
 const readFileAsFile = async (path: string) => {
-  const source = await readFile(path);
+  const type = nodeTypeOf(basename(path));
 
-  const bytes = new Uint8Array(source.byteLength);
+  if (type === undefined) {
+    throw new UnsupportedFileError(basename(path), "");
+  }
 
-  bytes.set(source);
-
-  return new File([bytes], basename(path), {
-    type: NODE_FORMATS.get(extname(path).toLowerCase()) ?? "",
-  });
+  return new File([toArrayBuffer(await readFile(path))], basename(path), { type });
 };
 
 export { readFileAsFile };

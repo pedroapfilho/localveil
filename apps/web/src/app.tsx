@@ -2,6 +2,7 @@ import { useTranslations } from "@repo/i18n";
 import { BROWSER_ACCEPT } from "@repo/redact-formats";
 import { FileDropzone } from "@repo/ui/compositions/file-dropzone";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
+import { MOST_FILES } from "@repo/ui/lib/dropped-files";
 import { AnimatePresence, m } from "motion/react";
 import { toast } from "sonner";
 
@@ -43,7 +44,7 @@ const App = ({ createPool }: AppProps) => {
   const jobs = useJobStore((state) => state.jobs);
   const modelLoading = useJobStore((state) => state.modelLoading);
   const setCovered = useJobStore((state) => state.setCovered);
-  const { apply, clear, remove, removeMany, selectModel, submit } = useRedaction(createPool);
+  const { apply, clear, remove, selectModel, submit } = useRedaction(createPool);
   const modelPicker = useModelPicker(selectModel);
 
   useDocumentLocale();
@@ -111,7 +112,7 @@ const App = ({ createPool }: AppProps) => {
             }}
             onFilesSelected={handleFilesSelected}
             onLimitReached={() => {
-              toast.warning(t("toast.fileLimit", { count: 200 }));
+              toast.warning(t("toast.fileLimit", { count: MOST_FILES }));
             }}
           />
 
@@ -125,7 +126,6 @@ const App = ({ createPool }: AppProps) => {
                   onClear={clear}
                   onCoveredChange={setCovered}
                   onRemove={remove}
-                  onRemoveMany={removeMany}
                 />
 
                 <DownloadPanel jobs={jobs} onDownload={handleDownload} />

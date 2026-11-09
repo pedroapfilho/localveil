@@ -4,7 +4,7 @@ import type { Detect, Span } from "@repo/redact-core";
 import { redactFile } from "@repo/redact-core";
 import { describe, expect, it } from "vitest";
 
-import { textRedactor } from "./index";
+import { TEXT_REDACTORS } from "./index";
 
 const PII = [
   "John Smith",
@@ -44,11 +44,11 @@ const detectKnown: Detect = (text) => {
 };
 
 const FIXTURES = [
-  { name: "sample.txt", type: "text/plain" },
-  { name: "sample.md", type: "text/markdown" },
-  { name: "sample.csv", type: "text/csv" },
-  { name: "sample.json", type: "application/json" },
-  { name: "sample.log", type: "" },
+  { format: "text", name: "sample.txt", type: "text/plain" },
+  { format: "text", name: "sample.md", type: "text/markdown" },
+  { format: "csv", name: "sample.csv", type: "text/csv" },
+  { format: "json", name: "sample.json", type: "application/json" },
+  { format: "text", name: "sample.log", type: "" },
 ] as const;
 
 const bytesOf = (name: string) =>
@@ -75,7 +75,7 @@ describe.each(FIXTURES)("$name", (entry) => {
       detect: detectKnown,
       file,
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS[entry.format],
     });
 
     const redacted = await result.blob.text();
@@ -90,7 +90,7 @@ describe.each(FIXTURES)("$name", (entry) => {
       detect: detectKnown,
       file,
       onProgress: noProgress,
-      redactor: textRedactor,
+      redactor: TEXT_REDACTORS[entry.format],
     });
 
     const redacted = await result.blob.text();

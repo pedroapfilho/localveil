@@ -1,7 +1,6 @@
-import type { WordInput } from "@repo/redact-core";
+import type { DocumentLanguage, WordInput } from "@repo/redact-core";
 import type { Block, ImageLike, Word, Worker } from "tesseract.js";
 
-import type { OcrLanguage } from "./languages";
 import { traineddataFor } from "./languages";
 
 type RecognisedWord = WordInput & { confidence: number };
@@ -11,15 +10,15 @@ type Recognition = {
   words: Array<RecognisedWord>;
 };
 
-const workers = new Map<OcrLanguage, Promise<Worker>>();
+const workers = new Map<DocumentLanguage, Promise<Worker>>();
 
-const startWorker = async (language: OcrLanguage) => {
+const startWorker = async (language: DocumentLanguage) => {
   const tesseract = await import("tesseract.js");
 
   return tesseract.createWorker(traineddataFor(language));
 };
 
-const evictOnFailure = async (language: OcrLanguage, started: Promise<Worker>) => {
+const evictOnFailure = async (language: DocumentLanguage, started: Promise<Worker>) => {
   try {
     await started;
   } catch {
@@ -29,7 +28,7 @@ const evictOnFailure = async (language: OcrLanguage, started: Promise<Worker>) =
   }
 };
 
-const workerFor = (language: OcrLanguage) => {
+const workerFor = (language: DocumentLanguage) => {
   const existing = workers.get(language);
 
   if (existing !== undefined) {
@@ -78,7 +77,7 @@ const pngOf = async (page: OffscreenCanvas) => {
 
 const recognizeWords = async (
   page: OffscreenCanvas,
-  language: OcrLanguage,
+  language: DocumentLanguage,
 ): Promise<Recognition> => {
   const [worker, image] = await Promise.all([workerFor(language), pngOf(page)]);
   const { data } = await worker.recognize(image, {}, { blocks: true, text: true });

@@ -14,6 +14,8 @@ import { jobOf } from "./test-utils";
 
 const textFile = (name: string) => new File(["hello"], name, { type: "text/plain" });
 
+const picked = (name: string) => ({ file: textFile(name), path: name });
+
 const doneResult = { blob: new Blob(["hello"]), redactionCount: 1, warnings: [] };
 
 const jobsOf = () => useJobStore.getState().jobs;
@@ -25,7 +27,7 @@ const withState = (state: JobState, id = "id") => jobOf(state, { id });
 const analysing: JobState = { phase: "analysing", progress: 0.2, stage: "stage.reading" };
 
 const reviewing: JobState = {
-  analysis: { detections: [], handle: undefined, warnings: [] },
+  analysis: { detections: [], units: [], warnings: [] },
   covered: [],
   phase: "reviewing",
   progress: 0.5,
@@ -37,7 +39,7 @@ describe("useJobStore review state", () => {
   });
 
   it("starts a job queued, with no analysis to speak of", () => {
-    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    const [job] = useJobStore.getState().addFiles([picked("a.txt")]);
 
     assert.isDefined(job);
 
@@ -46,11 +48,11 @@ describe("useJobStore review state", () => {
   });
 
   it("holds an analysis and the covered ids while a job waits for review", () => {
-    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    const [job] = useJobStore.getState().addFiles([picked("a.txt")]);
 
     assert.isDefined(job);
 
-    const analysis = { detections: [], handle: undefined, warnings: [] };
+    const analysis = { detections: [], units: [], warnings: [] };
 
     useJobStore
       .getState()
@@ -63,7 +65,7 @@ describe("useJobStore review state", () => {
   });
 
   it("changes the covered ids only while the job is under review", () => {
-    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    const [job] = useJobStore.getState().addFiles([picked("a.txt")]);
 
     assert.isDefined(job);
 
@@ -71,7 +73,7 @@ describe("useJobStore review state", () => {
     expect(found(job.id)?.phase).toBe("queued");
 
     useJobStore.getState().setState(job.id, {
-      analysis: { detections: [], handle: undefined, warnings: [] },
+      analysis: { detections: [], units: [], warnings: [] },
       covered: [],
       phase: "reviewing",
       progress: 0.5,
@@ -84,12 +86,12 @@ describe("useJobStore review state", () => {
   });
 
   it("forgets the analysis and the decisions when a job moves on", () => {
-    const [job] = useJobStore.getState().addFiles([new File(["x"], "a.txt")]);
+    const [job] = useJobStore.getState().addFiles([picked("a.txt")]);
 
     assert.isDefined(job);
 
     useJobStore.getState().setState(job.id, {
-      analysis: { detections: [], handle: undefined, warnings: [] },
+      analysis: { detections: [], units: [], warnings: [] },
       covered: ["a"],
       phase: "reviewing",
       progress: 0.5,
@@ -115,14 +117,14 @@ describe("useJobStore", () => {
   });
 
   it("queues one job per added file", () => {
-    useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt"), picked("b.txt")]);
 
     expect(jobsOf().map((job) => job.file.name)).toEqual(["a.txt", "b.txt"]);
     expect(jobsOf().every((job) => job.phase === "queued" && progressOf(job) === 0)).toBe(true);
   });
 
   it("names a loose file by its own name", () => {
-    useJobStore.getState().addFiles([textFile("a.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt")]);
 
     expect(jobsOf()[0]?.path).toBe("a.txt");
   });
@@ -136,20 +138,20 @@ describe("useJobStore", () => {
   });
 
   it("gives every job its own id", () => {
-    const created = useJobStore.getState().addFiles([textFile("a.txt"), textFile("a.txt")]);
+    const created = useJobStore.getState().addFiles([picked("a.txt"), picked("a.txt")]);
 
     expect(new Set(created.map((job) => job.id)).size).toBe(2);
   });
 
   it("keeps earlier jobs when more files arrive", () => {
-    useJobStore.getState().addFiles([textFile("a.txt")]);
-    useJobStore.getState().addFiles([textFile("b.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt")]);
+    useJobStore.getState().addFiles([picked("b.txt")]);
 
     expect(jobsOf().length).toBe(2);
   });
 
   it("moves only the job it was given", () => {
-    const [first, second] = useJobStore.getState().addFiles([textFile("a.txt"), textFile("b.txt")]);
+    const [first, second] = useJobStore.getState().addFiles([picked("a.txt"), picked("b.txt")]);
 
     assert.isDefined(first);
     assert.isDefined(second);
@@ -163,7 +165,7 @@ describe("useJobStore", () => {
   });
 
   it("ignores a transition for an id it does not know", () => {
-    useJobStore.getState().addFiles([textFile("a.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt")]);
 
     useJobStore.getState().setState("missing", { phase: "done", result: doneResult });
 
@@ -171,7 +173,7 @@ describe("useJobStore", () => {
   });
 
   it("clears everything on reset", () => {
-    useJobStore.getState().addFiles([textFile("a.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt")]);
 
     useJobStore.getState().reset();
 
@@ -181,7 +183,7 @@ describe("useJobStore", () => {
   it("removes several jobs at once and leaves the rest", () => {
     const [first, second, third] = useJobStore
       .getState()
-      .addFiles([textFile("a.txt"), textFile("b.txt"), textFile("c.txt")]);
+      .addFiles([picked("a.txt"), picked("b.txt"), picked("c.txt")]);
 
     assert.isDefined(first);
     assert.isDefined(second);
@@ -193,7 +195,7 @@ describe("useJobStore", () => {
   });
 
   it("ignores ids it does not know when removing in bulk", () => {
-    useJobStore.getState().addFiles([textFile("a.txt")]);
+    useJobStore.getState().addFiles([picked("a.txt")]);
 
     useJobStore.getState().removeJobs(["missing"]);
 

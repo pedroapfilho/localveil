@@ -18,8 +18,7 @@ const setup = (jobs: Array<Job>) => {
   const onApply = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
   const onClear = vi.fn<() => void>();
   const onCoveredChange = vi.fn<(id: string, covered: ReadonlyArray<string>) => void>();
-  const onRemove = vi.fn<(id: string) => void>();
-  const onRemoveMany = vi.fn<(ids: ReadonlyArray<string>) => void>();
+  const onRemove = vi.fn<(ids: ReadonlyArray<string>) => void>();
 
   const view = renderWithI18n(
     <JobList
@@ -29,7 +28,6 @@ const setup = (jobs: Array<Job>) => {
       onClear={onClear}
       onCoveredChange={onCoveredChange}
       onRemove={onRemove}
-      onRemoveMany={onRemoveMany}
     />,
   );
 
@@ -42,12 +40,11 @@ const setup = (jobs: Array<Job>) => {
         onClear={onClear}
         onCoveredChange={onCoveredChange}
         onRemove={onRemove}
-        onRemoveMany={onRemoveMany}
       />,
     );
   };
 
-  return { onClear, onRemove, onRemoveMany, rerenderWith };
+  return { onClear, onRemove, rerenderWith };
 };
 
 describe("JobList", () => {
@@ -118,7 +115,7 @@ describe("JobList", () => {
     assert.isDefined(second);
     fireEvent.click(second);
 
-    expect(onRemove).toHaveBeenCalledWith("job-2");
+    expect(onRemove).toHaveBeenCalledWith(["job-2"]);
   });
 });
 
@@ -144,16 +141,16 @@ describe("selecting files", () => {
   });
 
   it("hands the whole selection to the bulk remove", () => {
-    const { onRemoveMany } = setup([job(), other]);
+    const { onRemove } = setup([job(), other]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
 
-    expect(onRemoveMany).toHaveBeenCalledWith(["job-1", "job-2"]);
+    expect(onRemove).toHaveBeenCalledWith(["job-1", "job-2"]);
   });
 
   it("forgets a picked row that has left the list", () => {
-    const { onRemoveMany, rerenderWith } = setup([job(), other]);
+    const { onRemove, rerenderWith } = setup([job(), other]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     rerenderWith([job()]);
@@ -162,15 +159,15 @@ describe("selecting files", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
 
-    expect(onRemoveMany).toHaveBeenCalledWith(["job-1"]);
+    expect(onRemove).toHaveBeenCalledWith(["job-1"]);
   });
 
   it("removes a whole selection of scans at once", () => {
-    const { onRemoveMany } = setup([pdf("job-pdf"), pdf("job-pdf-2")]);
+    const { onRemove } = setup([pdf("job-pdf"), pdf("job-pdf-2")]);
 
     fireEvent.click(screen.getByLabelText("Select all files"));
     fireEvent.click(screen.getByRole("button", { name: "Remove selected" }));
 
-    expect(onRemoveMany).toHaveBeenCalledWith(["job-pdf", "job-pdf-2"]);
+    expect(onRemove).toHaveBeenCalledWith(["job-pdf", "job-pdf-2"]);
   });
 });

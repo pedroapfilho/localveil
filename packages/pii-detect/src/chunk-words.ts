@@ -36,5 +36,3 @@ const chunkWords = (words: Array<SourceWord>, size: number, overlap: number): Ar
 };
 
 export { chunkWords };
-
-export type { WordChunk };
