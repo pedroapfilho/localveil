@@ -1,6 +1,7 @@
 ---
 title: 'CLI build inherits nonexistent Turbo output files'
 severity: 'minor'
+issue: 'pedroapfilho/localveil#92'
 ---
 
 ## Expected Behavior
