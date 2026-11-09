@@ -19,6 +19,14 @@ type EvalDocument = {
   text: string;
 };
 
+type CorpusFields = {
+  format?: unknown;
+  id?: unknown;
+  language?: unknown;
+  marked?: unknown;
+  source?: unknown;
+};
+
 const CORPUS_DIR = path.join(import.meta.dirname, "..", "corpus");
 
 const parseMarked = (marked: string, id: string) => {
@@ -47,18 +55,18 @@ const parseMarked = (marked: string, id: string) => {
   return { spans, text: text + marked.slice(read) };
 };
 
-const toDocument = (json: string, file: string): EvalDocument => {
+const readFields = (json: string, file: string): CorpusFields => {
   const raw: unknown = JSON.parse(json);
 
   if (typeof raw !== "object" || raw === null) {
     throw new TypeError(`${file} does not hold an object`);
   }
 
-  const id: unknown = "id" in raw ? raw.id : undefined;
-  const language: unknown = "language" in raw ? raw.language : undefined;
-  const marked: unknown = "marked" in raw ? raw.marked : undefined;
-  const source: unknown = "source" in raw ? raw.source : undefined;
-  const format: unknown = "format" in raw ? raw.format : "text";
+  return { format: "text", ...raw };
+};
+
+const toDocument = (json: string, file: string): EvalDocument => {
+  const { format, id, language, marked, source } = readFields(json, file);
 
   if (typeof id !== "string" || id.length === 0) {
     throw new TypeError(`${file} has no id`);
