@@ -1,6 +1,7 @@
 ---
 title: 'Shared packages cannot use ES2025 APIs because the web app type-checks them under the ES2023 lib'
 severity: 'minor'
+issue: 'pedroapfilho/localveil#102'
 ---
 
 ## Expected Behavior
