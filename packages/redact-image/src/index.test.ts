@@ -73,7 +73,7 @@ const nothing: Detect = () => Promise.resolve([]);
 
 const onProgress: FileProgress = () => undefined;
 
-const file = (type = "image/jpeg") => new File(["image"], "identity.jpg", { type });
+const file = (type = "image/jpeg", name = "identity.jpg") => new File(["image"], name, { type });
 
 const redact = (read: ReadText, detect = nothing, input = file()) =>
   redactFile({ detect, file: input, onProgress, redactor: createImageRedactor(read) });
@@ -179,6 +179,16 @@ describe("imageRedactor", () => {
 
     expect(webp.blob.type).toBe("image/webp");
     expect(gif.blob.type).toBe("image/png");
+  });
+
+  it("names its output after the type it was written in", async () => {
+    const read = reads(placed("Alice"));
+
+    const webp = await redact(read, nothing, file("image/webp", "identity.webp"));
+    const gif = await redact(read, nothing, file("image/gif", "scan.gif"));
+
+    expect(webp.name).toBe("identity.webp");
+    expect(gif.name).toBe("scan.png");
   });
 
   it("closes the bitmap when painting throws", async () => {

@@ -22,7 +22,12 @@ const UNSURE: Detection = { ...CERTAIN, confidence: 0.2, id: "b", preview: "Mayb
 
 const ANALYSIS: Analysis = { detections: [CERTAIN, UNSURE], units: [], warnings: [] };
 
-const REDACTED: RedactionResult = { blob: new Blob(["x"]), redactionCount: 1, warnings: [] };
+const REDACTED: RedactionResult = {
+  blob: new Blob(["x"]),
+  name: "report.txt",
+  redactionCount: 1,
+  warnings: [],
+};
 
 const LOST = "The detection model stopped answering";
 

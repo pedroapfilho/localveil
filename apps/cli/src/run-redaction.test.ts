@@ -1,11 +1,11 @@
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect and workerpool wrap the model runtime and worker threads; the module seam is the only practical hermetic substitute */
 import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import type { FileStageKey, ProgressEvent } from "@repo/redact-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runRedaction } from "./run-redaction";
 
@@ -57,7 +57,9 @@ beforeEach(() => {
   createDetector.mockReset();
   redactFile.mockReset();
   createDetector.mockResolvedValue(() => Promise.resolve([]));
-  redactFile.mockResolvedValue({ bytes: REDACTED, redactionCount: 2, warnings: [] });
+  redactFile.mockImplementation((path: string) =>
+    Promise.resolve({ bytes: REDACTED, name: basename(path), redactionCount: 2, warnings: [] }),
+  );
 });
 
 describe("runRedaction", () => {
@@ -109,6 +111,7 @@ describe("runRedaction", () => {
     await writeFile(twin, "Grace Hopper");
     redactFile.mockResolvedValue({
       bytes: REDACTED,
+      name: "one.txt",
       redactionCount: 1,
       warnings: ["warning.notFullyRedacted"],
     });
@@ -118,6 +121,30 @@ describe("runRedaction", () => {
     );
 
     expect(result.warnings.map((entry) => entry.name)).toEqual(["one.txt", "one (2).txt"]);
+  });
+
+  it("names an archive entry the way the redactor named its output", async () => {
+    const { directory } = await makeWorkspace();
+    const scan = join(directory, "scan.gif");
+
+    await writeFile(scan, "GIF89a");
+    redactFile.mockResolvedValue({
+      bytes: REDACTED,
+      name: "scan.png",
+      redactionCount: 1,
+      warnings: ["warning.lowConfidence"],
+    });
+
+    const result = await runRedaction(runOptions(directory, [scan], new AbortController().signal));
+
+    assert.isNotNull(result.zipPath);
+
+    const archive = await readFile(result.zipPath);
+    const listing = archive.toString("latin1");
+
+    expect(listing).toContain("scan.png");
+    expect(listing).not.toContain("scan.gif");
+    expect(result.warnings).toStrictEqual([{ keys: ["warning.lowConfidence"], name: "scan.png" }]);
   });
 
   it("adds up the redactions across every file it handled", async () => {
@@ -194,10 +221,15 @@ describe("runRedaction", () => {
     const options = runOptions(directory, [first, second], new AbortController().signal);
 
     redactFile.mockImplementation(
-      (_path: string, onProgress: (fraction: number, stage: string) => void) => {
+      (path: string, onProgress: (fraction: number, stage: string) => void) => {
         onProgress(0.5, "stage.detecting");
 
-        return Promise.resolve({ bytes: REDACTED, redactionCount: 1, warnings: [] });
+        return Promise.resolve({
+          bytes: REDACTED,
+          name: basename(path),
+          redactionCount: 1,
+          warnings: [],
+        });
       },
     );
 
@@ -219,7 +251,12 @@ describe("runRedaction", () => {
         return Promise.reject(new Error("The page tree could not be read"));
       }
 
-      return Promise.resolve({ bytes: REDACTED, redactionCount: 3, warnings: [] });
+      return Promise.resolve({
+        bytes: REDACTED,
+        name: basename(path),
+        redactionCount: 3,
+        warnings: [],
+      });
     });
 
     const result = await runRedaction(options);
@@ -239,6 +276,7 @@ describe("runRedaction", () => {
 
     redactFile.mockResolvedValue({
       bytes: REDACTED,
+      name: "one.txt",
       redactionCount: 0,
       warnings: ["warning.lowConfidence"],
     });
@@ -253,10 +291,15 @@ describe("runRedaction", () => {
     const controller = new AbortController();
     const options = runOptions(directory, [first, second], controller.signal);
 
-    redactFile.mockImplementation(() => {
+    redactFile.mockImplementation((path: string) => {
       controller.abort();
 
-      return Promise.resolve({ bytes: REDACTED, redactionCount: 2, warnings: [] });
+      return Promise.resolve({
+        bytes: REDACTED,
+        name: basename(path),
+        redactionCount: 2,
+        warnings: [],
+      });
     });
 
     const result = await runRedaction(options);

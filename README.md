@@ -243,7 +243,7 @@ The output embeds each painted page as an image and redraws the surviving words 
 <details>
 <summary><b>Images</b>: recognise, paint, re-encode</summary>
 
-Recognition gives word boxes, those feed the same span-to-rectangle mapping the PDF path uses, and the rectangles get filled on a canvas. The result goes back out as the input's own type, or PNG for anything the encoder will not take.
+Recognition gives word boxes, those feed the same span-to-rectangle mapping the PDF path uses, and the rectangles get filled on a canvas. The result goes back out as the input's own type, or PNG for anything the encoder will not take, and a file written as PNG is named `.png` in the archive.
 
 </details>
 

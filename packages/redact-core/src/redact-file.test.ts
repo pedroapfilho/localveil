@@ -14,11 +14,28 @@ const redactor: Redactor = {
     onProgress(0, "stage.redacting");
     onProgress(0.8, "stage.redacting");
 
-    return Promise.resolve({ blob: new Blob(["x"]), visible: "", warnings: [] });
+    return Promise.resolve({ blob: new Blob(["x"]), name: "a.txt", visible: "", warnings: [] });
   },
 };
 
 describe("redactFile", () => {
+  it("hands back the output under the name the redactor gave it", async () => {
+    const renaming: Redactor = {
+      ...redactor,
+      apply: () =>
+        Promise.resolve({ blob: new Blob(["x"]), name: "a.png", visible: "", warnings: [] }),
+    };
+
+    const result = await redactFile({
+      detect: () => Promise.resolve([]),
+      file: new File(["x"], "a.gif"),
+      onProgress: () => undefined,
+      redactor: renaming,
+    });
+
+    expect(result.name).toBe("a.png");
+  });
+
   it("runs both phases along one bar that never runs back, and finishes once", async () => {
     const seen: Array<[number, FileStageKey]> = [];
 

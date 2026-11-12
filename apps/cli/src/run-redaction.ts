@@ -163,14 +163,12 @@ const runRedaction = async ({
       throw new RangeError(`Redaction outcome ${String(index)} has no file`);
     }
 
-    const name = basename(file);
-
     return outcome.status === "rejected"
-      ? { kind: "failed", name, reason: describeError(outcome.reason) }
+      ? { kind: "failed", name: basename(file), reason: describeError(outcome.reason) }
       : {
           blob: new Blob([toArrayBuffer(outcome.value.bytes)]),
           kind: "done",
-          name,
+          name: outcome.value.name,
           redactionCount: outcome.value.redactionCount,
           warnings: outcome.value.warnings,
         };

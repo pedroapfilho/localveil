@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe("downloadZip", () => {
-  it("archives each finished file under its folder path and hands the archive over", async () => {
+  it("archives each finished file under its folder path and the name its redactor gave it", async () => {
     const archives: Array<Blob | MediaSource> = [];
 
     vi.spyOn(URL, "createObjectURL").mockImplementation((archive) => {
@@ -24,8 +24,16 @@ describe("downloadZip", () => {
       .mockImplementation(() => undefined);
 
     const finished = jobOf(
-      { phase: "done", result: { blob: new Blob(["redacted"]), redactionCount: 1, warnings: [] } },
-      { path: "cases/august/report.txt" },
+      {
+        phase: "done",
+        result: {
+          blob: new Blob(["redacted"]),
+          name: "scan.png",
+          redactionCount: 1,
+          warnings: [],
+        },
+      },
+      { path: "cases/august/scan.gif" },
     );
 
     await downloadZip(completedJobs([finished]));
@@ -36,9 +44,10 @@ describe("downloadZip", () => {
     assert.instanceOf(archive, Blob);
     assert.instanceOf(link, HTMLAnchorElement);
 
-    expect(new TextDecoder().decode(await archive.arrayBuffer())).toContain(
-      "cases/august/report.txt",
-    );
+    const listing = new TextDecoder().decode(await archive.arrayBuffer());
+
+    expect(listing).toContain("cases/august/scan.png");
+    expect(listing).not.toContain("scan.gif");
     expect(link.download).toBe("localveil.zip");
   });
 });
