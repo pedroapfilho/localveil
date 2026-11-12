@@ -141,7 +141,7 @@ const FileDropzone = ({
           <p className="text-muted-foreground text-base text-pretty sm:text-sm">{hint}</p>
 
           {formats === undefined ? null : (
-            <p className="text-muted-foreground mt-4 max-w-(--container-measure-summary) text-sm text-pretty">
+            <p className="text-muted-foreground max-w-measure-summary mt-4 text-sm text-pretty">
               {formats}
             </p>
           )}

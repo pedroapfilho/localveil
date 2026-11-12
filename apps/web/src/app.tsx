@@ -93,7 +93,7 @@ const App = ({ createPool }: AppProps) => {
               {t("app.name")}
             </h1>
 
-            <p className="text-muted-foreground mx-auto max-w-(--container-measure-body) text-base text-pretty sm:text-lg">
+            <p className="text-muted-foreground max-w-measure-body mx-auto text-base text-pretty sm:text-lg">
               {t("app.tagline")}
             </p>
           </div>
