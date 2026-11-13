@@ -1,4 +1,4 @@
-import { useTranslations } from "@repo/i18n";
+import { pluralOf, useTranslations } from "@repo/i18n";
 import { Button } from "@repo/ui/components/button";
 import { DownloadIcon } from "lucide-react";
 
@@ -11,7 +11,7 @@ type DownloadPanelProps = {
 };
 
 const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
-  const { t } = useTranslations();
+  const { locale, t } = useTranslations();
 
   const ready = hasCompletedJobs(jobs);
   const excluded = failedJobs(jobs).length;
@@ -30,7 +30,7 @@ const DownloadPanel = ({ jobs, onDownload }: DownloadPanelProps) => {
 
       {excluded === 0 ? null : (
         <p className="text-muted-foreground text-base text-pretty tabular-nums sm:text-sm">
-          {t("download.excluded", { count: excluded })}
+          {t(`download.excluded.${pluralOf(locale, excluded)}`, { count: excluded })}
         </p>
       )}
     </div>

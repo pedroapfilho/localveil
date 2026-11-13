@@ -51,7 +51,13 @@ describe("DownloadPanel", () => {
   it("says how many files were left out", () => {
     setup([done, failed]);
 
-    expect(screen.getByText("1 files were left out because they failed.")).toBeInTheDocument();
+    expect(screen.getByText("1 file was left out because it failed.")).toBeInTheDocument();
+  });
+
+  it("counts more than one in the plural", () => {
+    setup([done, failed, jobOf({ error: "boom", phase: "error" }, { id: "job-3" })]);
+
+    expect(screen.getByText("2 files were left out because they failed.")).toBeInTheDocument();
   });
 
   it("hands the download over when clicked", () => {
