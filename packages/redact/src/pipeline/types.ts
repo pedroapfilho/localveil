@@ -1,16 +1,8 @@
 import type { Detect, Span } from "@repo/redact-core";
 
-type DetectedText = { spans: Array<Span>; text: string };
+import type { FileStageKey } from "./stages";
 
-type FileStageKey =
-  | "stage.assembling"
-  | "stage.detecting"
-  | "stage.extracting"
-  | "stage.finished"
-  | "stage.reading"
-  | "stage.recognising"
-  | "stage.redacting"
-  | "stage.rendering";
+type DetectedText = { spans: Array<Span>; text: string };
 
 type WarningKey =
   | "warning.droppedCharacters"
@@ -20,6 +12,9 @@ type WarningKey =
   | "warning.scannedPages";
 
 type FileProgress = (fraction: number, stage: FileStageKey) => void;
+
+// What a redactor reports: the stage it is in and, where it loops, how far through it is.
+type StageProgress = (stage: FileStageKey, done?: number) => void;
 
 type RedactionResult = {
   blob: Blob;
@@ -49,7 +44,7 @@ type ApplyRequest = {
   analysis: Analysis;
   decisions: Decisions;
   file: File;
-  onProgress: FileProgress;
+  onProgress: StageProgress;
 };
 
 /* What painting leaves: the file, the name that matches the format it was written in, the text
@@ -57,7 +52,7 @@ type ApplyRequest = {
 type Painted = { blob: Blob; name: string; visible: string; warnings: Array<WarningKey> };
 
 type Redactor = {
-  analyse: (file: File, detect: Detect, onProgress: FileProgress) => Promise<Analysis>;
+  analyse: (file: File, detect: Detect, onProgress: StageProgress) => Promise<Analysis>;
   apply: (request: ApplyRequest) => Promise<Painted>;
 };
 
@@ -78,13 +73,13 @@ export type {
   DetectedText,
   Detection,
   FileProgress,
-  FileStageKey,
   Mark,
   Painted,
   PositionedWord,
   Rect,
   RedactionResult,
   Redactor,
+  StageProgress,
   WarningKey,
   WordInput,
 };

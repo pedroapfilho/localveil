@@ -7,7 +7,8 @@ import type { ReadText, Recognise, TextReading } from "../ocr/read-text";
 import { createTextReader } from "../ocr/read-text";
 import { surfaceOf } from "../page/page-surface";
 import { applyDecisions, redactFile } from "../pipeline/redact-file";
-import type { FileProgress, FileStageKey } from "../pipeline/types";
+import type { FileStageKey } from "../pipeline/stages";
+import type { StageProgress } from "../pipeline/types";
 
 type FakePage = {
   layer: string;
@@ -204,7 +205,7 @@ const run = (detect: Detect = naming(), read: ReadText = fixedWords) => {
   }).then((result) => ({ ...result, stages }));
 };
 
-const analyse = (detect: Detect, onProgress: FileProgress = () => undefined) =>
+const analyse = (detect: Detect, onProgress: StageProgress = () => undefined) =>
   createPdfRedactor(fixedWords).analyse(file(), detect, onProgress);
 
 const page = (layer: string, scanned = layer.split(" ")): FakePage => ({ layer, scanned });
@@ -613,8 +614,8 @@ describe("the pdf.js resources it holds", () => {
   it("are still released when the job is cancelled mid-pass", async () => {
     state.pages = [page("Invoice total due"), page("Signed by Ana Lima")];
 
-    const stopped = analyse(naming(), (fraction, stage) => {
-      if (stage === "stage.extracting" && fraction > 0) {
+    const stopped = analyse(naming(), (stage, done = 0) => {
+      if (stage === "stage.extracting" && done > 0) {
         throw new Error("cancelled");
       }
     });
