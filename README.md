@@ -349,4 +349,5 @@ Two suites need the real model weights or Tesseract's language data, so they run
 - **The model misses things.** It is a statistical tagger rather than a rule set, so it sometimes walks past a name it should have caught. Read the output before you send it anywhere.
 - **Recognition sets the ceiling on scanned input.** A blurry photo or a PDF with broken fonts yields text nothing can redact, and the app says so rather than guessing.
 - **A redacted PDF is images.** The text layer is rebuilt from recognised words, so it is searchable but not identical to the original, and the file is larger.
+- **Two choices are still open.** Where the OCR engine is downloaded from, and which browsers the app supports, are written up in [open decisions](docs/open-decisions.md).
 - **The first run is a large download.** Once, resumable, and fetched several ranges at a time. For a given model the browser and the terminal run the same weights, so they redact a document the same way. The smaller model trades recall for size, and the multilingual model's smaller exports are unusable, both for the reasons under [Models](#models).
