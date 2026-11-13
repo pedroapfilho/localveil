@@ -316,6 +316,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, file, onProgre
 
     return {
       blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
+      name: file.name,
       visible: surfaceOf(survived).text,
       warnings: [...warnings],
     };

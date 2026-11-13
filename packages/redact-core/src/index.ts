@@ -53,6 +53,13 @@ export { isUnsupportedFile, UnsupportedFileError } from "./unsupported-file-erro
 
 export { warnRecoverable } from "./warn-recoverable";
 
-export { ARCHIVE_NAME, archiveNames, buildZip, toArrayBuffer, uniqueFilename } from "./zip";
+export {
+  ARCHIVE_NAME,
+  archiveNames,
+  buildZip,
+  splitExtension,
+  toArrayBuffer,
+  uniqueFilename,
+} from "./zip";
 
 export type { ZipEntry } from "./zip";

@@ -203,7 +203,12 @@ const taskAt = (index: number) => {
 
 const job = (id: string) => ({ file: new File(["x"], `${id}.txt`), id });
 
-const redacted: RedactionResult = { blob: new Blob(["x"]), redactionCount: 0, warnings: [] };
+const redacted: RedactionResult = {
+  blob: new Blob(["x"]),
+  name: "report.txt",
+  redactionCount: 0,
+  warnings: [],
+};
 
 export {
   job,

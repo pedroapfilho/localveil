@@ -62,6 +62,7 @@ const createTextRedactor = (format: TextFormat): Redactor => {
 
       return Promise.resolve({
         blob: new Blob([masked], { type: file.type }),
+        name: file.name,
         visible: body(masked),
         warnings: [],
       });

@@ -2,8 +2,11 @@ import { ARCHIVE_NAME, buildZip } from "@repo/redact-core";
 
 import type { CompletedJob } from "./store";
 
+const entryName = ({ path, result }: CompletedJob) =>
+  `${path.slice(0, path.lastIndexOf("/") + 1)}${result.name}`;
+
 const downloadZip = async (jobs: Array<CompletedJob>) => {
-  const blob = await buildZip(jobs.map((job) => ({ blob: job.result.blob, name: job.path })));
+  const blob = await buildZip(jobs.map((job) => ({ blob: job.result.blob, name: entryName(job) })));
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 

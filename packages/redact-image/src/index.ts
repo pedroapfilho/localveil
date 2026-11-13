@@ -6,6 +6,7 @@ import {
   coverUnit,
   paint,
   scanOf,
+  splitExtension,
   surfaceOf,
   surfaceUnits,
 } from "@repo/redact-core";
@@ -64,11 +65,15 @@ const createImageRedactor = (read: ReadText): Redactor => ({
 
     paint(canvas, rects);
 
-    const blob = await canvas.convertToBlob({
-      type: ENCODABLE.has(file.type) ? file.type : "image/png",
-    });
+    const kept = ENCODABLE.has(file.type);
+    const blob = await canvas.convertToBlob({ type: kept ? file.type : "image/png" });
 
-    return { blob, visible: surfaceOf(visible).text, warnings: [] };
+    return {
+      blob,
+      name: kept ? file.name : `${splitExtension(file.name).base}.png`,
+      visible: surfaceOf(visible).text,
+      warnings: [],
+    };
   },
 });
 
