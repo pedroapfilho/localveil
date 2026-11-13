@@ -90,7 +90,7 @@ TOTAL            100.0   59.3   74.4     83      0     57
 
 ## Detection plus the structural layer, overlap matching
 
-The CSV and JSON field-name layer from `@repo/redact-text`, scored on top of detection. It
+The CSV and JSON field-name layer from `@repo/redact/text`, scored on top of detection. It
 only applies to documents that declare a `format`, so most rows are unchanged.
 
 ```
@@ -110,7 +110,7 @@ TOTAL             74.9  100.0   85.6    140     47      0
 ## Whole analysis, overlap matching
 
 Everything above plus the repeats layer and the defined-terms filter, composed the way
-`redact-text` composes them. This is what reaches the review list.
+`@repo/redact/text` composes them. This is what reaches the review list.
 
 Two documents guard layers the detector alone does not reach. Removing the defined-terms
 filter takes `en-10-defined-terms` from 8 true positives and no false ones to 49 false
@@ -198,7 +198,7 @@ TOTAL             99.2   87.1   92.8    122      1     18
 Its scores sit lower than the default's, which is why the floor was swept before keeping the shared
 one. Whole-analysis F1 by floor: 77.8 at 0.3, 87.9 at 0.4, 93.6 at 0.5, 92.8 at 0.65. The half
 point of F1 a model-specific floor would buy does not pay for a second calibration path through
-`redact-core`, so it runs at 0.65 like the default.
+`@repo/redact`, so it runs at 0.65 like the default.
 
 ### `gliner-pii-edge`
 

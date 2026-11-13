@@ -3,8 +3,8 @@ import path from "node:path";
 
 import type { DocumentLanguage, PiiLabel } from "@repo/redact-core";
 import { isDocumentLanguage, isPiiLabel } from "@repo/redact-core";
-import type { TextFormat } from "@repo/redact-text";
-import { isTextFormat } from "@repo/redact-text";
+import type { TextFormat } from "@repo/redact/text";
+import { isTextFormat } from "@repo/redact/text";
 
 const MARK = /\[\[(?<label>[a-z_]+)\|(?<value>[^\]]*)\]\]/gv;
 

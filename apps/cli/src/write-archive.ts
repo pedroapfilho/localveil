@@ -1,7 +1,7 @@
 import { link, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { ARCHIVE_NAME, uniqueFilename } from "@repo/redact-core";
+import { ARCHIVE_NAME, uniqueFilename } from "@repo/redact";
 
 const writeArchive = async (
   blob: Blob,

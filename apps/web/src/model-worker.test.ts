@@ -15,7 +15,7 @@ vi.mock("@repo/pii-detect", () => ({
   createDetector: (options: LoadOptions) => createDetector(options),
 }));
 
-vi.mock("@repo/redact-core", () => ({
+vi.mock("@repo/redact", () => ({
   serveDetect: (port: unknown, served: unknown) => {
     serveDetect(port, served);
   },

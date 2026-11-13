@@ -1,4 +1,4 @@
-import { ARCHIVE_NAME, buildZip } from "@repo/redact-core";
+import { ARCHIVE_NAME, buildZip } from "@repo/redact";
 
 import type { CompletedJob } from "./store";
 

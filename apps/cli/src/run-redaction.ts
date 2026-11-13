@@ -6,15 +6,10 @@ import { MessageChannel } from "node:worker_threads";
 
 import { createDetector } from "@repo/pii-detect";
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
-import {
-  archiveNames,
-  buildZip,
-  describeError,
-  isProgressEvent,
-  serveDetect,
-  toArrayBuffer,
-} from "@repo/redact-core";
-import type { Detect, FileStageKey, WarningKey, ZipEntry } from "@repo/redact-core";
+import { archiveNames, buildZip, isProgressEvent, serveDetect, toArrayBuffer } from "@repo/redact";
+import type { FileStageKey, WarningKey, ZipEntry } from "@repo/redact";
+import { describeError } from "@repo/redact-core";
+import type { Detect } from "@repo/redact-core";
 import workerpool from "workerpool";
 
 import type { FileWorker } from "./file-worker";

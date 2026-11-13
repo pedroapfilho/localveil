@@ -8,7 +8,7 @@
     "packages/pii-detect/src/ort-browser.ts",
     "apps/cli/src/file-worker.ts",
     "apps/web/src/wasm-check.ts",
-    "packages/redact-pdf/src/standard-fonts.ts"
+    "packages/redact/src/pdf/standard-fonts.ts"
   ],
   "ignoreDependencies": ["@shadcn/lint", "@vitest/coverage-v8", "jsdom", "react-dom"],
   "ignoreUnresolvedImports": ["postcss-load-config"],

@@ -1,5 +1,5 @@
 import { useTranslations } from "@repo/i18n";
-import { BROWSER_ACCEPT } from "@repo/redact-formats";
+import { BROWSER_ACCEPT } from "@repo/redact";
 import { FileDropzone } from "@repo/ui/compositions/file-dropzone";
 import type { SelectedFile } from "@repo/ui/lib/dropped-files";
 import { MOST_FILES } from "@repo/ui/lib/dropped-files";

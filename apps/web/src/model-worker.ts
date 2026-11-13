@@ -1,8 +1,8 @@
 import { createDetector } from "@repo/pii-detect";
 import type { ModelId } from "@repo/pii-detect/models";
 import { isModelId } from "@repo/pii-detect/models";
+import { serveDetect } from "@repo/redact";
 import type { Detect } from "@repo/redact-core";
-import { serveDetect } from "@repo/redact-core";
 
 import type { ModelRequest, ModelResponse } from "./worker-protocol";
 

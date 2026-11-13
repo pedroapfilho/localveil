@@ -1,0 +1,122 @@
+import { describeError } from "@repo/redact-core";
+import type { Detect, Span } from "@repo/redact-core";
+
+type EventPort = {
+  addEventListener: (type: "close" | "message", handle: (event: { data: unknown }) => void) => void;
+  close: () => void;
+  postMessage: (message: DetectRequest | DetectResponse) => void;
+  start: () => void;
+};
+
+type DetectRequest = { requestId: string; text: string; type: "detect" };
+
+type DetectResponse =
+  | { message: string; requestId: string; type: "detect-error" }
+  | { requestId: string; spans: Array<Span>; type: "spans" };
+
+const isDetectRequest = (value: unknown): value is DetectRequest =>
+  typeof value === "object" && value !== null && "type" in value && value.type === "detect";
+
+const isDetectResponse = (value: unknown): value is DetectResponse =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  (value.type === "spans" || value.type === "detect-error");
+
+const serveDetect = (port: EventPort, detect: Detect): void => {
+  const answer = async (request: DetectRequest) => {
+    const { requestId, text } = request;
+
+    try {
+      const spans = await detect(text);
+
+      port.postMessage({ requestId, spans, type: "spans" } satisfies DetectResponse);
+    } catch (error) {
+      port.postMessage({
+        message: describeError(error),
+        requestId,
+        type: "detect-error",
+      } satisfies DetectResponse);
+    }
+  };
+
+  port.addEventListener("message", (event) => {
+    const request = event.data;
+
+    if (!isDetectRequest(request)) {
+      return;
+    }
+
+    void answer(request);
+  });
+
+  port.addEventListener("close", () => {
+    port.close();
+  });
+
+  port.start();
+};
+
+const CLOSED_EARLY = "The detection worker closed before it answered";
+
+const createDetectClient = (port: EventPort): Detect => {
+  const pending = new Map<
+    string,
+    { reject: (error: Error) => void; resolve: (spans: Array<Span>) => void }
+  >();
+
+  port.addEventListener("message", (event) => {
+    const response = event.data;
+
+    if (!isDetectResponse(response)) {
+      return;
+    }
+
+    const waiting = pending.get(response.requestId);
+
+    if (waiting === undefined) {
+      return;
+    }
+
+    pending.delete(response.requestId);
+
+    if (response.type === "spans") {
+      waiting.resolve(response.spans);
+
+      return;
+    }
+
+    waiting.reject(new Error(response.message));
+  });
+
+  let closed = false;
+
+  port.addEventListener("close", () => {
+    closed = true;
+
+    for (const waiting of pending.values()) {
+      waiting.reject(new Error(CLOSED_EARLY));
+    }
+
+    pending.clear();
+  });
+
+  port.start();
+
+  return (text) => {
+    if (closed) {
+      return Promise.reject(new Error(CLOSED_EARLY));
+    }
+
+    return new Promise((resolve, reject) => {
+      const requestId = crypto.randomUUID();
+
+      pending.set(requestId, { reject, resolve });
+      port.postMessage({ requestId, text, type: "detect" } satisfies DetectRequest);
+    });
+  };
+};
+
+export { createDetectClient, serveDetect };
+
+export type { EventPort };

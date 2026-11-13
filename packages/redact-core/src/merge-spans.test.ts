@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeOverlappingRanges } from "./merge-spans";
+import { absorbNested, mergeOverlappingRanges } from "./merge-spans";
 import type { Span } from "./types";
 
 const span = (start: number, end: number, score = 0.9): Span => ({
@@ -8,6 +8,22 @@ const span = (start: number, end: number, score = 0.9): Span => ({
   label: "private_person",
   score,
   start,
+});
+
+describe("absorbNested", () => {
+  it("folds a span into the one of its label that encloses it, keeping the stronger score", () => {
+    expect(absorbNested([span(4, 9, 0.9), span(0, 12, 0.7)])).toEqual([span(0, 12, 0.9)]);
+  });
+
+  it("keeps a nested span that carries another label", () => {
+    const email: Span = { end: 9, label: "private_email", score: 0.8, start: 4 };
+
+    expect(absorbNested([span(0, 12), email])).toEqual([span(0, 12), email]);
+  });
+
+  it("keeps two spans of one label that only overlap", () => {
+    expect(absorbNested([span(0, 8), span(5, 12)])).toEqual([span(0, 8), span(5, 12)]);
+  });
 });
 
 describe("mergeOverlappingRanges", () => {

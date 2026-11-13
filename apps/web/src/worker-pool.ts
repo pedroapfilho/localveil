@@ -1,5 +1,6 @@
 import type { ModelId } from "@repo/pii-detect/models";
-import { isProgressEvent, warnRecoverable } from "@repo/redact-core";
+import { isProgressEvent } from "@repo/redact";
+import { warnRecoverable } from "@repo/redact-core";
 import workerpool from "workerpool";
 
 import type { ApplyRequest, CreatePool, JobRequest } from "./job-runner";
