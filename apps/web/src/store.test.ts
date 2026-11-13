@@ -16,7 +16,12 @@ const textFile = (name: string) => new File(["hello"], name, { type: "text/plain
 
 const picked = (name: string) => ({ file: textFile(name), path: name });
 
-const doneResult = { blob: new Blob(["hello"]), redactionCount: 1, warnings: [] };
+const doneResult = {
+  blob: new Blob(["hello"]),
+  name: "report.txt",
+  redactionCount: 1,
+  warnings: [],
+};
 
 const jobsOf = () => useJobStore.getState().jobs;
 

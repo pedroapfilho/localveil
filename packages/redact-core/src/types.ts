@@ -27,6 +27,7 @@ type FileProgress = (fraction: number, stage: FileStageKey) => void;
 
 type RedactionResult = {
   blob: Blob;
+  name: string;
   redactionCount: number;
   warnings: Array<WarningKey>;
 };
@@ -63,8 +64,9 @@ type ApplyRequest = {
   onProgress: FileProgress;
 };
 
-// What painting leaves: the file, the text still readable in it, and what painting had to give up.
-type Painted = { blob: Blob; visible: string; warnings: Array<WarningKey> };
+/* What painting leaves: the file, the name that matches the format it was written in, the text
+   still readable in it, and what painting had to give up. */
+type Painted = { blob: Blob; name: string; visible: string; warnings: Array<WarningKey> };
 
 type Redactor = {
   analyse: (file: File, detect: Detect, onProgress: FileProgress) => Promise<Analysis>;

@@ -91,6 +91,6 @@ const buildZip = async (files: Array<ZipEntry>): Promise<Blob> => {
   return new Blob([toArrayBuffer(bytes)], { type: "application/zip" });
 };
 
-export { ARCHIVE_NAME, archiveNames, buildZip, toArrayBuffer, uniqueFilename };
+export { ARCHIVE_NAME, archiveNames, buildZip, splitExtension, toArrayBuffer, uniqueFilename };
 
 export type { ZipEntry };

@@ -71,7 +71,12 @@ describe("JobRow", () => {
     setup(
       pdf({
         phase: "done",
-        result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: ["warning.lowConfidence"] },
+        result: {
+          blob: new Blob(["hi"]),
+          name: "report.txt",
+          redactionCount: 1,
+          warnings: ["warning.lowConfidence"],
+        },
       }),
     );
 
@@ -128,7 +133,12 @@ describe("JobRow", () => {
     setup(
       pdf({
         phase: "done",
-        result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: ["warning.scannedPages"] },
+        result: {
+          blob: new Blob(["hi"]),
+          name: "report.txt",
+          redactionCount: 1,
+          warnings: ["warning.scannedPages"],
+        },
       }),
     );
 
@@ -170,7 +180,10 @@ describe("JobRow", () => {
 
   it("offers no disclosure at all on a clean text file", () => {
     setup(
-      text({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] } }),
+      text({
+        phase: "done",
+        result: { blob: new Blob(["hi"]), name: "report.txt", redactionCount: 1, warnings: [] },
+      }),
     );
 
     expect(screen.queryByLabelText("Details for notes.txt")).toBeNull();

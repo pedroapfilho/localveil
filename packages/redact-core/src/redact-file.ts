@@ -39,13 +39,18 @@ const applyDecisions = async ({
 }: Decided): Promise<RedactionResult> => {
   const { analysis, decisions } = request;
   const onProgress = inPhase("applying", request.onProgress);
-  const { blob, visible, warnings } = await redactor.apply({ ...request, onProgress });
+  const { blob, name, visible, warnings } = await redactor.apply({ ...request, onProgress });
 
   const verified = await verifyOutput(visible, detect, [...analysis.warnings, ...warnings]);
 
   onProgress(1, "stage.finished");
 
-  return { blob, redactionCount: redactionCount(analysis.units, decisions), warnings: verified };
+  return {
+    blob,
+    name,
+    redactionCount: redactionCount(analysis.units, decisions),
+    warnings: verified,
+  };
 };
 
 const redactFile = async (whole: WholeFile): Promise<RedactionResult> => {

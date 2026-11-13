@@ -10,6 +10,7 @@ const FIXTURES = new URL("../../../fixtures/", import.meta.url).pathname;
 const stubResult = (): Promise<Painted> =>
   Promise.resolve({
     blob: new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
+    name: "redacted.pdf",
     visible: "",
     warnings: ["warning.droppedCharacters"],
   });
@@ -84,6 +85,12 @@ describe("redactPath", () => {
 
     expect(redactImage).toHaveBeenCalledTimes(1);
     expect(redactPdf).not.toHaveBeenCalled();
+  });
+
+  it("passes on the name the redactor gave its output", async () => {
+    const { name } = await run("sample.png");
+
+    expect(name).toBe("redacted.pdf");
   });
 
   it("sends a markdown file to the text redactor", async () => {

@@ -114,7 +114,9 @@ describe("App", () => {
     expect(memory.applied.map((request) => request.decisions)).toEqual([{ covered: ["a"] }]);
 
     act(() => {
-      memory.workers().onDone(id, { blob: new Blob(["x"]), redactionCount: 1, warnings: [] });
+      memory
+        .workers()
+        .onDone(id, { blob: new Blob(["x"]), name: "report.txt", redactionCount: 1, warnings: [] });
     });
 
     expect(screen.getByRole("button", { name: /download zip/iv })).toBeEnabled();

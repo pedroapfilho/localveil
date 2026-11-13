@@ -7,6 +7,7 @@ import { readFileAsFile } from "./read-file";
 
 type NodeRedactionOutput = {
   bytes: Uint8Array;
+  name: string;
   redactionCount: number;
   warnings: Array<WarningKey>;
 };
@@ -21,14 +22,14 @@ const redactPath = async (
   const file = await readFileAsFile(path);
   const redactor = resolveRedactor(file);
 
-  const { blob, redactionCount, warnings } = await redactFile({
+  const { blob, name, redactionCount, warnings } = await redactFile({
     detect,
     file,
     onProgress,
     redactor,
   });
 
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), redactionCount, warnings };
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), name, redactionCount, warnings };
 };
 
 export { redactPath };

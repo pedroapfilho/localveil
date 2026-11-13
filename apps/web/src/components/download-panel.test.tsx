@@ -8,7 +8,7 @@ import { DownloadPanel } from "./download-panel";
 
 const done = jobOf({
   phase: "done",
-  result: { blob: new Blob(["hi"]), redactionCount: 1, warnings: [] },
+  result: { blob: new Blob(["hi"]), name: "report.txt", redactionCount: 1, warnings: [] },
 });
 
 const failed = jobOf({ error: "boom", phase: "error" }, { id: "job-2" });

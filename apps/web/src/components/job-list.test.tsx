@@ -77,7 +77,10 @@ describe("JobList", () => {
 
   it("drops the progress bar once a file has settled", () => {
     setup([
-      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] } }),
+      job({
+        phase: "done",
+        result: { blob: new Blob(["hi"]), name: "report.txt", redactionCount: 3, warnings: [] },
+      }),
     ]);
 
     expect(screen.queryByRole("progressbar")).toBeNull();
@@ -85,7 +88,10 @@ describe("JobList", () => {
 
   it("reports how many spans were redacted", () => {
     setup([
-      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 3, warnings: [] } }),
+      job({
+        phase: "done",
+        result: { blob: new Blob(["hi"]), name: "report.txt", redactionCount: 3, warnings: [] },
+      }),
     ]);
 
     expect(screen.getByText("3 redacted")).toBeInTheDocument();
@@ -93,7 +99,10 @@ describe("JobList", () => {
 
   it("says so when a clean file had nothing to redact", () => {
     setup([
-      job({ phase: "done", result: { blob: new Blob(["hi"]), redactionCount: 0, warnings: [] } }),
+      job({
+        phase: "done",
+        result: { blob: new Blob(["hi"]), name: "report.txt", redactionCount: 0, warnings: [] },
+      }),
     ]);
 
     expect(screen.getByText("Nothing found to redact")).toBeInTheDocument();
