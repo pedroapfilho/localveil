@@ -10,7 +10,9 @@ export type { FileStageKey } from "./pipeline/stages";
 
 export type { Analysis, Decisions, Detection, RedactionResult, WarningKey } from "./pipeline/types";
 
-export { isUnsupportedFile, UnsupportedFileError } from "./pipeline/unsupported-file-error";
+export { failureKeyOf, RedactionFailure, unsupportedFile } from "./pipeline/failure";
+
+export type { FailureKey } from "./pipeline/failure";
 
 export { createDetectClient, serveDetect } from "./transport/detect-rpc";
 

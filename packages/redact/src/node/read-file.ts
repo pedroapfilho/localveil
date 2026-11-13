@@ -2,14 +2,14 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 
 import { nodeTypeOf } from "../formats/formats";
-import { UnsupportedFileError } from "../pipeline/unsupported-file-error";
+import { unsupportedFile } from "../pipeline/failure";
 import { toArrayBuffer } from "../transport/zip";
 
 const readFileAsFile = async (path: string) => {
   const type = nodeTypeOf(basename(path));
 
   if (type === undefined) {
-    throw new UnsupportedFileError(basename(path), "");
+    throw unsupportedFile(basename(path), "");
   }
 
   return new File([toArrayBuffer(await readFile(path))], basename(path), { type });

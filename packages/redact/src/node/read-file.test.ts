@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { UnsupportedFileError } from "../pipeline/unsupported-file-error";
+import { RedactionFailure } from "../pipeline/failure";
 
 import { readFileAsFile } from "./read-file";
 
@@ -22,11 +22,9 @@ describe("readFileAsFile", () => {
   });
 
   it("refuses a format Node cannot decode before reading it", async () => {
-    await expect(readFileAsFile(`${FIXTURES}photo.heic`)).rejects.toBeInstanceOf(
-      UnsupportedFileError,
-    );
+    await expect(readFileAsFile(`${FIXTURES}photo.heic`)).rejects.toBeInstanceOf(RedactionFailure);
     await expect(readFileAsFile(new URL(import.meta.url).pathname)).rejects.toBeInstanceOf(
-      UnsupportedFileError,
+      RedactionFailure,
     );
   });
 

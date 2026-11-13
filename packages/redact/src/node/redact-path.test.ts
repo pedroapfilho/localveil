@@ -3,9 +3,9 @@ import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as RedactImage from "../image/index";
 import type * as RedactPdf from "../pdf/index";
+import { RedactionFailure } from "../pipeline/failure";
 /* oxlint-disable anti-slop/no-module-mocking -- the PDF and image redactors wrap wasm/canvas engines; the module seam is the only practical hermetic substitute */
 import type { Analysis, Painted, Redactor } from "../pipeline/types";
-import { UnsupportedFileError } from "../pipeline/unsupported-file-error";
 
 const FIXTURES = new URL("../../../../fixtures/", import.meta.url).pathname;
 
@@ -118,7 +118,7 @@ describe("redactPath", () => {
 
   it("turns away a file no redactor takes", async () => {
     await expect(run("../packages/redact-node/vitest.config.ts")).rejects.toBeInstanceOf(
-      UnsupportedFileError,
+      RedactionFailure,
     );
   });
 

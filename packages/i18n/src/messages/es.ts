@@ -14,6 +14,12 @@ const es: Messages = {
   "dropzone.hint": "o arrástralos aquí",
   "dropzone.label": "Agregar archivos o carpetas",
   "error.unknown": "Algo salió mal.",
+  "failure.modelGone":
+    "El modelo de detección ya no está disponible, así que no se puede ocultar nada.",
+  "failure.modelSilent": "El modelo de detección dejó de responder.",
+  "failure.modelUnreadable": "El modelo de detección envió una respuesta que no se pudo leer.",
+  "failure.unsupported": "Este tipo de archivo no está admitido.",
+  "failure.workerSilent": "El proceso de ocultación dejó de responder.",
   "files.clear": "Limpiar",
   "files.details": "Detalles de {name}",
   "files.heading": "Archivos",

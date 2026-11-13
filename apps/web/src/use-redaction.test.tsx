@@ -1,5 +1,5 @@
 import { I18nProvider } from "@repo/i18n";
-import { UnsupportedFileError } from "@repo/redact";
+import { unsupportedFile } from "@repo/redact";
 import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,7 +104,7 @@ describe("what the runner reports", () => {
     const { id } = submitted("archive.zip");
 
     play(() => {
-      memory.workers().onFailed(id, new UnsupportedFileError("archive.zip", "application/zip"));
+      memory.workers().onFailed(id, unsupportedFile("archive.zip", "application/zip"));
     });
 
     expect(toast.error).toHaveBeenCalledExactlyOnceWith(
@@ -156,10 +156,10 @@ describe("what the runner reports", () => {
     render();
 
     play(() => {
-      memory.workers().onModelLost("The detection model stopped answering", true, false);
+      memory.workers().onModelLost("failure.modelSilent", true, false);
     });
 
-    expect(toast.error).toHaveBeenCalledExactlyOnceWith("The detection model stopped answering");
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith("The detection model stopped answering.");
   });
 
   it("warns about a device without GPU acceleration", () => {

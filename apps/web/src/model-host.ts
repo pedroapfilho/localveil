@@ -1,4 +1,5 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
+import type { FailureKey } from "@repo/redact";
 
 import type { ConnectRequest, DisconnectRequest, ModelResponse } from "./worker-protocol";
 
@@ -7,7 +8,7 @@ const MAX_RESPAWNS = 3;
 type ModelHostOptions = {
   model: ModelId;
   onLoad: (event: ModelLoadEvent) => void;
-  onLost: (reason: string, fatal: boolean) => void;
+  onLost: (failure: FailureKey, fatal: boolean) => void;
 };
 
 type ModelHost = {
@@ -38,7 +39,7 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
     const listeners = new AbortController();
     const { signal } = listeners;
 
-    const retire = (reason: string) => {
+    const retire = (failure: FailureKey) => {
       listeners.abort();
       worker.terminate();
 
@@ -50,7 +51,7 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
 
       state = fatal ? { kind: "gone" } : spawn(respawns + 1);
 
-      onLost(reason, fatal);
+      onLost(failure, fatal);
     };
 
     worker.addEventListener(
@@ -64,7 +65,7 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
     worker.addEventListener(
       "error",
       () => {
-        retire("The detection model stopped answering");
+        retire("failure.modelSilent");
       },
       { signal },
     );
@@ -72,7 +73,7 @@ const createModelHost = ({ model, onLoad, onLost }: ModelHostOptions): ModelHost
     worker.addEventListener(
       "messageerror",
       () => {
-        retire("The detection model sent a reply that could not be read");
+        retire("failure.modelUnreadable");
       },
       { signal },
     );
