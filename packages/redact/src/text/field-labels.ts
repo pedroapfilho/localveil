@@ -61,7 +61,6 @@ const normaliseField = (name: string) =>
     .toLowerCase()
     .replaceAll(/[^a-z0-9]/gv, "");
 
-// Headers are folded before the lookup, so the names are folded the same way here.
 const BY_FIELD = new Map<string, PiiLabel>(
   Object.values(FIELD_NAMES).flatMap((byLabel) =>
     Object.entries(byLabel).flatMap(([label, fields]) =>

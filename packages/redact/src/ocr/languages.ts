@@ -13,7 +13,6 @@ const COMBINING_MARK = /\p{Mark}/gv;
 const normalise = (text: string) =>
   text.normalize("NFD").replaceAll(COMBINING_MARK, "").toLowerCase();
 
-// Tokens are folded before they are counted, so the stopwords are folded the same way.
 const stopwords = (words: ReadonlyArray<string>) => new Set(words.map(normalise));
 
 const STOPWORDS = {

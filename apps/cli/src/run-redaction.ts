@@ -57,7 +57,6 @@ type RunResult = {
   zipPath: string | null;
 };
 
-// What the command line can set for a run.
 type RunSettings = { jobs?: number; model?: ModelId };
 
 type RunOptions = RunSettings & {

@@ -13,7 +13,6 @@ const post = (message: ModelResponse) => {
 
 let loading: Promise<Detect> | undefined;
 
-// A failed load has posted why, and is dropped so the next file starts afresh.
 const dropIfFailed = async (started: Promise<Detect>) => {
   try {
     await started;
@@ -24,7 +23,6 @@ const dropIfFailed = async (started: Promise<Detect>) => {
   }
 };
 
-// Every file shares one load, which posts each step of its lifecycle, failure included.
 const loadDetector = (model: ModelId): Promise<Detect> => {
   if (loading === undefined) {
     loading = createDetector({

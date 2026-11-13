@@ -67,7 +67,6 @@ const positionShouted = (
   return positioned;
 };
 
-// A chunk's shouted lines in title case, each word placed back where it sits in the whole text.
 const shoutedWords = (text: string, chunk: { end: number; start: number }): Array<SpanWord> => {
   const shouting = collectShouting(text.slice(chunk.start, chunk.end));
 
