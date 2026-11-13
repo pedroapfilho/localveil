@@ -101,6 +101,25 @@ describe("localveil models", () => {
     );
   });
 
+  it("prints the usage it was asked for, every option included", async () => {
+    const { store } = fakeStore();
+    const { code, out } = await run(["--help"], store);
+
+    expect(code).toBe(0);
+    expect(out).toContain("localveil models remove <id>");
+    expect(out).toContain("--jobs <n>");
+    expect(out).toContain("--model <id>");
+  });
+
+  it("refuses a flag it does not take", async () => {
+    const { calls, store } = fakeStore();
+    const { code, err } = await run(["remove", "gliner-pii-base", "--jobs", "2"], store);
+
+    expect(code).toBe(1);
+    expect(calls).toEqual([]);
+    expect(err).toContain("--jobs");
+  });
+
   it("prints its usage for an action it does not have", async () => {
     const { store } = fakeStore();
     const { code, err } = await run(["rename", "gliner-pii-base"], store);

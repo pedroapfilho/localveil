@@ -39,6 +39,7 @@ pnpm --filter cli start --model gliner-pii-base scan.pdf   # use another detecti
 pnpm --filter cli start models             # list the models and which are downloaded
 pnpm --filter cli start models download gliner-pii-base
 pnpm --filter cli start models remove gliner-pii-base
+pnpm --filter cli start --help             # every command and option
 ```
 
 The CLI writes `localveil.zip` into the working directory and keeps its own copy of the model under `~/.cache/localveil/models`. Each run keeps a fresh filename (`localveil (2).zip`, and so on), including concurrent runs. The output filesystem must support hard links. Without `--jobs` it runs half the core count, up to four files at once. `models` is a subcommand only as the first argument, so a folder that happens to be called `models` is still reachable as `./models`.
