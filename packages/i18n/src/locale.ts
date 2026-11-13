@@ -24,6 +24,10 @@ const resolveLocale = (preferred: ReadonlyArray<string>): Locale => {
   return DEFAULT_LOCALE;
 };
 
-export { DEFAULT_LOCALE, isLocale, LOCALE_NAMES, LOCALES, resolveLocale };
+// Every shipped language tells one from many and nothing finer, so a message has two forms.
+const pluralOf = (locale: Locale, count: number) =>
+  new Intl.PluralRules(locale).select(count) === "one" ? "one" : "other";
+
+export { DEFAULT_LOCALE, isLocale, LOCALE_NAMES, LOCALES, pluralOf, resolveLocale };
 
 export type { Locale };
