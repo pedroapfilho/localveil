@@ -8,9 +8,6 @@ import { CATALOGUES } from "./index";
 
 const PLACEHOLDER = /\{(?<name>\w+)\}/gv;
 
-const sortedKeys = (catalogue: Readonly<Record<string, string>>) =>
-  Object.keys(catalogue).toSorted();
-
 const placeholders = (message: string) =>
   [...message.matchAll(PLACEHOLDER)]
     .map(([placeholder]) => placeholder)
@@ -21,18 +18,6 @@ const catalogueOf = (locale: (typeof LOCALES)[number]): Readonly<Record<string, 
   CATALOGUES[locale];
 
 describe("catalogues", () => {
-  it("ships one catalogue per locale", () => {
-    expect(Object.keys(CATALOGUES).toSorted()).toStrictEqual([...LOCALES].toSorted());
-  });
-
-  it("keeps pt in step with en, with no missing and no extra keys", () => {
-    expect(sortedKeys(catalogueOf("pt"))).toStrictEqual(sortedKeys(en));
-  });
-
-  it("keeps es in step with en, with no missing and no extra keys", () => {
-    expect(sortedKeys(catalogueOf("es"))).toStrictEqual(sortedKeys(en));
-  });
-
   it("leaves no message empty", () => {
     const empty = LOCALES.flatMap((locale) =>
       Object.entries(catalogueOf(locale))

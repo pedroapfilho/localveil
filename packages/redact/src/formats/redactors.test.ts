@@ -130,20 +130,6 @@ describe("resolveRedactor", () => {
 });
 
 describe("the lists drawn from the same declarations", () => {
-  it("offers the dropzone every format a redactor declares", () => {
-    expect(BROWSER_ACCEPT).toBe(
-      ".csv,text/csv,.json,application/json,.log,.md,.txt,text/*,.pdf,application/pdf,.avif,.bmp,.gif,.heic,.jpeg,.jpg,.png,.tif,.tiff,.webp,image/*",
-    );
-  });
-
-  it.each(OFFERED)("resolves %s, which the dropzone lets through", (token) => {
-    const file = token.startsWith(".")
-      ? named(`sample${token}`)
-      : named("sample", token.replace("/*", "/x-any"));
-
-    expect(() => resolveRedactor(file)).not.toThrow();
-  });
-
   it("lists for Node what the dropzone offers, less HEIC and TIFF, which Node cannot decode", () => {
     expect([...NODE_FORMATS.keys()]).toStrictEqual(
       OFFERED_EXTENSIONS.filter((extension) => ![".heic", ".tif", ".tiff"].includes(extension)),

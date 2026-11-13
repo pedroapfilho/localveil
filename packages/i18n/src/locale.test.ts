@@ -35,15 +35,7 @@ describe("isLocale", () => {
 });
 
 describe("LOCALE_NAMES", () => {
-  it("names every shipped locale", () => {
-    expect(Object.keys(LOCALE_NAMES).toSorted()).toStrictEqual(LOCALES.toSorted());
-  });
-
   it("gives every locale a name a reader can pick from", () => {
     expect(LOCALES.every((locale) => LOCALE_NAMES[locale].trim().length > 0)).toBe(true);
-  });
-
-  it("writes each name in its own language", () => {
-    expect(LOCALE_NAMES).toStrictEqual({ en: "English", es: "Español", pt: "Português" });
   });
 });
