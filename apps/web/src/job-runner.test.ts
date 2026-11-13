@@ -1,5 +1,5 @@
 import type { Analysis, Detection, RedactionResult } from "@repo/redact";
-import { UnsupportedFileError } from "@repo/redact";
+import { unsupportedFile } from "@repo/redact";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobNotice, JobRunner } from "./job-runner";
@@ -29,7 +29,7 @@ const REDACTED: RedactionResult = {
   warnings: [],
 };
 
-const LOST = "The detection model stopped answering";
+const LOST = "failure.modelSilent";
 
 let memory = createMemoryPool();
 let notices: Array<JobNotice> = [];
@@ -214,8 +214,9 @@ describe("a failed job", () => {
   it("tells a file the registry refused apart from one that broke", () => {
     const id = submit("archive.zip");
 
-    workers().onFailed(id, new UnsupportedFileError("archive.zip", "application/zip"));
+    workers().onFailed(id, unsupportedFile("archive.zip", "application/zip"));
 
+    expect(jobWith(id)).toMatchObject({ failure: "failure.unsupported", phase: "error" });
     expect(notices).toEqual([{ kind: "file-unsupported", name: "archive.zip" }]);
   });
 
@@ -386,7 +387,7 @@ describe("losing the model", () => {
   it("says why once the model is beyond recovery", () => {
     workers().onModelLost(LOST, true, false);
 
-    expect(notices).toEqual([{ kind: "model-lost", reason: LOST }]);
+    expect(notices).toEqual([{ failure: LOST, kind: "model-lost" }]);
   });
 
   it("turns a download into the failure once the model is beyond recovery", () => {

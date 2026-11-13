@@ -76,7 +76,12 @@ type Reported = {
   done: Array<string>;
   failed: Array<{ cause: unknown; id: string }>;
   model: Array<ModelLoadEvent>;
-  modelLost: Array<{ failedBefore: number; fatal: boolean; reason: string; restarted: boolean }>;
+  modelLost: Array<{
+    failedBefore: number;
+    failure: string;
+    fatal: boolean;
+    restarted: boolean;
+  }>;
   progress: Array<{ fraction: number; id: string }>;
 };
 
@@ -155,8 +160,8 @@ const poolOptions = () => ({
   onModelLoad: (event: ModelLoadEvent) => {
     reported.model.push(event);
   },
-  onModelLost: (reason: string, fatal: boolean, restarted: boolean) => {
-    reported.modelLost.push({ failedBefore: reported.failed.length, fatal, reason, restarted });
+  onModelLost: (failure: string, fatal: boolean, restarted: boolean) => {
+    reported.modelLost.push({ failedBefore: reported.failed.length, failure, fatal, restarted });
   },
   onProgress: (id: string, fraction: number) => {
     reported.progress.push({ fraction, id });

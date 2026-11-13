@@ -202,7 +202,9 @@ const JobRow = ({
                   ) : null}
 
                   {job.phase === "error" ? (
-                    <p className="text-destructive text-sm text-pretty">{job.error}</p>
+                    <p className="text-destructive text-sm text-pretty">
+                      {job.failure === undefined ? job.error : t(job.failure)}
+                    </p>
                   ) : null}
 
                   {warnings.map((warning) => (

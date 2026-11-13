@@ -1,6 +1,6 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
-import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact";
-import { defaultDecisions, isUnsupportedFile, REVIEW_AT } from "@repo/redact";
+import type { Analysis, Decisions, FailureKey, FileStageKey, RedactionResult } from "@repo/redact";
+import { defaultDecisions, failureKeyOf, REVIEW_AT } from "@repo/redact";
 import { describeError } from "@repo/redact-core";
 
 import { useModelLibrary } from "./model-library";
@@ -17,7 +17,7 @@ type RedactionPoolOptions = {
   onDone: (id: string, result: RedactionResult) => void;
   onFailed: (id: string, cause: unknown) => void;
   onModelLoad: (event: ModelLoadEvent) => void;
-  onModelLost: (reason: string, fatal: boolean, restarted: boolean) => void;
+  onModelLost: (failure: FailureKey, fatal: boolean, restarted: boolean) => void;
   onProgress: (id: string, fraction: number, stage: FileStageKey) => void;
 };
 
@@ -34,7 +34,7 @@ type CreatePool = (options: RedactionPoolOptions) => RedactionPool;
 type JobNotice =
   | { kind: "file-failed" | "file-unsupported"; name: string }
   | { kind: "model-downloading" | "model-dropped" | "model-failed" | "model-ready" | "slow-device" }
-  | { kind: "model-lost"; reason: string };
+  | { failure: FailureKey; kind: "model-lost" };
 
 type JobRunnerOptions = {
   createPool: CreatePool;
@@ -118,9 +118,11 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
         return;
       }
 
-      moveJob(id, { error: describeError(cause), phase: "error" });
+      const failure = failureKeyOf(cause);
+
+      moveJob(id, { error: describeError(cause), failure, phase: "error" });
       onNotice({
-        kind: isUnsupportedFile(cause) ? "file-unsupported" : "file-failed",
+        kind: failure === "failure.unsupported" ? "file-unsupported" : "file-failed",
         name: job.path,
       });
     },
@@ -161,7 +163,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
     },
     /* A file restarted after a loss is on the respawned model, and its new load reports itself.
        With none restarted, nothing will ever load there, so the load that was under way ends. */
-    onModelLost: (reason, fatal, restarted) => {
+    onModelLost: (failure, fatal, restarted) => {
       if (restarted) {
         return;
       }
@@ -169,7 +171,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       if (endLoad()) {
         onNotice({ kind: "model-failed" });
       } else if (fatal) {
-        onNotice({ kind: "model-lost", reason });
+        onNotice({ failure, kind: "model-lost" });
       }
     },
     onProgress: (id, fraction, stage) => {

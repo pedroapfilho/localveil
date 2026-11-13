@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { RedactionFailure } from "../pipeline/failure";
 import type { FileStageKey } from "../pipeline/stages";
-import { UnsupportedFileError } from "../pipeline/unsupported-file-error";
 
 import { BROWSER_ACCEPT, NODE_FORMATS } from "./formats";
 import { resolveRedactor } from "./redactors";
@@ -120,7 +120,7 @@ describe("resolveRedactor", () => {
 
   it("refuses a format nothing handles", () => {
     expect(() => resolveRedactor(named("setup.exe", "application/x-msdos"))).toThrow(
-      UnsupportedFileError,
+      RedactionFailure,
     );
   });
 

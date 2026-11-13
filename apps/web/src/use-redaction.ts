@@ -40,7 +40,7 @@ const show = (notice: JobNotice, t: Translate) => {
     }
 
     case "model-lost": {
-      toast.error(notice.reason);
+      toast.error(t(notice.failure));
       break;
     }
 

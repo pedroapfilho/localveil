@@ -155,6 +155,13 @@ describe("JobRow", () => {
     expect(screen.getByText("The worker gave up")).toBeInTheDocument();
   });
 
+  it("explains a failure it has a key for, rather than showing the error's own text", () => {
+    setup(text({ error: "failure.workerSilent", failure: "failure.workerSilent", phase: "error" }));
+
+    expect(screen.getByText("The redaction worker stopped answering.")).toBeInTheDocument();
+    expect(screen.queryByText("failure.workerSilent")).toBeNull();
+  });
+
   it("opens a row that fails long after it mounted", () => {
     const { rerenderWith } = setup(text());
 

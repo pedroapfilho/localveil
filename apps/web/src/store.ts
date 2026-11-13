@@ -1,4 +1,4 @@
-import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact";
+import type { Analysis, FailureKey, FileStageKey, RedactionResult } from "@repo/redact";
 import { create } from "zustand";
 
 type JobSource = {
@@ -9,7 +9,7 @@ type JobSource = {
 
 type JobState =
   | { analysis: Analysis; covered: ReadonlyArray<string>; phase: "reviewing"; progress: number }
-  | { error: string; phase: "error" }
+  | { error: string; failure?: FailureKey; phase: "error" }
   | { phase: "analysing"; progress: number; stage: FileStageKey }
   | { phase: "applying"; progress: number; stage?: FileStageKey }
   | { phase: "done"; result: RedactionResult }

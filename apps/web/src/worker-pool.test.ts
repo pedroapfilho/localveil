@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-module-mocking -- workerpool and the model host wrap real Worker threads; the module seam is the only practical hermetic substitute */
+import { unsupportedFile } from "@repo/redact";
 import { describeError } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -138,9 +139,8 @@ describe("createRedactionPool", () => {
 
   it("hands over what a refused file threw, for the runner to classify", () => {
     const pool = build();
-    const refused = new Error("archive.zip is not a supported file type");
+    const refused = unsupportedFile("archive.zip", "application/zip");
 
-    refused.name = "UnsupportedFileError";
     pool.submit(job("a"));
     taskAt(0).crash(refused);
 
@@ -227,7 +227,7 @@ describe("when a worker goes quiet", () => {
     taskAt(0).progress();
     waitOutTheSilence();
 
-    expect(failures()[0]).toMatchObject({ id: "a" });
+    expect(failures()[0]).toMatchObject({ id: "a", message: "failure.workerSilent" });
     expect(taskAt(0).cancelled).toBe(true);
   });
 
@@ -301,7 +301,7 @@ describe("when the model is lost", () => {
 
     pool.submit(job("a"));
     taskAt(0).progress();
-    modelHost().onLost("The detection model stopped answering", false);
+    modelHost().onLost("failure.modelSilent", false);
 
     expect(failures().map((entry) => entry.id)).toEqual(["a"]);
   });
@@ -310,7 +310,7 @@ describe("when the model is lost", () => {
     const pool = build();
 
     pool.submit(job("a"));
-    modelHost().onLost("The detection model stopped answering", false);
+    modelHost().onLost("failure.modelSilent", false);
 
     expect(reported.failed).toEqual([]);
     expect(pooled.tasks.length).toBe(2);
@@ -322,7 +322,7 @@ describe("when the model is lost", () => {
 
     pool.submit(job("a"));
     pool.submit(job("b"));
-    modelHost().onLost("The detection model stopped answering", true);
+    modelHost().onLost("failure.modelSilent", true);
 
     expect(failures().map((entry) => entry.id)).toEqual(["a", "b"]);
     expect(pooled.tasks.length).toBe(2);
@@ -332,13 +332,13 @@ describe("when the model is lost", () => {
     const pool = build();
 
     pool.submit(job("a"));
-    modelHost().onLost("The detection model stopped answering", true);
+    modelHost().onLost("failure.modelSilent", true);
 
     expect(reported.modelLost).toEqual([
       {
         failedBefore: 1,
+        failure: "failure.modelSilent",
         fatal: true,
-        reason: "The detection model stopped answering",
         restarted: false,
       },
     ]);
@@ -350,13 +350,13 @@ describe("when the model is lost", () => {
     pool.submit(job("a"));
     pool.submit(job("b"));
     taskAt(0).progress();
-    modelHost().onLost("The detection model stopped answering", false);
+    modelHost().onLost("failure.modelSilent", false);
 
     expect(reported.modelLost).toEqual([
       {
         failedBefore: 1,
+        failure: "failure.modelSilent",
         fatal: false,
-        reason: "The detection model stopped answering",
         restarted: true,
       },
     ]);

@@ -47,7 +47,7 @@ class FakeWorker {
   }
 }
 
-const lost: Array<{ fatal: boolean; reason: string }> = [];
+const lost: Array<{ failure: string; fatal: boolean }> = [];
 const loads: Array<ModelLoadEvent> = [];
 
 const build = () =>
@@ -56,8 +56,8 @@ const build = () =>
     onLoad: (event) => {
       loads.push(event);
     },
-    onLost: (reason, fatal) => {
-      lost.push({ fatal, reason });
+    onLost: (failure, fatal) => {
+      lost.push({ failure, fatal });
     },
   });
 
@@ -136,7 +136,7 @@ describe("when the model worker dies", () => {
 
     expect(workerAt(0).terminated).toBe(true);
     expect(FakeWorker.instances.length).toBe(2);
-    expect(lost).toEqual([{ fatal: false, reason: "The detection model stopped answering" }]);
+    expect(lost).toEqual([{ failure: "failure.modelSilent", fatal: false }]);
   });
 
   it("recovers the same way from a reply it could not read", () => {

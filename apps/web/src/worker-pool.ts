@@ -1,5 +1,6 @@
 import type { ModelId } from "@repo/pii-detect/models";
-import { isProgressEvent } from "@repo/redact";
+import type { FailureKey } from "@repo/redact";
+import { isProgressEvent, RedactionFailure } from "@repo/redact";
 import { warnRecoverable } from "@repo/redact-core";
 import workerpool from "workerpool";
 
@@ -52,20 +53,20 @@ const createRedactionPool: CreatePool = (options) => {
     return job;
   };
 
-  const give = (job: LiveJob, reason: string) => {
+  const give = (job: LiveJob, failure: FailureKey) => {
     if (release(job) === undefined) {
       return;
     }
 
     job.task.cancel();
-    onFailed(job.id, new Error(reason));
+    onFailed(job.id, new RedactionFailure(failure));
   };
 
   const arm = (job: LiveJob) => {
     clearTimeout(job.watchdog);
 
     job.watchdog = setTimeout(() => {
-      give(job, "The redaction worker stopped answering");
+      give(job, "failure.workerSilent");
     }, SILENCE_LIMIT);
   };
 
@@ -82,12 +83,12 @@ const createRedactionPool: CreatePool = (options) => {
 
         onModelLoad(event);
       },
-      onLost: (reason, fatal) => {
+      onLost: (failure, fatal) => {
         const waiting = [...jobs.values()].filter((job) => !job.started);
         const failing = [...jobs.values()].filter((job) => job.started || fatal);
 
         for (const job of failing) {
-          give(job, reason);
+          give(job, failure);
         }
 
         if (!fatal) {
@@ -98,7 +99,7 @@ const createRedactionPool: CreatePool = (options) => {
           }
         }
 
-        onModelLost(reason, fatal, !fatal && waiting.length > 0);
+        onModelLost(failure, fatal, !fatal && waiting.length > 0);
       },
     });
 
@@ -141,7 +142,7 @@ const createRedactionPool: CreatePool = (options) => {
     const wire = new MessageChannel();
 
     if (!host.connect(channel, wire.port1)) {
-      onFailed(id, new Error("The detection model is gone, so nothing can be redacted"));
+      onFailed(id, new RedactionFailure("failure.modelGone"));
 
       return;
     }
