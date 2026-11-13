@@ -6,7 +6,7 @@ import { createDetector, patternSpans, readModelFiles } from "@repo/pii-detect";
 import { DEFAULT_MODEL_ID, isModelId, MODELS } from "@repo/pii-detect/models";
 import type { PiiLabel, Span } from "@repo/redact-core";
 import { APPLY_SCORE } from "@repo/redact-core";
-import { TEXT_REDACTORS, withFields } from "@repo/redact-text";
+import { TEXT_REDACTORS, withFields } from "@repo/redact/text";
 
 import type { EvalDocument } from "./corpus";
 import { loadCorpus } from "./corpus";

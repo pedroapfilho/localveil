@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
-import type { FileStageKey, ProgressEvent } from "@repo/redact-core";
+import type { FileStageKey, ProgressEvent } from "@repo/redact";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runRedaction } from "./run-redaction";

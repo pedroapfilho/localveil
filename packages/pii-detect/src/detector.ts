@@ -1,6 +1,6 @@
 import { PreTrainedTokenizer } from "@huggingface/transformers";
 import type { Detect, Span } from "@repo/redact-core";
-import { absorbNested, describeError, serialiseDetect, warnRecoverable } from "@repo/redact-core";
+import { absorbNested, describeError, warnRecoverable } from "@repo/redact-core";
 
 import { modelStore } from "#model-store";
 import { createModelRunner, pickDevice } from "#ort";
@@ -15,6 +15,7 @@ import type { ModelLoadEvent } from "./model-lifecycle";
 import type { ModelDevice } from "./model-runtime";
 import type { ModelFiles } from "./model-status";
 import { patternSpans } from "./patterns";
+import { serialiseDetect } from "./serialise-detect";
 import { shoutedWords } from "./shouting";
 import { splitWords } from "./split-words";
 import { tightenToVerified } from "./tighten";

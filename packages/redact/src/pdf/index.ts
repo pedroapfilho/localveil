@@ -1,0 +1,331 @@
+import type { Detect, DocumentLanguage } from "@repo/redact-core";
+import { warnRecoverable } from "@repo/redact-core";
+import type { PDFDocument } from "pdf-lib";
+
+import { StandardFontFactory } from "#standard-fonts";
+
+import { languageOf } from "../ocr/languages";
+import type { ReadText } from "../ocr/read-text";
+import type { PageSurface } from "../page/page-surface";
+import { contextOf, coverUnit, paint, scanOf, surfaceOf, surfaceUnits } from "../page/page-surface";
+import { inReadingOrder } from "../page/reading-order";
+import { analyseUnits } from "../pipeline/analysis";
+import type { FileProgress, Redactor, WarningKey, WordInput } from "../pipeline/types";
+import { toArrayBuffer } from "../transport/zip";
+
+import { OffscreenCanvasFactory } from "./canvas-factory";
+import { NoFilterFactory } from "./filter-factory";
+import { textLayerWords } from "./text-layer";
+import type { MeasureText } from "./text-layer";
+
+const SCALE = 2;
+
+const MIN_LAYER_WORDS = 12;
+
+const READ_SHARE = 0.45;
+
+const DETECT_SHARE = 0.45;
+
+let parserInstalled: Promise<void> | undefined;
+
+const measureText = (): MeasureText => {
+  const context = contextOf(new OffscreenCanvas(1, 1));
+
+  return (text, fontFamily) => {
+    context.font = `100px ${fontFamily}`;
+
+    return context.measureText(text).width;
+  };
+};
+
+const installParser = async () => {
+  await import("#pdfjs-worker");
+
+  if (!("pdfjsWorker" in globalThis)) {
+    throw new Error("pdf.js loaded without registering its parser, so no PDF can be read");
+  }
+};
+
+/* A PDF that names a standard font such as Helvetica without embedding it is drawn from pdf.js's own
+   copies; without them pdf.js falls back to a canvas font taller and wider than the metrics the
+   boxes are placed by, so letter edges show past them. */
+const documentOptions = (data: Uint8Array) => ({
+  BinaryDataFactory: StandardFontFactory,
+  CanvasFactory: OffscreenCanvasFactory,
+  data,
+  disableFontFace: true,
+  FilterFactory: NoFilterFactory,
+});
+
+const openPdf = async (file: File) => {
+  parserInstalled ??= installParser();
+
+  const [pdfjs, pdfLib, source] = await Promise.all([
+    import("#pdfjs"),
+    import("pdf-lib"),
+    file.arrayBuffer(),
+
+    parserInstalled,
+  ]);
+
+  const opened = pdfjs.getDocument(documentOptions(new Uint8Array(source)));
+
+  return { loading: opened, pdf: await opened.promise, pdfLib };
+};
+
+type OpenedPdf = Awaited<ReturnType<typeof openPdf>>;
+
+type PdfDocument = OpenedPdf["pdf"];
+
+type PdfPage = Awaited<ReturnType<PdfDocument["getPage"]>>;
+
+type PdfViewport = ReturnType<PdfPage["getViewport"]>;
+
+const withPdf = async <T>(
+  file: File,
+  work: (pdf: PdfDocument, pdfLib: OpenedPdf["pdfLib"]) => Promise<T>,
+): Promise<T> => {
+  const { loading, pdf, pdfLib } = await openPdf(file);
+
+  try {
+    return await work(pdf, pdfLib);
+  } finally {
+    try {
+      await loading.destroy();
+    } catch (error) {
+      warnRecoverable("Could not release a PDF after reading it", error);
+    }
+  }
+};
+
+const withPage = async <T>(
+  pdf: PdfDocument,
+  number: number,
+  body: (page: PdfPage, viewport: PdfViewport) => Promise<T>,
+): Promise<T> => {
+  const page = await pdf.getPage(number);
+
+  try {
+    return await body(page, page.getViewport({ scale: SCALE }));
+  } finally {
+    page.cleanup();
+  }
+};
+
+const render = async (page: PdfPage, viewport: PdfViewport) => {
+  const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+
+  /* SAFETY: pdf.js renders onto an offscreen 2d context at runtime, but its RenderParameters
+     type only admits a DOM CanvasRenderingContext2D, so the context is forced through unknown. */
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, anti-slop/no-chained-type-assertions -- see the SAFETY note above
+  const target = contextOf(canvas) as unknown as CanvasRenderingContext2D;
+
+  await page.render({
+    background: "#FFFFFF",
+    canvas: null,
+    canvasContext: target,
+    viewport,
+  }).promise;
+
+  return canvas;
+};
+
+const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
+  withPdf(file, async (pdf) => {
+    onProgress(0, "stage.reading");
+
+    const warnings = new Set<WarningKey>();
+    const pages: Array<PageSurface | { readings: Array<PageSurface> }> = [];
+
+    let language: DocumentLanguage | undefined;
+    let anyText = false;
+    let readings = 0;
+
+    for (let number = 1; number <= pdf.numPages; number += 1) {
+      const progress = ((number - 1) / pdf.numPages) * READ_SHARE;
+
+      onProgress(progress, "stage.extracting");
+
+      const known = language;
+
+      const scanned = await withPage(pdf, number, async (proxy, viewport) => {
+        const content = await proxy.getTextContent();
+
+        const layerText = content.items
+          .map((item) => ("str" in item ? item.str : ""))
+          .join(" ")
+          .trim();
+
+        const layerLanguage = known ?? languageOf(layerText);
+
+        if (layerText.length === 0) {
+          warnings.add("warning.scannedPages");
+        }
+
+        const typed = inReadingOrder(
+          textLayerWords({ items: content.items, styles: content.styles, viewport }, measureText()),
+        );
+
+        if (typed.length >= MIN_LAYER_WORDS) {
+          return { found: true, language: layerLanguage, page: surfaceOf(typed), readings: 1 };
+        }
+
+        onProgress(progress, "stage.rendering");
+
+        const canvas = await render(proxy, viewport);
+
+        onProgress(progress, "stage.recognising");
+
+        const reading = await read(canvas, layerLanguage);
+
+        if (reading.legibility === "unreadable") {
+          warnings.add("warning.lowConfidence");
+        }
+
+        const scan = scanOf(reading);
+
+        return {
+          found: reading.legibility !== "blank",
+          language: layerLanguage ?? reading.language,
+          page: scan,
+          readings: scan.readings.length,
+        };
+      });
+
+      language = scanned.language;
+      readings += scanned.readings;
+      anyText ||= scanned.found;
+      pages.push(scanned.page);
+    }
+
+    if (!anyText) {
+      warnings.add("warning.noText");
+    }
+
+    return { pages, readings, warnings };
+  });
+
+const detectingReadings = (detect: Detect, count: number, onProgress: FileProgress): Detect => {
+  let detected = 0;
+
+  return (text) => {
+    onProgress(READ_SHARE + (detected / count) * DETECT_SHARE, "stage.detecting");
+    detected += 1;
+
+    return detect(text);
+  };
+};
+
+const applyPdf: Redactor["apply"] = async ({ analysis, decisions, file, onProgress }) => {
+  const pages = surfaceUnits(analysis);
+
+  const built = await withPdf(file, async (pdf, pdfLib) => {
+    const out = await pdfLib.PDFDocument.create();
+    const font = await out.embedFont(pdfLib.StandardFonts.Helvetica);
+
+    const warnings = new Set<WarningKey>();
+    const survived: Array<WordInput> = [];
+
+    let original: Promise<PDFDocument> | undefined;
+    let copying = true;
+
+    const copyPage = async (number: number) => {
+      if (!copying) {
+        return false;
+      }
+
+      try {
+        const from = await (original ??= file
+          .arrayBuffer()
+          .then((bytes) => pdfLib.PDFDocument.load(bytes)));
+
+        const [copied] = await out.copyPages(from, [number - 1]);
+
+        out.addPage(copied);
+
+        return true;
+      } catch (error) {
+        copying = false;
+
+        warnRecoverable("Could not copy an untouched page, so it is painted instead", error);
+
+        return false;
+      }
+    };
+
+    for (const [index, readings] of pages.entries()) {
+      const number = index + 1;
+      const progress = (index / pages.length) * 0.9;
+
+      onProgress(progress, "stage.redacting");
+
+      const { rects, visible } = coverUnit(readings, decisions);
+
+      survived.push(...visible);
+
+      if (rects.length === 0 && (await copyPage(number))) {
+        continue;
+      }
+
+      await withPage(pdf, number, async (proxy, viewport) => {
+        const canvas = await render(proxy, viewport);
+
+        paint(canvas, rects);
+
+        onProgress(progress, "stage.assembling");
+
+        const encoded = await canvas.convertToBlob({ type: "image/png" });
+        const png = await out.embedPng(await encoded.arrayBuffer());
+        const sheet = out.addPage([viewport.width / SCALE, viewport.height / SCALE]);
+
+        sheet.drawImage(png, {
+          height: viewport.height / SCALE,
+          width: viewport.width / SCALE,
+          x: 0,
+          y: 0,
+        });
+
+        for (const word of visible) {
+          try {
+            sheet.drawText(word.text, {
+              font,
+              opacity: 0,
+              size: (word.bbox.y1 - word.bbox.y0) / SCALE,
+              x: word.bbox.x0 / SCALE,
+
+              y: (viewport.height - word.bbox.y1) / SCALE,
+            });
+          } catch {
+            warnings.add("warning.droppedCharacters");
+          }
+        }
+      });
+    }
+
+    return {
+      blob: new Blob([toArrayBuffer(await out.save())], { type: "application/pdf" }),
+      name: file.name,
+      visible: surfaceOf(survived).text,
+      warnings: [...warnings],
+    };
+  });
+
+  return built;
+};
+
+const createPdfRedactor = (read: ReadText): Redactor => ({
+  analyse: async (file, detect, onProgress) => {
+    const { pages, readings, warnings } = await readPages(file, read, onProgress);
+
+    const { detections, units } = await analyseUnits({
+      detect: detectingReadings(detect, readings, onProgress),
+      kind: "pages",
+      units: pages,
+    });
+
+    return { detections, units, warnings: [...warnings] };
+  },
+  apply: applyPdf,
+});
+
+export { createPdfRedactor, documentOptions };

@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { isModelId, MODELS } from "@repo/pii-detect/models";
-import { nodeTypeOf } from "@repo/redact-formats";
+import { nodeTypeOf } from "@repo/redact";
 
 import type { RunSettings } from "./run-redaction";
 

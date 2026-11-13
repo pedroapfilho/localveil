@@ -1,5 +1,6 @@
 import { useTranslations } from "@repo/i18n";
-import type { Detection, PiiLabel } from "@repo/redact-core";
+import type { Detection } from "@repo/redact";
+import type { PiiLabel } from "@repo/redact-core";
 import { APPLY_SCORE } from "@repo/redact-core";
 import { Button } from "@repo/ui/components/button";
 import { Checkbox } from "@repo/ui/components/checkbox";

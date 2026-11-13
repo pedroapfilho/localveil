@@ -1,5 +1,5 @@
 import { I18nProvider } from "@repo/i18n";
-import { UnsupportedFileError } from "@repo/redact-core";
+import { UnsupportedFileError } from "@repo/redact";
 import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,5 +1,5 @@
-import type { Analysis, Detection, RedactionResult } from "@repo/redact-core";
-import { UnsupportedFileError } from "@repo/redact-core";
+import type { Analysis, Detection, RedactionResult } from "@repo/redact";
+import { UnsupportedFileError } from "@repo/redact";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobNotice, JobRunner } from "./job-runner";

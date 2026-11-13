@@ -1,4 +1,4 @@
-import type { Detection } from "@repo/redact-core";
+import type { Detection } from "@repo/redact";
 import { fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 

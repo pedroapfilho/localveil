@@ -1,5 +1,5 @@
 import type { ModelLoadState } from "@repo/pii-detect/models";
-import type { FileStageKey } from "@repo/redact-core";
+import type { FileStageKey } from "@repo/redact";
 import { Box, Text, useWindowSize } from "ink";
 
 import { describeKey } from "./messages";

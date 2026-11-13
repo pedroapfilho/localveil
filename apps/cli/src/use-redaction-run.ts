@@ -1,5 +1,5 @@
 import type { ModelLoadState } from "@repo/pii-detect/models";
-import type { FileStageKey } from "@repo/redact-core";
+import type { FileStageKey } from "@repo/redact";
 import { describeError } from "@repo/redact-core";
 import { useCallback, useRef, useState } from "react";
 

@@ -1,6 +1,6 @@
-import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact-core";
-import { analyseFile, applyDecisions, createDetectClient, progressEvent } from "@repo/redact-core";
-import { resolveRedactor } from "@repo/redact-formats/redactors";
+import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact";
+import { analyseFile, applyDecisions, createDetectClient, progressEvent } from "@repo/redact";
+import { resolveRedactor } from "@repo/redact/redactors";
 import workerpool from "workerpool";
 
 import type { ApplyWork, RedactWorker } from "./worker-protocol";

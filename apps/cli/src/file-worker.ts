@@ -1,9 +1,9 @@
 import { workerData } from "node:worker_threads";
 
-import type { EventPort } from "@repo/redact-core";
-import { createDetectClient, progressEvent } from "@repo/redact-core";
-import type { NodeRedactionOutput } from "@repo/redact-node";
-import { redactPath } from "@repo/redact-node";
+import type { EventPort } from "@repo/redact";
+import { createDetectClient, progressEvent } from "@repo/redact";
+import type { NodeRedactionOutput } from "@repo/redact/node";
+import { redactPath } from "@repo/redact/node";
 import workerpool from "workerpool";
 
 type WorkerSetup = { port: EventPort };

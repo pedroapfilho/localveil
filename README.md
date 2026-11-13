@@ -170,47 +170,50 @@ A redacted PDF is rasterised rather than annotated. Drawing boxes over live text
 flowchart LR
   web["<b>web</b><br/>dropzone · job list"] --> pool["<b>worker pool</b><br/>one file per worker"]
   cli["<b>cli</b><br/>Ink terminal app"] --> threads["<b>worker pool</b><br/>one file per thread"]
-  threads --> node["<b>@repo/redact-node</b><br/>canvas shims for Node"]
 
-  pool --> formats["<b>@repo/redact-formats</b><br/>format → redactor"]
-  node --> formats
-  formats --> redactors
+  subgraph redact["@repo/redact"]
+    node["<b>node</b><br/>canvas shims for Node"]
+    formats["<b>formats</b><br/>format → redactor"]
 
-  subgraph redactors["one redactor per format"]
-    text["<b>@repo/redact-text</b>"]
-    pdf["<b>@repo/redact-pdf</b>"]
-    image["<b>@repo/redact-image</b>"]
+    subgraph redactors["one redactor per format"]
+      text["<b>text</b>"]
+      pdf["<b>pdf</b>"]
+      image["<b>image</b>"]
+    end
+
+    ocr["<b>ocr</b><br/>Tesseract · language · legibility"]
+    pipeline["<b>pipeline</b><br/>analysis · repeats · rects · verification"]
   end
 
-  pool -. port .-> detect["<b>@repo/pii-detect</b><br/>one GLiNER session · model cache"]
+  threads --> node
+  pool --> formats
+  node --> formats
+  formats --> redactors
+  pdf --> ocr
+  image --> ocr
+  redactors --> pipeline
+
+  pool -. port .-> detect["<b>@repo/pii-detect</b><br/>one GLiNER session · patterns · model cache"]
   threads -. port .-> detect
 
-  pdf --> ocr["<b>@repo/ocr</b><br/>Tesseract · language · legibility"]
-  image --> ocr
-
-  redactors --> core["<b>@repo/redact-core</b><br/>types · patterns · spans · rects · zip"]
+  pipeline --> core["<b>@repo/redact-core</b><br/>labels · languages · spans"]
   detect --> core
-  ocr --> core
 ```
 
-`@repo/redact-core` owns the shared vocabulary: what a span is, the checksum patterns, how spans become rectangles, and how the ZIP is built. Every redactor implements the same `Redactor` shape. `@repo/redact-formats` declares the extensions and MIME types each one takes; the dropzone, the CLI's file browser and both workers read that one table, so the worker resolves a redactor from the file and knows nothing else about it. Adding a format means adding a package and a row to that table, not editing the worker. The CLI reuses the same redactors through `@repo/redact-node`, which supplies the canvas globals a browser would have provided.
+`@repo/redact-core` owns the vocabulary the detector and the redactors share: the labels, the document languages, what a span is and how nested spans merge. `@repo/redact` is everything that turns a file into a redacted one, a folder per concern: the analysis pipeline, page geometry, OCR, a redactor per format, the format table, the worker transport and the Node entry. Every redactor implements the same `Redactor` shape. The format table declares the extensions and MIME types each one takes; the dropzone, the CLI's file browser and both workers read that one table, so the worker resolves a redactor from the file and knows nothing else about it. Adding a format means adding a redactor and a row to that table, not editing the worker. The CLI reuses the same redactors through `@repo/redact/node`, which supplies the canvas globals a browser would have provided.
 
 Files run side by side, four at most. Each worker holds pdf.js, a Tesseract worker per language and page-sized canvases, so a pool of one worker per core, which is what `workerpool` does left alone, runs a laptop out of memory. The browser sizes its pool from `hardwareConcurrency` and `deviceMemory`, holding two cores back for the model and the page itself; the CLI takes half the core count, since `onnxruntime-node` already spreads a single inference across all of them. The weights are not part of that arithmetic: one session is loaded once and served to every worker over a port, which is what makes running files in parallel affordable at all.
 
 ## Packages
 
-| Package                | Purpose                                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `@repo/redact-core`    | Types, checksum patterns, span merging, span-to-rectangle mapping, repeat matching, ZIP building.                               |
-| `@repo/pii-detect`     | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, and the resumable model cache.                            |
-| `@repo/ocr`            | One reader for scanned pages and images: Tesseract word boxes, en / pt / es detection, legibility and a black-and-white retry.  |
-| `@repo/redact-text`    | Redactor for text formats. Masks with `█` and keeps line breaks intact.                                                         |
-| `@repo/redact-pdf`     | Redactor for PDFs. Renders, recognises, paints, and rebuilds the document.                                                      |
-| `@repo/redact-image`   | Redactor for images. Recognises, paints, and re-encodes.                                                                        |
-| `@repo/redact-formats` | The formats each redactor takes, the lists the dropzone and the CLI offer, and the redactor a file resolves to.                 |
-| `@repo/redact-node`    | Runs the redactors under Node: skia-backed canvas globals and file reading for the CLI.                                         |
-| `@repo/i18n`           | Typed message catalogues for English, Portuguese and Spanish.                                                                   |
-| `@repo/ui`             | Shared components: dropzone, attachment, progress, select, checkbox, collapsible, scroll area, skeleton, button, card, toaster. |
+| Package             | Purpose                                                                                                                                                          |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@repo/redact-core` | The vocabulary every package shares: labels, document languages, spans and how nested ones merge.                                                                |
+| `@repo/pii-detect`  | GLiNER span detection over `gliner_multi_pii-v1`, the entity prompts, the checksum patterns, and the resumable model cache.                                      |
+| `@repo/redact`      | Turns a file into a redacted one: the analysis pipeline, OCR, the text, PDF and image redactors, the format table, the worker transport, ZIP building, and Node. |
+| `@repo/eval`        | The labelled corpus and the script that scores a model against it.                                                                                               |
+| `@repo/i18n`        | Typed message catalogues for English, Portuguese and Spanish.                                                                                                    |
+| `@repo/ui`          | Shared components: dropzone, attachment, progress, select, checkbox, collapsible, scroll area, skeleton, button, card, toaster.                                  |
 
 The apps are `web`, the browser app, and `cli`, the Ink terminal app. `@repo/typescript-config` and `@repo/config-vitest` hold the shared tooling config.
 
@@ -340,7 +343,7 @@ The dev server sends the cross-origin isolation headers the model needs, so run 
 | `pnpm clean`         | Clean all build artifacts.                 |
 | `pnpm fallow:dead`   | Find unused exports.                       |
 
-Two suites need the real model weights or Tesseract's language data, so they run only when asked: `PII_MODEL_TEST=1 pnpm --filter @repo/pii-detect test` and `OCR_PIPELINE_TEST=1 pnpm --filter @repo/redact-node test`.
+Two suites need the real model weights or Tesseract's language data, so they run only when asked: `PII_MODEL_TEST=1 pnpm --filter @repo/pii-detect test` and `OCR_PIPELINE_TEST=1 pnpm --filter @repo/redact test`.
 
 ## Limits
 

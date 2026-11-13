@@ -1,5 +1,5 @@
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
-import type { Analysis, Decisions, RedactionResult } from "@repo/redact-core";
+import type { Analysis, Decisions, RedactionResult } from "@repo/redact";
 
 type ApplyWork = { analysis: Analysis; decisions: Decisions };
 

@@ -1,4 +1,4 @@
-import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact-core";
+import type { Analysis, FileStageKey, RedactionResult } from "@repo/redact";
 import { create } from "zustand";
 
 type JobSource = {

@@ -1,4 +1,4 @@
-import { BROWSER_ACCEPT } from "@repo/redact-formats";
+import { BROWSER_ACCEPT } from "@repo/redact";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 

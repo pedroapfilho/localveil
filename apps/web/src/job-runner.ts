@@ -1,11 +1,7 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
-import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact-core";
-import {
-  defaultDecisions,
-  describeError,
-  isUnsupportedFile,
-  overallProgress,
-} from "@repo/redact-core";
+import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact";
+import { defaultDecisions, isUnsupportedFile, overallProgress } from "@repo/redact";
+import { describeError } from "@repo/redact-core";
 
 import { useModelLibrary } from "./model-library";
 import type { JobInput, JobState } from "./store";
