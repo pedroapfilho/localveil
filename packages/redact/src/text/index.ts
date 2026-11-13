@@ -35,11 +35,11 @@ const createTextRedactor = (format: TextFormat): Redactor => {
 
   return {
     analyse: async (file, detect, onProgress) => {
-      onProgress(0, "stage.reading");
+      onProgress("stage.reading");
 
       const text = await file.text();
 
-      onProgress(0.2, "stage.detecting");
+      onProgress("stage.detecting");
 
       const { detections, units } = await analyseUnits({
         detect: withFields(format, detect),
@@ -50,7 +50,7 @@ const createTextRedactor = (format: TextFormat): Redactor => {
       return { detections, units, warnings: text.length === 0 ? ["warning.noText"] : [] };
     },
     apply: ({ analysis, decisions, file, onProgress }) => {
-      onProgress(0.8, "stage.redacting");
+      onProgress("stage.redacting");
 
       const [[reading] = []] = analysis.units;
 

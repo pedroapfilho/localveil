@@ -1,11 +1,11 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 import type { Analysis, Decisions, FileStageKey, RedactionResult } from "@repo/redact";
-import { defaultDecisions, isUnsupportedFile, overallProgress } from "@repo/redact";
+import { defaultDecisions, isUnsupportedFile, REVIEW_AT } from "@repo/redact";
 import { describeError } from "@repo/redact-core";
 
 import { useModelLibrary } from "./model-library";
 import type { JobInput, JobState } from "./store";
-import { holdsModel, isInFlight, progressOf, useJobStore } from "./store";
+import { holdsModel, isInFlight, useJobStore } from "./store";
 
 type JobRequest = { file: File; id: string };
 
@@ -103,7 +103,7 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
         analysis,
         covered: defaultDecisions(analysis.detections).covered,
         phase: "reviewing",
-        progress: overallProgress("analysing", 1),
+        progress: REVIEW_AT,
       });
     },
     onDone: (id, result) => {
@@ -176,17 +176,9 @@ const createJobRunner = ({ createPool, onNotice }: JobRunnerOptions): JobRunner 
       const job = findJob(id);
 
       if (job?.phase === "queued" || job?.phase === "analysing") {
-        moveJob(id, {
-          phase: "analysing",
-          progress: Math.max(progressOf(job), fraction),
-          stage,
-        });
+        moveJob(id, { phase: "analysing", progress: fraction, stage });
       } else if (job?.phase === "applying") {
-        moveJob(id, {
-          phase: "applying",
-          progress: Math.max(job.progress, fraction),
-          stage,
-        });
+        moveJob(id, { phase: "applying", progress: fraction, stage });
       }
     },
   });

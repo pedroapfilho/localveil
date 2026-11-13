@@ -1,4 +1,4 @@
-import type { FileStageKey } from "../pipeline/types";
+import type { FileStageKey } from "../pipeline/stages";
 
 type ProgressEvent = { fraction: number; stage: FileStageKey; type: "progress" };
 

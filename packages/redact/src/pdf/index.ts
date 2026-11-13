@@ -10,7 +10,7 @@ import type { PageSurface } from "../page/page-surface";
 import { contextOf, coverUnit, paint, scanOf, surfaceOf, surfaceUnits } from "../page/page-surface";
 import { inReadingOrder } from "../page/reading-order";
 import { analyseUnits } from "../pipeline/analysis";
-import type { FileProgress, Redactor, WarningKey, WordInput } from "../pipeline/types";
+import type { Redactor, StageProgress, WarningKey, WordInput } from "../pipeline/types";
 import { toArrayBuffer } from "../transport/zip";
 
 import { OffscreenCanvasFactory } from "./canvas-factory";
@@ -21,10 +21,6 @@ import type { MeasureText } from "./text-layer";
 const SCALE = 2;
 
 const MIN_LAYER_WORDS = 12;
-
-const READ_SHARE = 0.45;
-
-const DETECT_SHARE = 0.45;
 
 let parserInstalled: Promise<void> | undefined;
 
@@ -130,9 +126,9 @@ const render = async (page: PdfPage, viewport: PdfViewport) => {
   return canvas;
 };
 
-const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
+const readPages = (file: File, read: ReadText, onProgress: StageProgress) =>
   withPdf(file, async (pdf) => {
-    onProgress(0, "stage.reading");
+    onProgress("stage.reading");
 
     const warnings = new Set<WarningKey>();
     const pages: Array<PageSurface | { readings: Array<PageSurface> }> = [];
@@ -142,9 +138,9 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
     let readings = 0;
 
     for (let number = 1; number <= pdf.numPages; number += 1) {
-      const progress = ((number - 1) / pdf.numPages) * READ_SHARE;
+      const done = (number - 1) / pdf.numPages;
 
-      onProgress(progress, "stage.extracting");
+      onProgress("stage.extracting", done);
 
       const known = language;
 
@@ -170,11 +166,11 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
           return { found: true, language: layerLanguage, page: surfaceOf(typed), readings: 1 };
         }
 
-        onProgress(progress, "stage.rendering");
+        onProgress("stage.rendering", done);
 
         const canvas = await render(proxy, viewport);
 
-        onProgress(progress, "stage.recognising");
+        onProgress("stage.recognising", done);
 
         const reading = await read(canvas, layerLanguage);
 
@@ -205,11 +201,11 @@ const readPages = (file: File, read: ReadText, onProgress: FileProgress) =>
     return { pages, readings, warnings };
   });
 
-const detectingReadings = (detect: Detect, count: number, onProgress: FileProgress): Detect => {
+const detectingReadings = (detect: Detect, count: number, onProgress: StageProgress): Detect => {
   let detected = 0;
 
   return (text) => {
-    onProgress(READ_SHARE + (detected / count) * DETECT_SHARE, "stage.detecting");
+    onProgress("stage.detecting", detected / count);
     detected += 1;
 
     return detect(text);
@@ -255,9 +251,9 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, file, onProgre
 
     for (const [index, readings] of pages.entries()) {
       const number = index + 1;
-      const progress = (index / pages.length) * 0.9;
+      const done = index / pages.length;
 
-      onProgress(progress, "stage.redacting");
+      onProgress("stage.redacting", done);
 
       const { rects, visible } = coverUnit(readings, decisions);
 
@@ -272,7 +268,7 @@ const applyPdf: Redactor["apply"] = async ({ analysis, decisions, file, onProgre
 
         paint(canvas, rects);
 
-        onProgress(progress, "stage.assembling");
+        onProgress("stage.assembling", done);
 
         const encoded = await canvas.convertToBlob({ type: "image/png" });
         const png = await out.embedPng(await encoded.arrayBuffer());

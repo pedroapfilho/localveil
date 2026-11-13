@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReadText, TextReading } from "../ocr/read-text";
 import { surfaceOf } from "../page/page-surface";
 import { applyDecisions, redactFile } from "../pipeline/redact-file";
-import type { FileProgress, WordInput } from "../pipeline/types";
+import type { WordInput } from "../pipeline/types";
 
 import { createImageRedactor } from "./index";
 
@@ -74,7 +74,7 @@ const naming =
 
 const nothing: Detect = () => Promise.resolve([]);
 
-const onProgress: FileProgress = () => undefined;
+const onProgress = () => undefined;
 
 const file = (type = "image/jpeg", name = "identity.jpg") => new File(["image"], name, { type });
 

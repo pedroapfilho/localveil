@@ -30,15 +30,15 @@ const warningsFor = ({ legibility }: TextReading): Array<WarningKey> => {
 
 const createImageRedactor = (read: ReadText): Redactor => ({
   analyse: async (file, detect, onProgress) => {
-    onProgress(0, "stage.reading");
+    onProgress("stage.reading");
 
     const page = await canvasOf(file);
 
-    onProgress(0.1, "stage.recognising");
+    onProgress("stage.recognising");
 
     const reading = await read(page);
 
-    onProgress(0.6, "stage.detecting");
+    onProgress("stage.detecting");
 
     const { detections, units } = await analyseUnits({
       detect,
@@ -51,7 +51,7 @@ const createImageRedactor = (read: ReadText): Redactor => ({
   apply: async ({ analysis, decisions, file, onProgress }) => {
     const [readings = []] = surfaceUnits(analysis);
 
-    onProgress(0.85, "stage.redacting");
+    onProgress("stage.redacting");
 
     const { rects, visible } = coverUnit(readings, decisions);
     const canvas = await canvasOf(file);

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FileStageKey } from "../pipeline/types";
+import type { FileStageKey } from "../pipeline/stages";
 import { UnsupportedFileError } from "../pipeline/unsupported-file-error";
 
 import { BROWSER_ACCEPT, NODE_FORMATS } from "./formats";
@@ -48,7 +48,7 @@ const stagesOf = async (file: File) => {
   const run = resolveRedactor(file).analyse(
     file,
     () => Promise.resolve([]),
-    (_fraction, stage) => {
+    (stage) => {
       stages.push(stage);
 
       if (stages.length === 2) {

@@ -171,7 +171,7 @@ describe("a job's lifecycle", () => {
 });
 
 describe("a job's progress", () => {
-  it("never runs back, from the first report to the finished file", () => {
+  it("shows what its worker reports, waiting at the review point between the two phases", () => {
     const id = submit();
     const seen: Array<number> = [];
 
@@ -179,7 +179,7 @@ describe("a job's progress", () => {
       seen.push(progressOf(jobWith(id)));
     };
 
-    for (const fraction of [0, 0.2, 0.15, 0.45]) {
+    for (const fraction of [0, 0.15, 0.45]) {
       workers().onProgress(id, fraction, "stage.rendering");
       record();
     }
@@ -189,7 +189,7 @@ describe("a job's progress", () => {
     runner.apply(id, ["a"]);
     record();
 
-    for (const fraction of [0.5, 0.95, 0.9, 1]) {
+    for (const fraction of [0.5, 0.9, 1]) {
       workers().onProgress(id, fraction, "stage.redacting");
       record();
     }
@@ -197,17 +197,7 @@ describe("a job's progress", () => {
     workers().onDone(id, REDACTED);
     record();
 
-    expect(seen).toEqual(seen.toSorted((left, right) => left - right));
-    expect(seen.at(-1)).toBe(1);
-  });
-
-  it("holds at half when applying starts its own count at zero", () => {
-    const id = reviewing();
-
-    runner.apply(id, ["a"]);
-    workers().onProgress(id, 0, "stage.redacting");
-
-    expect(progressOf(jobWith(id))).toBe(0.5);
+    expect(seen).toEqual([0, 0.15, 0.45, 0.5, 0.5, 0.5, 0.9, 1, 1]);
   });
 });
 

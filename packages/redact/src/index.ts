@@ -2,16 +2,13 @@ export { BROWSER_ACCEPT, nodeTypeOf } from "./formats/formats";
 
 export { defaultDecisions } from "./pipeline/detections";
 
-export { analyseFile, applyDecisions, overallProgress } from "./pipeline/redact-file";
+export { analyseFile, applyDecisions } from "./pipeline/redact-file";
 
-export type {
-  Analysis,
-  Decisions,
-  Detection,
-  FileStageKey,
-  RedactionResult,
-  WarningKey,
-} from "./pipeline/types";
+export { REVIEW_AT } from "./pipeline/stages";
+
+export type { FileStageKey } from "./pipeline/stages";
+
+export type { Analysis, Decisions, Detection, RedactionResult, WarningKey } from "./pipeline/types";
 
 export { isUnsupportedFile, UnsupportedFileError } from "./pipeline/unsupported-file-error";
 
