@@ -14,11 +14,11 @@ const text = (state?: JobState) => jobOf(state);
 const pdf = (state?: JobState) => jobOf(state, { file: PDF });
 
 const ANA: Detection = {
-  confidence: 0.9,
   end: 8,
   id: "a",
   label: "private_person",
   preview: "Ana Lima",
+  score: 0.9,
   start: 0,
 };
 

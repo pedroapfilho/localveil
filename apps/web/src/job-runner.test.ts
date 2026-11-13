@@ -10,15 +10,15 @@ import type { JobPhase } from "./store";
 import { progressOf, useJobStore } from "./store";
 
 const CERTAIN: Detection = {
-  confidence: 0.9,
   end: 8,
   id: "a",
   label: "private_person",
   preview: "Ana Lima",
+  score: 0.9,
   start: 0,
 };
 
-const UNSURE: Detection = { ...CERTAIN, confidence: 0.2, id: "b", preview: "Maybe Name" };
+const UNSURE: Detection = { ...CERTAIN, id: "b", preview: "Maybe Name", score: 0.2 };
 
 const ANALYSIS: Analysis = { detections: [CERTAIN, UNSURE], units: [], warnings: [] };
 

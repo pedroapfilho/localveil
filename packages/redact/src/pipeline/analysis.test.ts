@@ -121,7 +121,7 @@ describe("analyseUnits repeats", () => {
       answering([spanOver(text, "ana@example.com", { label: "private_email", score: 0.8 })]),
     );
 
-    expect(analysed.detections.map(({ confidence, label }) => [label, confidence])).toEqual([
+    expect(analysed.detections.map(({ label, score }) => [label, score])).toEqual([
       ["private_email", 0.8],
       ["private_email", 0.8],
     ]);
@@ -163,7 +163,7 @@ describe("analyseUnits repeats", () => {
     ]) {
       const { detections } = await inFile(text, answering(tagged));
 
-      expect(detections.map((detection) => detection.confidence)).toEqual([0.9, 0.9, 0.9]);
+      expect(detections.map((detection) => detection.score)).toEqual([0.9, 0.9, 0.9]);
     }
   });
 
@@ -365,7 +365,7 @@ describe("analyseUnits defined terms", () => {
 });
 
 describe("analyseUnits identity", () => {
-  it("keeps one detection when two layers found the same span, at the better confidence", async () => {
+  it("keeps one detection when two layers found the same span, at the better score", async () => {
     const text = "Signed by Ana Lima today";
 
     const { detections } = await inFile(
@@ -373,9 +373,7 @@ describe("analyseUnits identity", () => {
       answering([spanOver(text, "Ana Lima", { score: 0.6 }), spanOver(text, "Ana Lima")]),
     );
 
-    expect(detections.map(({ confidence, preview }) => [preview, confidence])).toEqual([
-      ["Ana Lima", 0.9],
-    ]);
+    expect(detections.map(({ preview, score }) => [preview, score])).toEqual([["Ana Lima", 0.9]]);
   });
 
   it("folds a nested span into the one that encloses it, carrying the better score", async () => {
@@ -389,7 +387,7 @@ describe("analyseUnits identity", () => {
       ]),
     );
 
-    expect(detections.map(({ confidence, preview }) => [preview, confidence])).toEqual([
+    expect(detections.map(({ preview, score }) => [preview, score])).toEqual([
       ["Ana Lima Souza", 1],
     ]);
   });
@@ -452,9 +450,7 @@ describe("analyseUnits identity", () => {
       accountNumber,
     );
 
-    expect(detections.map(({ confidence, preview }) => [preview, confidence])).toEqual([
-      ["10846703645", 1],
-    ]);
+    expect(detections.map(({ preview, score }) => [preview, score])).toEqual([["10846703645", 1]]);
     expect(detections[0]?.page).toBeUndefined();
   });
 });

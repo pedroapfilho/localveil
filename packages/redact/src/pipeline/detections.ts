@@ -6,7 +6,7 @@ const defaultDecisions = (detections: ReadonlyArray<Detection>): Decisions => {
   const covered: Array<string> = [];
 
   for (const detection of detections) {
-    if (detection.confidence >= APPLY_SCORE) {
+    if (detection.score >= APPLY_SCORE) {
       covered.push(detection.id);
     }
   }

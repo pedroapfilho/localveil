@@ -7,11 +7,11 @@ import { renderWithI18n } from "../test-utils";
 import { DetectionReview } from "./detection-review";
 
 const detection = (patch: Partial<Detection> = {}): Detection => ({
-  confidence: 0.9,
   end: 8,
   id: "a",
   label: "private_person",
   preview: "Ana Lima",
+  score: 0.9,
   start: 0,
   ...patch,
 });
@@ -22,9 +22,7 @@ const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) =>
 
   renderWithI18n(
     <DetectionReview
-      covered={
-        covered ?? detections.flatMap((entry) => (entry.confidence >= 0.65 ? [entry.id] : []))
-      }
+      covered={covered ?? detections.flatMap((entry) => (entry.score >= 0.65 ? [entry.id] : []))}
       detections={detections}
       onApply={onApply}
       onCoveredChange={onCoveredChange}
@@ -35,7 +33,7 @@ const setup = (detections: Array<Detection>, covered?: ReadonlyArray<string>) =>
 };
 
 describe("DetectionReview", () => {
-  it("lists a row per detection with its preview and confidence", () => {
+  it("lists a row per detection with its preview and score", () => {
     setup([detection(), detection({ id: "b", preview: "Joao Reis" })]);
 
     expect(screen.getByText("Ana Lima")).toBeInTheDocument();
@@ -124,7 +122,7 @@ describe("DetectionReview", () => {
 
   it("applies every certain detection when told to cover everything", () => {
     const { onApply } = setup(
-      [detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })],
+      [detection(), detection({ id: "b", preview: "Maybe Name", score: 0.2 })],
       ["b"],
     );
 
@@ -150,16 +148,14 @@ describe("DetectionReview", () => {
   });
 
   it("keeps suggestions out of the main list and behind a summary", () => {
-    setup([detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })]);
+    setup([detection(), detection({ id: "b", preview: "Maybe Name", score: 0.2 })]);
 
     expect(screen.getByText("1 more the model was unsure about")).toBeInTheDocument();
     expect(screen.getByText("1 of 2 will be covered")).toBeInTheDocument();
   });
 
   it("leaves a suggestion unchecked until it is ticked", () => {
-    const { onCoveredChange } = setup([
-      detection({ confidence: 0.2, id: "b", preview: "Maybe Name" }),
-    ]);
+    const { onCoveredChange } = setup([detection({ id: "b", preview: "Maybe Name", score: 0.2 })]);
 
     const box = screen.getByRole("checkbox", { name: "Cover Maybe Name" });
 
@@ -171,10 +167,7 @@ describe("DetectionReview", () => {
   });
 
   it("counts a ticked suggestion towards what will be covered", () => {
-    setup(
-      [detection(), detection({ confidence: 0.2, id: "b", preview: "Maybe Name" })],
-      ["a", "b"],
-    );
+    setup([detection(), detection({ id: "b", preview: "Maybe Name", score: 0.2 })], ["a", "b"]);
 
     expect(screen.getByText("2 of 2 will be covered")).toBeInTheDocument();
   });
