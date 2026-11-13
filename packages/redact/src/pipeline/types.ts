@@ -1,4 +1,4 @@
-import type { Detect, PiiLabel, Span } from "@repo/redact-core";
+import type { Detect, Span } from "@repo/redact-core";
 
 type DetectedText = { spans: Array<Span>; text: string };
 
@@ -28,17 +28,9 @@ type RedactionResult = {
   warnings: Array<WarningKey>;
 };
 
-type Detection = {
-  confidence: number;
-  end: number;
-  id: string;
-  label: PiiLabel;
-  page?: number;
-  preview: string;
-  start: number;
-};
-
 type Mark = Span & { id: string };
+
+type Detection = Mark & { page?: number; preview: string };
 
 type AnalysedReading = { marks: Array<Mark>; text: string };
 

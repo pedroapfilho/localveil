@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { defaultDecisions } from "./detections";
 import type { Detection } from "./types";
 
-const detection = (id: string, confidence: number): Detection => ({
-  confidence,
+const detection = (id: string, score: number): Detection => ({
   end: 4,
   id,
   label: "private_person",
   preview: "Ana",
+  score,
   start: 0,
 });
 

@@ -39,11 +39,11 @@ const scopeOf = (page: number | undefined) => (page === undefined ? "" : String(
 
 const describe = (span: Span, text: string, id: string, page: number | undefined): Detection => {
   const detection: Detection = {
-    confidence: span.score,
     end: span.end,
     id,
     label: span.label,
     preview: preview(text.slice(span.start, span.end)),
+    score: span.score,
     start: span.start,
   };
 
@@ -71,13 +71,7 @@ const byPosition: Identify = (readings, page) => {
 
     detections.push(...kept);
 
-    return kept.map(({ confidence, end, id, label, start }) => ({
-      end,
-      id,
-      label,
-      score: confidence,
-      start,
-    }));
+    return kept.map(({ end, id, label, score, start }) => ({ end, id, label, score, start }));
   });
 
   return { detections, marks };
@@ -95,7 +89,7 @@ const byValue: Identify = (readings, page) => {
       const id = `${scopeOf(page)}:${span.label}:${keyOf(text.slice(span.start, span.end))}`;
       const existing = byId.get(id);
 
-      if (existing === undefined || existing.confidence < span.score) {
+      if (existing === undefined || existing.score < span.score) {
         byId.set(id, describe(span, text, id, page));
       }
 

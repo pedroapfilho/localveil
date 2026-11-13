@@ -71,12 +71,7 @@ const analysedSpans = async (document: EvalDocument, predicted: Array<Span>) => 
     () => undefined,
   );
 
-  return detections.map(({ confidence, end, label, start }) => ({
-    end,
-    label,
-    score: confidence,
-    start,
-  }));
+  return detections;
 };
 
 const scoreDocument = async (

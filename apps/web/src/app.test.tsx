@@ -91,10 +91,10 @@ describe("App", () => {
     const id = drop("notes.txt");
 
     const detection = {
-      confidence: 0.9,
       end: 8,
       label: "private_person" as const,
       preview: "Ana Lima",
+      score: 0.9,
       start: 0,
     };
 

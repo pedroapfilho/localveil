@@ -43,7 +43,7 @@ const DetectionToggle = ({ checked, detail, detection, onToggle }: DetectionTogg
   );
 };
 
-const percentOf = (detection: Detection) => `${(detection.confidence * 100).toFixed(0)}%`;
+const percentOf = (detection: Detection) => `${(detection.score * 100).toFixed(0)}%`;
 
 type Row = { group: Group; kind: "header" } | { detection: Detection; kind: "row" };
 
@@ -63,7 +63,7 @@ const groupByLabel = (detections: Array<Detection>): Array<Group> => {
   return [...groups.entries()]
     .toSorted(([left], [right]) => left.localeCompare(right))
     .map(([label, found]) => ({
-      detections: found.toSorted((left, right) => left.confidence - right.confidence),
+      detections: found.toSorted((left, right) => left.score - right.score),
       label,
     }));
 };
@@ -77,12 +77,12 @@ const DetectionReview = ({
   const { t } = useTranslations();
 
   const certain = useMemo(
-    () => detections.filter((entry) => entry.confidence >= APPLY_SCORE),
+    () => detections.filter((entry) => entry.score >= APPLY_SCORE),
     [detections],
   );
 
   const maybe = useMemo(
-    () => detections.filter((entry) => entry.confidence < APPLY_SCORE),
+    () => detections.filter((entry) => entry.score < APPLY_SCORE),
     [detections],
   );
 
