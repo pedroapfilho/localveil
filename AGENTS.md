@@ -52,7 +52,7 @@ pnpm --filter cli start    # terminal pipeline
 
 Root scripts run turbo: `dev`, `build`, `start`, `test`, `test:coverage`, `lint`, `typecheck`, `clean`. Root-only: `format`/`format:check` (oxfmt) and the `fallow*` suite. Pre-commit runs husky → lint-staged (oxlint + oxfmt).
 
-Every package's `exports` points straight at `./src/index.ts`. Nothing here is published, so no package has a build step; `vite` and `vitest` consume the TypeScript directly and `tsc --noEmit` is the only type gate.
+Every package's `exports` point straight at its TypeScript source under `./src`. Nothing here is published, so no package has a build step; `vite` and `vitest` consume the TypeScript directly and `tsc --noEmit` is the only type gate.
 
 ## Conventions
 

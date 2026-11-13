@@ -258,8 +258,6 @@ A PDF with a usable text layer gets sampled directly, then recognised once in wh
 
 Detection scores stopword frequency across the three supported languages, written without accents because the English probe drops most of them. The lists include the field labels identity documents print, because an ID card carries almost no prose to vote with: on a Brazilian licence, the evidence is words like `nome` and `filiação` and the `da` in the holder's name.
 
-When you already know the answer, say so: the picker beside the dropzone and `--lang` on the CLI skip the guessing entirely, which matters most on exactly those documents.
-
 </details>
 
 <details>
