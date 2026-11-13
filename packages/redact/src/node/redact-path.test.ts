@@ -117,7 +117,7 @@ describe("redactPath", () => {
   });
 
   it("turns away a file no redactor takes", async () => {
-    await expect(run("../packages/redact-node/vitest.config.ts")).rejects.toBeInstanceOf(
+    await expect(run("../packages/redact/vitest.config.ts")).rejects.toBeInstanceOf(
       RedactionFailure,
     );
   });

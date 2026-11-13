@@ -1,24 +1,18 @@
 import type { ModelId, ModelLoadEvent } from "@repo/pii-detect/models";
 /* oxlint-disable anti-slop/no-module-mocking -- @repo/pii-detect wraps a wasm model runtime; the module seam is the only practical hermetic substitute */
-/* oxlint-disable anti-slop/no-unknown-parameters -- the serveDetect double mirrors the untyped MessagePort wire */
+import { createDetectClient } from "@repo/redact";
+import type { Detect } from "@repo/redact-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelRequest, ModelResponse } from "./worker-protocol";
 
 type LoadOptions = { model: string; onLoad: (event: ModelLoadEvent) => void };
 
-const detect = vi.fn(() => Promise.resolve([]));
-const serveDetect = vi.fn();
+const detect = vi.fn<Detect>(() => Promise.resolve([]));
 const createDetector = vi.fn((_options: LoadOptions) => Promise.resolve(detect));
 
 vi.mock("@repo/pii-detect", () => ({
   createDetector: (options: LoadOptions) => createDetector(options),
-}));
-
-vi.mock("@repo/redact", () => ({
-  serveDetect: (port: unknown, served: unknown) => {
-    serveDetect(port, served);
-  },
 }));
 
 const posted: Array<ModelResponse> = [];
@@ -88,13 +82,22 @@ afterEach(() => {
 });
 
 describe("model worker", () => {
-  it("serves a connect request on its own thread", async () => {
+  it("answers a detection over the port a connect request hands it", async () => {
+    const found = [{ end: 3, label: "private_person" as const, score: 0.9, start: 0 }];
+
+    detect.mockResolvedValueOnce(found);
+
     const listen = await loadWorkerFor("gliner-multi-pii");
     const request = connectRequest();
+    const [caller] = ports;
+
+    if (caller === undefined) {
+      throw new Error("The connect request opened no channel");
+    }
 
     listen(request);
 
-    expect(serveDetect.mock.calls.some(([served]) => served === request.data.port)).toBe(true);
+    await expect(createDetectClient(caller)("Ada")).resolves.toEqual(found);
   });
 
   it("loads the model it is named after, once", async () => {
