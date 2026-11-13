@@ -100,7 +100,6 @@ const progressOf = (job: Job) => {
   return "progress" in job ? job.progress : 0;
 };
 
-// A queued file is waiting on the model only while the model is actually loading.
 const stageOf = (job: Job, modelLoading: boolean) => {
   if (job.phase === "queued") {
     return modelLoading ? "stage.loadingModel" : undefined;

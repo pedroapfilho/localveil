@@ -13,7 +13,6 @@ type WarningKey =
 
 type FileProgress = (fraction: number, stage: FileStageKey) => void;
 
-// What a redactor reports: the stage it is in and, where it loops, how far through it is.
 type StageProgress = (stage: FileStageKey, done?: number) => void;
 
 type RedactionResult = {
