@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { parseArgs } from "node:util";
 
 import type { ModelId, ModelSpec, ModelStatus, ModelStore } from "@repo/pii-detect/models";
 import {
@@ -9,19 +10,15 @@ import {
   modelStore,
 } from "@repo/pii-detect/models";
 import { MODEL_CACHE_DIR } from "@repo/pii-detect/node";
+import { describeError } from "@repo/redact-core";
+
+import { OPTIONS, USAGE } from "./usage";
 
 type Output = { isTTY?: boolean; write: (text: string) => void };
 
 type ModelsIo = { err: Output; out: Output; store?: ModelStore };
 
 type Listed = { model: ModelSpec; status: ModelStatus };
-
-const USAGE = `Usage:
-  localveil models                  list the detection models and which are downloaded
-  localveil models download <id>    download a model now rather than on the first run
-  localveil models remove <id>      delete a downloaded model
-  localveil --model <id> [paths]    redact with a model other than the default
-`;
 
 const MEGABYTE = 1_000_000;
 
@@ -125,10 +122,30 @@ const remove = async (id: ModelId, io: ModelsIo) => {
   return 0;
 };
 
+const parsed = (args: ReadonlyArray<string>) => {
+  try {
+    return parseArgs({ allowPositionals: true, args: [...args], options: { help: OPTIONS.help } });
+  } catch (error) {
+    return describeError(error);
+  }
+};
+
 const runModelsCommand = (args: ReadonlyArray<string>, io: ModelsIo): Promise<number> => {
-  const action = args.at(0);
-  const value = args.at(1);
-  const rest = args.slice(2);
+  const command = parsed(args);
+
+  if (typeof command === "string") {
+    io.err.write(`${command}\n\n${USAGE}`);
+
+    return Promise.resolve(1);
+  }
+
+  if (command.values.help === true) {
+    io.out.write(USAGE);
+
+    return Promise.resolve(0);
+  }
+
+  const [action, value, ...rest] = command.positionals;
 
   if (rest.length > 0) {
     io.err.write(USAGE);

@@ -6,6 +6,7 @@ import { isModelId, MODELS } from "@repo/pii-detect/models";
 import { nodeTypeOf } from "@repo/redact";
 
 import type { RunSettings } from "./run-redaction";
+import { OPTIONS } from "./usage";
 
 const PARENT_NAME = "..";
 
@@ -16,44 +17,45 @@ type DirectoryEntry = {
   supported: boolean;
 };
 
-type StartingPoint = { directory: string; selection: Array<string>; settings: RunSettings };
+type StartingPoint = {
+  directory: string;
+  help: boolean;
+  selection: Array<string>;
+  settings: RunSettings;
+};
 
-type ParsedFlags = { paths: Array<string>; settings: RunSettings };
-
-const named = (value: string | boolean | undefined) =>
-  typeof value === "string" ? value : "nothing";
+type ParsedFlags = { help: boolean; paths: Array<string>; settings: RunSettings };
 
 const parseFlags = (args: ReadonlyArray<string>): ParsedFlags => {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
     args: [...args],
-    options: { jobs: { type: "string" }, model: { type: "string" } },
-    strict: false,
+    options: OPTIONS,
   });
 
   const settings: RunSettings = {};
 
   if (values.jobs !== undefined) {
-    const count = typeof values.jobs === "string" ? Number(values.jobs) : Number.NaN;
+    const count = Number(values.jobs);
 
     if (!Number.isInteger(count) || count < 1) {
-      throw new RangeError(`--jobs takes a whole number of 1 or more, not ${named(values.jobs)}`);
+      throw new RangeError(`--jobs takes a whole number of 1 or more, not ${values.jobs}`);
     }
 
     settings.jobs = count;
   }
 
   if (values.model !== undefined) {
-    if (typeof values.model !== "string" || !isModelId(values.model)) {
+    if (!isModelId(values.model)) {
       throw new RangeError(
-        `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${named(values.model)}`,
+        `--model takes one of ${MODELS.map((entry) => entry.id).join(", ")}, not ${values.model}`,
       );
     }
 
     settings.model = values.model;
   }
 
-  return { paths: positionals, settings };
+  return { help: values.help === true, paths: positionals, settings };
 };
 
 const isSupported = (name: string): boolean => nodeTypeOf(name) !== undefined;
@@ -103,10 +105,10 @@ const resolveArguments = async (
   args: ReadonlyArray<string>,
   workingDirectory: string,
 ): Promise<StartingPoint> => {
-  const { paths, settings } = parseFlags(args);
+  const { help, paths, settings } = parseFlags(args);
 
-  if (paths.length === 0) {
-    return { directory: workingDirectory, selection: [], settings };
+  if (help || paths.length === 0) {
+    return { directory: workingDirectory, help, selection: [], settings };
   }
 
   const settled = await Promise.allSettled(
@@ -136,7 +138,7 @@ const resolveArguments = async (
   const first = selection.at(0);
   const directory = first === undefined ? (directories[0] ?? workingDirectory) : dirname(first);
 
-  return { directory, selection, settings };
+  return { directory, help, selection, settings };
 };
 
 export { isSupported, parentEntry, readDirectory, resolveArguments };

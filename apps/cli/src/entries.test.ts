@@ -94,7 +94,7 @@ describe("resolveArguments", () => {
 
     await expect(resolveArguments(["--jobs", "0"], directory)).rejects.toThrow(/--jobs/v);
     await expect(resolveArguments(["--jobs", "two"], directory)).rejects.toThrow(/--jobs/v);
-    await expect(resolveArguments(["--jobs"], directory)).rejects.toThrow(/nothing/v);
+    await expect(resolveArguments(["--jobs"], directory)).rejects.toThrow(/argument missing/v);
   });
 
   it("takes a model either way round", async () => {
@@ -114,7 +114,24 @@ describe("resolveArguments", () => {
     await expect(resolveArguments(["--model", "gpt"], directory)).rejects.toThrow(
       /gliner-multi-pii, gliner-pii-base, gliner-pii-edge, not gpt/v,
     );
-    await expect(resolveArguments(["--model"], directory)).rejects.toThrow(/nothing/v);
+    await expect(resolveArguments(["--model"], directory)).rejects.toThrow(/argument missing/v);
+  });
+
+  it("refuses a flag it does not know rather than ignoring it", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--modle", "gliner-pii-base"], directory)).rejects.toThrow(
+      /--modle/v,
+    );
+  });
+
+  it("asks for the usage and picks nothing when it is asked for help", async () => {
+    const directory = await makeDirectory();
+
+    await expect(resolveArguments(["--help", "notes.txt"], directory)).resolves.toMatchObject({
+      help: true,
+      selection: [],
+    });
   });
 
   it("starts in the working directory when it is given nothing", async () => {
@@ -122,6 +139,7 @@ describe("resolveArguments", () => {
 
     await expect(resolveArguments([], directory)).resolves.toStrictEqual({
       directory,
+      help: false,
       selection: [],
       settings: {},
     });
@@ -134,6 +152,7 @@ describe("resolveArguments", () => {
 
     expect(point).toStrictEqual({
       directory,
+      help: false,
       selection: [join(directory, "notes.txt")],
       settings: {},
     });
@@ -162,6 +181,7 @@ describe("resolveArguments", () => {
 
     expect(point).toStrictEqual({
       directory: join(directory, "photos"),
+      help: false,
       selection: [],
       settings: {},
     });
