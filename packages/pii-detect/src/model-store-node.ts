@@ -102,7 +102,6 @@ const createNodeModelStore = (directory: string): PlatformModelStore => {
     }
   };
 
-  // Hands back the bytes it fetched, or nothing when the file was already on disk.
   const ensureOnDisk = async (
     url: string,
     persistence: Persistence,

@@ -19,7 +19,6 @@ type MemoryPool = {
   workers: () => RedactionPoolOptions;
 };
 
-// Holds every request the runner makes and hands back the callbacks it gave, so a test plays the workers.
 const createMemoryPool = (): MemoryPool => {
   let given: RedactionPoolOptions | undefined;
 

@@ -47,8 +47,6 @@ type ApplyRequest = {
   onProgress: StageProgress;
 };
 
-/* What painting leaves: the file, the name that matches the format it was written in, the text
-   still readable in it, and what painting had to give up. */
 type Painted = { blob: Blob; name: string; visible: string; warnings: Array<WarningKey> };
 
 type Redactor = {

@@ -76,7 +76,6 @@ const NODE_FORMATS: ReadonlyMap<string, string> = new Map(
   ),
 );
 
-// The type a file read off a disk under Node takes from its name; undefined when Node cannot redact it.
 const nodeTypeOf = (name: string) => NODE_FORMATS.get(extensionOf(name));
 
 export { BROWSER_ACCEPT, NODE_FORMATS, nodeTypeOf, redactorFor };
