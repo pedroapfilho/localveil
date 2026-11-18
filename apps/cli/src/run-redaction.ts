@@ -132,7 +132,6 @@ const runRedaction = async ({
 
   const redactOne = (file: string, index: number) =>
     pool.exec<FileWorker[typeof REDACT]>(REDACT, [file], {
-      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the thread boundary untyped; isProgressEvent parses them
       on: (payload: unknown) => {
         if (isProgressEvent(payload)) {
           onFileProgress({ fraction: payload.fraction, index, stage: payload.stage });

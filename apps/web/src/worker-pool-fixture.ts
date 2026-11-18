@@ -1,4 +1,3 @@
-/* oxlint-disable anti-slop/no-unknown-parameters -- this fixture mirrors workerpool's untyped task wire, so its params are unknown by contract */
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import type { Analysis, ProgressEvent, RedactionResult } from "@repo/redact";
 import { vi } from "vitest";
