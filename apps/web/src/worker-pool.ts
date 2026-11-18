@@ -112,7 +112,6 @@ const createRedactionPool: CreatePool = (options) => {
     workerType: "web",
   });
 
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- workerpool events cross the worker boundary untyped; isProgressEvent parses them
   const watching = (id: string) => (payload: unknown) => {
     const live = jobs.get(id);
 

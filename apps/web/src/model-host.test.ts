@@ -1,4 +1,3 @@
-/* oxlint-disable anti-slop/no-unknown-parameters -- the fake Worker mirrors the untyped postMessage wire, so its params are unknown by contract */
 import type { ModelLoadEvent } from "@repo/pii-detect/models";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
